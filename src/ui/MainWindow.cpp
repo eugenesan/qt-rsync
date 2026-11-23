@@ -1,6 +1,7 @@
 #include "ui/MainWindow.h"
 
 #include <QDialogButtonBox>
+#include <QDebug>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -33,6 +34,11 @@
 namespace qt_rsync::ui {
 namespace {
 
+QString withTrailingSlash(QString path) {
+  if (!path.trimmed().isEmpty() && !path.endsWith('/')) path += '/';
+  return path;
+}
+
 void setProcessEnvironment(const core::ProcessSpec& spec, QProcess* process) {
   QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
   for (auto it = spec.environment.cbegin(); it != spec.environment.cend(); ++it) {
@@ -57,6 +63,7 @@ class MainWindow::Private {
   OverviewPane* overview = nullptr;
   QProcess* compareProcess = nullptr;
   QProcess* operationProcess = nullptr;
+  QProcess* inventoryProcess = nullptr;
   QTemporaryFile* filterFile = nullptr;
   core::SyncProfile profile;
   QVector<core::Change> changes;
@@ -141,6 +148,7 @@ MainWindow::MainWindow(QWidget* parent)
 
   d_->compareProcess = new QProcess(this);
   d_->operationProcess = new QProcess(this);
+  d_->inventoryProcess = new QProcess(this);
   connect(d_->compare, &QPushButton::clicked, this, &MainWindow::startCompare);
   connect(d_->verify, &QPushButton::clicked, this, &MainWindow::verifyPlan);
   connect(d_->sync, &QPushButton::clicked, this, &MainWindow::synchronize);
@@ -148,6 +156,7 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->compareProcess, &QProcess::errorOccurred, this, &MainWindow::onCompareError);
   connect(d_->operationProcess, &QProcess::finished, this, &MainWindow::onOperationFinished);
   connect(d_->operationProcess, &QProcess::errorOccurred, this, &MainWindow::onOperationError);
+  connect(d_->inventoryProcess, &QProcess::finished, this, &MainWindow::onInventoryFinished);
   connect(d_->operationProcess, &QProcess::readyReadStandardOutput, this, [this]() {
     const QString text = core::cleanQtNoise(
         QString::fromLocal8Bit(d_->operationProcess->readAllStandardOutput()));
@@ -188,8 +197,8 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::applyStartupOptions(const app::StartupOptions& options) {
-  d_->source->setText(options.source);
-  d_->destination->setText(options.destination);
+  d_->source->setText(withTrailingSlash(options.source));
+  d_->destination->setText(withTrailingSlash(options.destination));
   d_->profile.backup.directory = options.backup;
   if (options.mode == QLatin1String("mirror")) {
     d_->profile.transfer.mode = core::SyncMode::Mirror;
@@ -213,6 +222,8 @@ void MainWindow::setStatus(const QString& text) {
 }
 
 void MainWindow::startCompare() {
+  d_->source->setText(withTrailingSlash(d_->source->text()));
+  d_->destination->setText(withTrailingSlash(d_->destination->text()));
   d_->profile.source.path = d_->source->text();
   d_->profile.destination.path = d_->destination->text();
   if (d_->profile.source.path.isEmpty() || d_->profile.destination.path.isEmpty()) {
@@ -241,10 +252,19 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   const core::ParseResult parsed = core::parseOutput(
       QString::fromUtf8(output), d_->profile.transfer.mirrorEnabled());
   d_->changes = parsed.changes;
+  const auto baseName = [](const QString& path) {
+    QString clean = path.trimmed();
+    while (clean.endsWith('/')) clean.chop(1);
+    const QString name = QFileInfo(clean).fileName();
+    return name.isEmpty() ? QStringLiteral("?") : name;
+  };
+  d_->comparison->setRootNames(baseName(d_->profile.source.path),
+                               baseName(d_->profile.destination.path));
   d_->comparison->setChanges(parsed.changes);
   d_->overview->rebuild(d_->comparison->store());
   refreshPlan();
   d_->stale = false;
+  startDestinationInventory();
   setStatus(QStringLiteral("Comparison complete: %1 item(s)")
                           .arg(parsed.changes.size()));
 }
@@ -254,6 +274,29 @@ void MainWindow::onCompareError(QProcess::ProcessError error) {
   d_->compare->setEnabled(true);
   setStatus(QStringLiteral("Could not start rsync: %1")
                           .arg(d_->compareProcess->errorString()));
+}
+
+void MainWindow::startDestinationInventory() {
+  const core::ProcessSpec spec =
+      core::buildInventorySpec(d_->profile, d_->profile.destination);
+  setProcessEnvironment(spec, d_->inventoryProcess);
+  d_->inventoryProcess->start(spec.program, spec.arguments);
+}
+
+void MainWindow::onInventoryFinished(int, QProcess::ExitStatus) {
+  const QString text = core::cleanQtNoise(
+      QString::fromLocal8Bit(d_->inventoryProcess->readAllStandardOutput()));
+  QHash<QString, QPair<qlonglong, QString>> metadata;
+  static const QRegularExpression line(
+      QStringLiteral("^\\S+\\s+(\\d+)\\s+(\\d{4}/\\d{2}/\\d{2})\\s+(\\d{2}:\\d{2}:\\d{2})\\s+(.+)$"));
+  for (const QString& entry : text.split('\n')) {
+    const auto match = line.match(entry.trimmed());
+    if (!match.hasMatch()) continue;
+    metadata.insert(match.captured(4),
+                    {match.captured(1).toLongLong(),
+                     match.captured(2) + ' ' + match.captured(3)});
+  }
+  if (!metadata.isEmpty()) d_->comparison->applyDestinationMetadata(metadata);
 }
 
 void MainWindow::refreshPlan() {

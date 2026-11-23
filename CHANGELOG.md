@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — phase 5: parity fixes from real-tree comparison
+
+- Fixed `--dir-pair` so the second operand is captured; local endpoints now
+  get a trailing slash so rsync compares directories instead of copying the
+  source directory into the destination.
+- Set the pane root names from the endpoint names, excluded synthesized folder
+  rows from overview totals, and added coloured action glyphs to the decision
+  column.
+- Added a destination inventory pass after Compare so destination sizes and
+  folder aggregates match the Python app.
+- Verified side-by-side against qpy-rsync on X11: same 6 changes, same source
+  and destination counts/sizes and the same overview totals.
+
 ## Unreleased — phase 4: profiles and multi-instance
 
 - Added a Profile menu with Save, Save As, Load, recent profiles and Reset.

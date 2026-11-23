@@ -22,6 +22,9 @@ class ComparisonView : public QWidget {
   [[nodiscard]] model::DataStore& store() { return store_; }
   [[nodiscard]] core::Decisions& decisions() { return decisions_; }
   void setChanges(const QVector<core::Change>& changes);
+  void setRootNames(const QString& source, const QString& destination);
+  void applyDestinationMetadata(
+      const QHash<QString, QPair<qlonglong, QString>>& metadata);
   void markDelete(const QString& path);
 
  signals:

@@ -62,6 +62,33 @@ void DecisionDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
     painter->drawLine(box.left() + 6, box.bottom() - 3, box.right() - 3, box.top() + 3);
   }
   painter->restore();
+
+  // Coloured action glyph, matching the qpy-rsync decision column semantics.
+  const QString label =
+      index.model()->data(index.siblingAtColumn(4), Qt::DisplayRole).toString();
+  QString glyph = QStringLiteral("=");
+  QString colour = QStringLiteral("#64748B");
+  if (label == QLatin1String("new")) {
+    glyph = QStringLiteral("+");
+    colour = QStringLiteral("#16A34A");
+  } else if (label == QLatin1String("updated")) {
+    glyph = QStringLiteral("\u2191");
+    colour = QStringLiteral("#EA580C");
+  } else if (label == QLatin1String("destination only")) {
+    glyph = QStringLiteral("\u2190");
+    colour = QStringLiteral("#B45309");
+  } else if (label == QLatin1String("delete")) {
+    glyph = QStringLiteral("\u00D7");
+    colour = QStringLiteral("#DC2626");
+  }
+  painter->save();
+  painter->setPen(QColor(colour));
+  QFont font = painter->font();
+  font.setBold(true);
+  painter->setFont(font);
+  painter->drawText(option.rect.adjusted(0, 0, -6, 0),
+                    Qt::AlignRight | Qt::AlignVCenter, glyph);
+  painter->restore();
 }
 
 bool DecisionDelegate::editorEvent(QEvent* event, QAbstractItemModel* model,

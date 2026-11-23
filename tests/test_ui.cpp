@@ -69,7 +69,8 @@ void UiTest::compareRendersFakeRsyncOutput() {
   QVERIFY(status != nullptr);
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
   QVERIFY(status->text().contains(QStringLiteral("3 item(s)")));
-
+  QVERIFY(edits.at(0)->text().endsWith('/'));
+  QVERIFY(edits.at(1)->text().endsWith('/'));
   const auto tables = window.findChildren<QTableView*>();
   QCOMPARE(tables.size(), 3);
   QVERIFY(tables.at(0)->model()->rowCount() >= 3);

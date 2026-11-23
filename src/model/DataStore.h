@@ -1042,6 +1042,11 @@ struct OverviewNode {
   std::vector<OverviewNode*> children;
 };
 
+inline bool dir_size_hint(const DataStore& store, int id) {
+  return id < static_cast<int>(store.is_dir.size()) && store.is_dir[id] &&
+         id < static_cast<int>(store.sizes.size()) && store.sizes[id] == 0;
+}
+
 class OverviewModel : public QAbstractItemModel {
  public:
   explicit OverviewModel(QObject* parent = nullptr) : QAbstractItemModel(parent) {
@@ -1100,6 +1105,12 @@ class OverviewModel : public QAbstractItemModel {
       if (i < 0 || i >= static_cast<int>(store.paths.size())) return;
       const std::string& path = store.paths[i];
       if (path == DataStore::root_path() || path.empty()) return;
+      // Synthesized folder rows carry NoChange; they are navigation aids,
+      // not comparison items, and must not be counted twice in the overview.
+      if (i < static_cast<int>(store.actions.size()) &&
+          store.actions[i] == NoChange && dir_size_hint(store, i)) {
+        return;
+      }
       const bool dir_row = i < static_cast<int>(store.is_dir.size()) && store.is_dir[i];
       const std::size_t slash = path.rfind('/');
       const std::string folder_path = slash == std::string::npos

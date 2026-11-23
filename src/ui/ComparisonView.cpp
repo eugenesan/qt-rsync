@@ -75,10 +75,29 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   }
 }
 
+void ComparisonView::setRootNames(const QString& source,
+                                  const QString& destination) {
+  store_.root_source = source.toStdString();
+  store_.root_dest = destination.toStdString();
+}
+
 void ComparisonView::setChanges(const QVector<core::Change>& changes) {
   decisions_.reconcile(changes, true);
   loadChanges(store_, changes);
   syncDecisionsToStore();
+  for (model::TableModel* model : models_) model->reset();
+  emit decisionChanged();
+}
+
+void ComparisonView::applyDestinationMetadata(
+    const QHash<QString, QPair<qlonglong, QString>>& metadata) {
+  std::unordered_map<std::string, std::pair<long long, std::string>> converted;
+  for (auto it = metadata.cbegin(); it != metadata.cend(); ++it) {
+    converted.emplace(it.key().toStdString(),
+                      std::make_pair(static_cast<long long>(it.value().first),
+                                     it.value().second.toStdString()));
+  }
+  store_.apply_destination_metadata(converted, false);
   for (model::TableModel* model : models_) model->reset();
   emit decisionChanged();
 }

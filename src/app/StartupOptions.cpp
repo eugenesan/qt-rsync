@@ -32,10 +32,14 @@ StartupOptions StartupOptions::parse(const QStringList& arguments, QString* erro
   if (!ok && error) *error = p.errorText();
   result.qtArguments = p.positionalArguments();
   if (p.isSet(QStringLiteral("dir-pair"))) {
+    // QCommandLineParser consumes one value per option flag; the second
+    // operand arrives as a positional argument.
     const auto pair = p.values(QStringLiteral("dir-pair"));
-    if (pair.size() == 2) {
-      result.source = pair.at(0);
+    if (!pair.isEmpty()) result.source = pair.first();
+    if (pair.size() > 1) {
       result.destination = pair.at(1);
+    } else if (!result.qtArguments.isEmpty()) {
+      result.destination = result.qtArguments.first();
     }
   }
   result.backup = p.value(QStringLiteral("backup"));
