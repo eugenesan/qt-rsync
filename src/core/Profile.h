@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 
 #include "core/Filter.h"
 
@@ -20,34 +21,60 @@ struct Endpoint {
   [[nodiscard]] QString rsyncOperand() const;
 };
 
+struct PreservationOptions {
+  bool archive = true;
+  bool hardLinks = false;
+  bool acls = false;
+  bool xattrs = false;
+  bool numericIds = false;
+};
+
 struct TransferOptions {
   SyncMode mode = SyncMode::Update;
+  bool legacyDelete = false;
   DeleteTiming deleteTiming = DeleteTiming::During;
-  bool deletionEnabled = false;
-  bool ignoreExisting = false;
+  bool fuzzy = false;
+  bool copyLinks = false;
+  bool wholeFile = false;
+  bool relative = false;
+  bool compress = false;
+  bool checksum = false;
+  QString partialDir;
+  bool inplace = false;
+  bool oneFileSystem = false;
+  bool sparse = false;
+  bool ignoreTimes = false;
+
+  [[nodiscard]] bool mirrorEnabled() const;
+  [[nodiscard]] bool newOnlyEnabled() const { return mode == SyncMode::NewOnly; }
 };
 
 struct BackupOptions {
   QString directory;
   bool protectNested = true;
+  [[nodiscard]] bool enabled() const { return !directory.trimmed().isEmpty(); }
 };
 
 struct SyncProfile {
   QString id;
   QString name;
+  QString description;
   Endpoint source;
   Endpoint destination;
+  PreservationOptions preservation;
   TransferOptions transfer;
   BackupOptions backup;
   ConflictPolicy conflict = ConflictPolicy::Override;
   QString filterText;
   QVector<FilterRule> filters;
-  QString schemaVersion = "1";
+  bool inventoryAfterCompare = false;
+  int schemaVersion = 3;
 
-  [[nodiscard]] bool mirrorEnabled() const;
   [[nodiscard]] QString fingerprint() const;
 };
 
-QVector<FilterRule> rulesFromText(const QString& text);
+QString normalizePosixPath(const QString& value);
+QString destinationBackupDirectory(const SyncProfile& profile);
+QStringList backupProtectionArguments(const SyncProfile& profile);
 
 }  // namespace qt_rsync::core

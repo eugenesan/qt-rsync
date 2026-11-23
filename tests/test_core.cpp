@@ -4,6 +4,7 @@
 #include "core/Decision.h"
 #include "core/Filter.h"
 #include "core/Plan.h"
+#include "core/Command.h"
 #include "core/Profile.h"
 
 using namespace qt_rsync::core;
@@ -59,6 +60,14 @@ class CoreTest : public QObject {
   void decisionFilterRulesAndOrdering();
   void retainedDestinationOnlyIsProtected();
   void planFreshnessAcceptsSyntheticDelete();
+
+  // rsync command construction
+  void compareSpecUsesDryRunAndDestinationInventory();
+  void syncSpecIsWriteCapableAndHasNoDryRun();
+  void filterMergePrecedesUserFilters();
+  void mirrorAndFuzzyChangeDeleteTiming();
+  void nestedBackupAddsProtectionRules();
+  void sshEndpointsUseSetsidAndRemoteShell();
 
   // Existing smoke checks
   void endpointOperandKeepsSshSyntax();
@@ -355,7 +364,7 @@ void CoreTest::profileFingerprintIgnoresIdentity() {
   SyncProfile second = testProfile();
   second.id = QStringLiteral("second");
   QCOMPARE(first.fingerprint(), second.fingerprint());
-  second.transfer.deletionEnabled = true;
+  second.transfer.legacyDelete = true;
   QVERIFY(first.fingerprint() != second.fingerprint());
 }
 
@@ -461,6 +470,76 @@ void CoreTest::planFreshnessAcceptsSyntheticDelete() {
   const auto plan = buildExecutionPlan(testProfile(), changes, decisions);
   QVERIFY(checkPlanFreshness(plan, testProfile(), changes,
                              decisionSignature(decisions)).fresh);
+}
+
+void CoreTest::compareSpecUsesDryRunAndDestinationInventory() {
+  const auto spec = buildCompareSpec(testProfile());
+  QCOMPARE(spec.program, QStringLiteral("rsync"));
+  const QStringList args = spec.arguments;
+  QVERIFY(args.contains(QStringLiteral("--dry-run")));
+  QVERIFY(args.contains(QStringLiteral("--itemize-changes")));
+  QVERIFY(args.contains(QStringLiteral("--archive")));
+  QVERIFY(args.contains(QStringLiteral("--no-compress")));
+  QVERIFY(args.contains(QStringLiteral("--delete-during")));
+  QCOMPARE(args.last(), QStringLiteral("/dst/"));
+  QCOMPARE(args.at(args.size() - 2), QStringLiteral("/src/"));
+}
+
+void CoreTest::syncSpecIsWriteCapableAndHasNoDryRun() {
+  const auto spec = buildSyncSpec(testProfile());
+  QVERIFY(!spec.arguments.contains(QStringLiteral("--dry-run")));
+  QVERIFY(spec.arguments.contains(QStringLiteral("--stats")));
+  QVERIFY(!spec.arguments.contains(QStringLiteral("--delete-during")));
+  QVERIFY(spec.arguments.contains(QStringLiteral("--no-compress")));
+}
+
+void CoreTest::filterMergePrecedesUserFilters() {
+  SyncProfile profile = testProfile();
+  profile.filters = filterTextToRules(QStringLiteral("*.tmp"));
+  const auto spec = buildSyncSpec(profile, QStringLiteral("/tmp/rules"));
+  const QStringList args = spec.arguments;
+  const int merge = args.indexOf(QStringLiteral("--filter=merge /tmp/rules"));
+  const int user = args.indexOf(QStringLiteral("- *.tmp"));
+  QVERIFY(merge >= 0);
+  QVERIFY(user > merge);
+}
+
+void CoreTest::mirrorAndFuzzyChangeDeleteTiming() {
+  SyncProfile profile = testProfile();
+  profile.transfer.mode = SyncMode::Mirror;
+  QVERIFY(buildCompareSpec(profile).arguments.contains(
+      QStringLiteral("--delete-during")));
+  profile.transfer.fuzzy = true;
+  QVERIFY(buildCompareSpec(profile).arguments.contains(
+      QStringLiteral("--delete-after")));
+  QVERIFY(buildCompareSpec(profile).arguments.contains(QStringLiteral("--fuzzy")));
+}
+
+void CoreTest::nestedBackupAddsProtectionRules() {
+  SyncProfile profile = testProfile();
+  profile.backup.directory = QStringLiteral("/src/.backup");
+  const QStringList args = buildSyncSpec(profile).arguments;
+  QVERIFY(args.contains(QStringLiteral("--backup")));
+  QVERIFY(args.contains(QStringLiteral("--backup-dir=/src/.backup")));
+  QVERIFY(args.contains(QStringLiteral("P /.backup/***")));
+  QVERIFY(args.contains(QStringLiteral("- /.backup/***")));
+}
+
+void CoreTest::sshEndpointsUseSetsidAndRemoteShell() {
+  qputenv("DISPLAY", ":50");
+  SyncProfile profile = testProfile();
+  profile.destination.kind = EndpointKind::Ssh;
+  profile.destination.host = QStringLiteral("example");
+  profile.destination.path = QStringLiteral("/home/user/dst");
+  const auto spec = buildSyncSpec(profile);
+  QCOMPARE(spec.program, QStringLiteral("setsid"));
+  QCOMPARE(spec.arguments.first(), QStringLiteral("--wait"));
+  QCOMPARE(spec.arguments.at(1), QStringLiteral("rsync"));
+  const QStringList args = spec.arguments;
+  const int shell = args.indexOf(QStringLiteral("-e"));
+  QVERIFY(shell >= 0);
+  QCOMPARE(args.at(shell + 1), QStringLiteral("env DISPLAY=:50 ssh"));
+  QCOMPARE(args.last(), QStringLiteral("example:/home/user/dst"));
 }
 
 void CoreTest::endpointOperandKeepsSshSyntax() {
