@@ -6,6 +6,7 @@
 #include "core/Plan.h"
 #include "core/Command.h"
 #include "core/Storage.h"
+#include "core/Parser.h"
 #include "core/Paths.h"
 
 #include <QTemporaryDir>
@@ -72,6 +73,9 @@ class CoreTest : public QObject {
   void mirrorAndFuzzyChangeDeleteTiming();
   void nestedBackupAddsProtectionRules();
   void sshEndpointsUseSetsidAndRemoteShell();
+
+  // rsync output parser
+  void parseItemizedRecords();
 
   // Storage (profiles, settings split, locks)
   void profileJsonRoundTrip();
@@ -550,6 +554,26 @@ void CoreTest::sshEndpointsUseSetsidAndRemoteShell() {
   QVERIFY(shell >= 0);
   QCOMPARE(args.at(shell + 1), QStringLiteral("env DISPLAY=:50 ssh"));
   QCOMPARE(args.last(), QStringLiteral("example:/home/user/dst"));
+}
+
+void CoreTest::parseItemizedRecords() {
+  const QString output = QStringLiteral(
+      ">f+++++++++|qpy-rsync|123|qpy-rsync|2026-11-23|qpy-rsync|docs/a.txt\n"
+      "*deleting|qpy-rsync|0|qpy-rsync||qpy-rsync|old.txt\n"
+      ".d..t......|qpy-rsync|0|qpy-rsync||qpy-rsync|docs/\n"
+      "random progress output\n");
+  const ParseResult result = parseOutput(output);
+  QCOMPARE(result.changes.size(), 3);
+  QCOMPARE(result.changes.at(0).path, QStringLiteral("docs/a.txt"));
+  QCOMPARE(result.changes.at(0).action, Action::Create);
+  QCOMPARE(result.changes.at(0).size.value(), 123);
+  QCOMPARE(result.changes.at(1).action, Action::Delete);
+  QCOMPARE(result.changes.at(2).action, Action::UpdateMetadata);
+  QCOMPARE(result.diagnostics.size(), 1);
+  QVERIFY(result.diagnostics.first().contains(QStringLiteral("progress")));
+
+  const ParseResult retained = parseOutput(output, false);
+  QCOMPARE(retained.changes.at(1).action, Action::DestinationOnly);
 }
 
 void CoreTest::profileJsonRoundTrip() {

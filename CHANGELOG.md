@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — phase 2: first vertical slice
+
+- Lifted the proven native view layer: `DataStore`, `TableModel` and
+  `OverviewModel` now live in `src/model/DataStore.h` (header-only, no Python
+  bindings, no `.so` handoffs).
+- Ported the rsync itemized-output parser with strict record validation and
+  destination-only vs delete semantics.
+- `ComparisonView` now renders three synchronized panes over one DataStore;
+  `OverviewPane` builds the folder tree from the same store.
+- `MainWindow` runs a real Compare with `QProcess` using the ported command
+  spec, parses stdout, populates the views and reports progress/status.
+- Added a QtTest end-to-end check with a fake rsync executable: 2 test targets,
+  43 assertions total.
+
 ## Unreleased — phase 1: core semantics
 
 - Ported the decision model to C++: INCLUDE / EXCLUDE / INHERIT / DELETE,

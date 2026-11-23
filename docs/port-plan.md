@@ -75,7 +75,7 @@ argv strings byte-identical to qpy-rsync for the same fixture profile.
 Phase 1 is complete: 41 QtTest cases pass. `core::Decisions`, filters, plans,
 command specs and storage are implemented in `src/core`.
 
-## Phase 2 — first vertical slice (next)
+## Phase 2 — first vertical slice (in progress)
 
 - Replace the placeholder `ComparisonView` with the lifted `DataStore`,
   `TableModel`, `OverviewModel`, delegates, key/mouse filters, stats bar and
@@ -83,6 +83,14 @@ command specs and storage are implemented in `src/core`.
 - Wire one real Compare: run rsync with `QProcess`, parse itemized output into
   `DataStore`, show it in the three panes and overview.
 - Add the decision checkbox path with a **single** decision store.
+
+Delivered so far: the lifted models, the parser, three synchronized panes,
+the overview tree and a working Compare driven by `QProcess`. A fake-rsync
+QtTest verifies the full path from CLI-style startup to rendered rows.
+
+Still to do in this phase: port the delegates, key/mouse filters and context
+menus from the Qt-only part of `native-hybrid/hybrid.cpp`, and wire the
+decision checkbox to the single `core::Decisions` store.
 
 Exit criterion: a real Compare of the example-sized tree renders and decisions can
 be toggled, with no mirrored state and no Python process involved.

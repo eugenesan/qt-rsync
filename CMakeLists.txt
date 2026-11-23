@@ -31,14 +31,13 @@ add_library(qt_rsync_core
     src/core/Command.cpp
     src/core/Paths.cpp
     src/core/Storage.cpp
+    src/core/Parser.cpp
 )
 target_include_directories(qt_rsync_core PUBLIC src)
 target_link_libraries(qt_rsync_core PUBLIC Qt6::Core)
 
 add_library(qt_rsync_model
     src/model/DataStore.cpp
-    src/model/TableModel.cpp
-    src/model/OverviewModel.cpp
 )
 target_include_directories(qt_rsync_model PUBLIC src)
 target_link_libraries(qt_rsync_model PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets qt_rsync_core)
