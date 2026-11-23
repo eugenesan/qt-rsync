@@ -11,6 +11,8 @@
   refreshed automatically; the user must press Compare.
 - Added a fake-rsync UI test covering compare → verify → confirm → sync →
   stale state.
+- Added a timestamped journal, rsync progress bar and benign Qt-output
+  filtering for captured process output.
 
 ## Unreleased — phase 2: first vertical slice
 

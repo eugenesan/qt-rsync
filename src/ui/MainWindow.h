@@ -32,6 +32,7 @@ class MainWindow : public QMainWindow {
   void onOperationError(QProcess::ProcessError error);
   void refreshPlan();
   void addFilterPattern(const QString& pattern, const QString& path);
+  void setStatus(const QString& text);
 
  private:
   class Private;

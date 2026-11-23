@@ -109,8 +109,8 @@ Delivered so far: plan summary wiring, verify dry run, sync confirmation
 dialog with command/rules preview, and stale-after-sync behaviour, covered by
 a fake-rsync UI test.
 
-Still to do in this phase: a persistent journal widget, rsync progress parsing
-and cancellation, and real mirror-mode validation against a disposable tree.
+The journal widget and progress parsing are in place. Remaining in this phase:
+rsync cancellation and real mirror-mode validation against a disposable tree.
 
 Exit criterion: a verified and confirmed mirror sync against a disposable tree,
 with journal continuity and stale state afterwards.

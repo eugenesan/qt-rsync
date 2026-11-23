@@ -6,7 +6,11 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QProcessEnvironment>
+#include <QTime>
+#include <QPlainTextEdit>
+#include <QProgressBar>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSplitter>
 #include <QTemporaryFile>
 #include <QVBoxLayout>
@@ -41,6 +45,8 @@ class MainWindow::Private {
   QPushButton* verify = nullptr;
   QPushButton* sync = nullptr;
   QLabel* status = nullptr;
+  QPlainTextEdit* journal = nullptr;
+  QProgressBar* progress = nullptr;
   ComparisonView* comparison = nullptr;
   OverviewPane* overview = nullptr;
   QProcess* compareProcess = nullptr;
@@ -102,8 +108,17 @@ MainWindow::MainWindow(QWidget* parent)
   splitter->setStretchFactor(1, 1);
   layout->addWidget(splitter, 1);
 
+  d_->progress = new QProgressBar(central);
+  d_->progress->setRange(0, 100);
+  d_->progress->setValue(0);
+  d_->progress->hide();
+  layout->addWidget(d_->progress);
   d_->status = new QLabel(QStringLiteral("Ready"), central);
   layout->addWidget(d_->status);
+  d_->journal = new QPlainTextEdit(central);
+  d_->journal->setReadOnly(true);
+  d_->journal->setMaximumHeight(140);
+  layout->addWidget(d_->journal);
 
   d_->compareProcess = new QProcess(this);
   d_->operationProcess = new QProcess(this);
@@ -114,6 +129,20 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->compareProcess, &QProcess::errorOccurred, this, &MainWindow::onCompareError);
   connect(d_->operationProcess, &QProcess::finished, this, &MainWindow::onOperationFinished);
   connect(d_->operationProcess, &QProcess::errorOccurred, this, &MainWindow::onOperationError);
+  connect(d_->operationProcess, &QProcess::readyReadStandardOutput, this, [this]() {
+    const QString text = core::cleanQtNoise(
+        QString::fromLocal8Bit(d_->operationProcess->readAllStandardOutput()));
+    for (const QString& line : text.split('\r')) {
+      const QString clean = line.trimmed();
+      if (clean.isEmpty()) continue;
+      static const QRegularExpression percent(QStringLiteral("(\d+)%"));
+      const auto match = percent.match(clean);
+      if (match.hasMatch()) {
+        d_->progress->setValue(match.captured(1).toInt());
+      }
+      d_->journal->appendPlainText(clean);
+    }
+  });
   connect(d_->comparison, &ComparisonView::decisionChanged, this, [this]() {
     d_->verified = false;
     refreshPlan();
@@ -147,18 +176,24 @@ void MainWindow::applyStartupOptions(const app::StartupOptions& options) {
   }
 }
 
+void MainWindow::setStatus(const QString& text) {
+  d_->status->setText(text);
+  const QString time = QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz"));
+  d_->journal->appendPlainText(time + QStringLiteral(" ") + text);
+}
+
 void MainWindow::startCompare() {
   d_->profile.source.path = d_->source->text();
   d_->profile.destination.path = d_->destination->text();
   if (d_->profile.source.path.isEmpty() || d_->profile.destination.path.isEmpty()) {
-    d_->status->setText(QStringLiteral("Enter Source and Destination first."));
+    setStatus(QStringLiteral("Enter Source and Destination first."));
     return;
   }
   d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
   const core::ProcessSpec spec = core::buildCompareSpec(d_->profile);
   setProcessEnvironment(spec, d_->compareProcess);
   d_->compare->setEnabled(false);
-  d_->status->setText(QStringLiteral("Comparing..."));
+  setStatus(QStringLiteral("Comparing..."));
   d_->compareProcess->start(spec.program, spec.arguments);
 }
 
@@ -167,7 +202,7 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   const QByteArray output = d_->compareProcess->readAllStandardOutput();
   const QString stderr = QString::fromLocal8Bit(d_->compareProcess->readAllStandardError());
   if (status != QProcess::NormalExit || exitCode != 0) {
-    d_->status->setText(QStringLiteral("Compare failed: %1")
+    setStatus(QStringLiteral("Compare failed: %1")
                             .arg(stderr.trimmed().isEmpty()
                                      ? QString::number(exitCode)
                                      : stderr.trimmed()));
@@ -180,14 +215,14 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   d_->overview->rebuild(d_->comparison->store());
   refreshPlan();
   d_->stale = false;
-  d_->status->setText(QStringLiteral("Comparison complete: %1 item(s)")
+  setStatus(QStringLiteral("Comparison complete: %1 item(s)")
                           .arg(parsed.changes.size()));
 }
 
 void MainWindow::onCompareError(QProcess::ProcessError error) {
   Q_UNUSED(error)
   d_->compare->setEnabled(true);
-  d_->status->setText(QStringLiteral("Could not start rsync: %1")
+  setStatus(QStringLiteral("Could not start rsync: %1")
                           .arg(d_->compareProcess->errorString()));
 }
 
@@ -203,7 +238,7 @@ void MainWindow::verifyPlan() {
   if (d_->plan.items.isEmpty()) refreshPlan();
   d_->filterFile = new QTemporaryFile(this);
   if (!d_->filterFile->open()) {
-    d_->status->setText(QStringLiteral("Could not write decision rules."));
+    setStatus(QStringLiteral("Could not write decision rules."));
     return;
   }
   d_->filterFile->write(core::decisionFilterText(d_->plan).toUtf8());
@@ -212,7 +247,7 @@ void MainWindow::verifyPlan() {
       core::buildVerifySpec(d_->profile, d_->filterFile->fileName());
   setProcessEnvironment(spec, d_->operationProcess);
   d_->syncing = false;
-  d_->status->setText(QStringLiteral("Verifying..."));
+  setStatus(QStringLiteral("Verifying..."));
   d_->operationProcess->start(spec.program, spec.arguments);
 }
 
@@ -220,7 +255,7 @@ void MainWindow::synchronize() {
   if (d_->plan.items.isEmpty() || d_->stale) refreshPlan();
   d_->filterFile = new QTemporaryFile(this);
   if (!d_->filterFile->open()) {
-    d_->status->setText(QStringLiteral("Could not write decision rules."));
+    setStatus(QStringLiteral("Could not write decision rules."));
     return;
   }
   d_->filterFile->write(core::decisionFilterText(d_->plan).toUtf8());
@@ -233,17 +268,20 @@ void MainWindow::synchronize() {
       core::buildSyncSpec(d_->profile, d_->filterFile->fileName());
   setProcessEnvironment(spec, d_->operationProcess);
   d_->syncing = true;
-  d_->status->setText(QStringLiteral("Synchronizing..."));
+  d_->progress->show();
+  d_->progress->setValue(0);
+  setStatus(QStringLiteral("Synchronizing..."));
   d_->operationProcess->start(spec.program, spec.arguments);
 }
 
 void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) {
+  d_->progress->hide();
   const QString stderr = QString::fromLocal8Bit(d_->operationProcess->readAllStandardError());
   const bool ok = status == QProcess::NormalExit && exitCode == 0;
   if (d_->syncing) {
     d_->syncing = false;
     if (!ok) {
-      d_->status->setText(QStringLiteral("Synchronization failed: %1")
+      setStatus(QStringLiteral("Synchronization failed: %1")
                               .arg(stderr.trimmed()));
       return;
     }
@@ -251,19 +289,19 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
     // for a fresh Compare. Never refresh automatically.
     d_->stale = true;
     d_->verified = false;
-    d_->status->setText(QStringLiteral(
+    setStatus(QStringLiteral(
         "Synchronization complete — click Compare to refresh the comparison."));
     return;
   }
   d_->verified = ok;
-  d_->status->setText(ok ? QStringLiteral("Verification matched the plan.")
+  setStatus(ok ? QStringLiteral("Verification matched the plan.")
                          : QStringLiteral("Verification failed: %1")
                                .arg(stderr.trimmed()));
 }
 
 void MainWindow::onOperationError(QProcess::ProcessError error) {
   Q_UNUSED(error)
-  d_->status->setText(QStringLiteral("Operation failed: %1")
+  setStatus(QStringLiteral("Operation failed: %1")
                           .arg(d_->operationProcess->errorString()));
 }
 
@@ -275,7 +313,7 @@ void MainWindow::addFilterPattern(const QString& pattern, const QString& path) {
                      : text + QStringLiteral("\n# Added from ") + path +
                            QStringLiteral("\n") + pattern;
   d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
-  d_->status->setText(QStringLiteral("Filter added: %1").arg(pattern));
+  setStatus(QStringLiteral("Filter added: %1").arg(pattern));
 }
 
 }  // namespace qt_rsync::ui
