@@ -38,6 +38,10 @@ class MainWindow : public QMainWindow {
   void addFilterPattern(const QString& pattern, const QString& path);
   void setStatus(const QString& text);
   void setProfilePath(const QString& path);
+  void openSessionLog(const QString& name);
+  void closeSessionLog();
+  void promoteTempProfile(const QString& newName);
+  void discardTempProfile();
   void restoreProfile();
   void loadProfileFile(const QString& path);
   void saveProfileAs();

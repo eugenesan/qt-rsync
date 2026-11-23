@@ -125,15 +125,14 @@ Delivered so far: profile menu, cached-profile startup, locked-profile dialog
 with in-place retry and a no-changes quit path, and PID locks. The settings
 pages and XDG split were ported in earlier phases.
 
-Still to do in this phase: log renaming when a temporary profile is promoted,
-cleanup of discarded temporary files, and the final path-name migration from
-`qpy-rsync` to `qt-rsync`.
+Temporary-file cleanup, log promotion and the XDG path migration are now in
+place. Phase 4 is complete.
 
 Exit criterion: two instances can run against different profiles; a locked
 profile offers temporary copy / retry / quit; no settings or profiles are
 modified by the quit path.
 
-## Phase 5 — parity hardening and test port
+## Phase 5 — parity hardening and test port (next)
 
 Port the remaining qpy-rsync UI/decision differential tests to QtTest with
 offscreen widgets. Retire the copied Python code from the working set only after

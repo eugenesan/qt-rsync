@@ -1,6 +1,7 @@
 #include "ui/MainWindow.h"
 
 #include <QDialogButtonBox>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -68,6 +69,8 @@ class MainWindow::Private {
   QString profilePath;
   std::unique_ptr<core::storage::FileLock> profileLock;
   QPushButton* profileButton = nullptr;
+  QString logPath;
+  QFile* logFile = nullptr;
 };
 
 MainWindow::MainWindow(QWidget* parent)
@@ -178,7 +181,11 @@ MainWindow::MainWindow(QWidget* parent)
           [this](const QString& path) { d_->comparison->markDelete(path); });
 }
 
-MainWindow::~MainWindow() { delete d_; }
+MainWindow::~MainWindow() {
+  discardTempProfile();
+  closeSessionLog();
+  delete d_;
+}
 
 void MainWindow::applyStartupOptions(const app::StartupOptions& options) {
   d_->source->setText(options.source);
@@ -197,7 +204,12 @@ void MainWindow::applyStartupOptions(const app::StartupOptions& options) {
 void MainWindow::setStatus(const QString& text) {
   d_->status->setText(text);
   const QString time = QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz"));
-  d_->journal->appendPlainText(time + QStringLiteral(" ") + text);
+  const QString line = time + QStringLiteral(" ") + text;
+  d_->journal->appendPlainText(line);
+  if (d_->logFile != nullptr && d_->logFile->isOpen()) {
+    d_->logFile->write((line + '\n').toUtf8());
+    d_->logFile->flush();
+  }
 }
 
 void MainWindow::startCompare() {
@@ -338,9 +350,64 @@ bool MainWindow::startupAborted() const {
   return d_->startupAborted;
 }
 
+void MainWindow::closeSessionLog() {
+  if (d_->logFile != nullptr) {
+    d_->logFile->flush();
+    delete d_->logFile;
+    d_->logFile = nullptr;
+  }
+  d_->logPath.clear();
+}
+
+void MainWindow::openSessionLog(const QString& name) {
+  closeSessionLog();
+  d_->logPath = core::paths::appLogPath(name);
+  QFileInfo(d_->logPath).absoluteDir().mkpath(QStringLiteral("."));
+  d_->logFile = new QFile(d_->logPath, this);
+  if (d_->logFile->open(QIODevice::Append | QIODevice::Text)) {
+    d_->logFile->write(QStringLiteral("\n===== qt-rsync session =====\n").toUtf8());
+    d_->logFile->flush();
+  }
+}
+
+void MainWindow::promoteTempProfile(const QString& newName) {
+  if (!d_->tempProfile) return;
+  const QString oldName = QFileInfo(d_->profilePath).completeBaseName();
+  closeSessionLog();
+  const auto rename = [](const QString& from, const QString& to) {
+    if (from != to && QFile::exists(from)) {
+      QFile::remove(to);
+      QFile::rename(from, to);
+    }
+  };
+  rename(core::paths::appLogPath(oldName), core::paths::appLogPath(newName));
+  rename(core::paths::rsyncLogPath(oldName), core::paths::rsyncLogPath(newName));
+  QFile::remove(d_->profilePath);
+  QFile::remove(d_->profilePath + QStringLiteral(".lock"));
+  d_->profileLock.reset();
+  d_->tempProfile = false;
+  openSessionLog(newName);
+}
+
+void MainWindow::discardTempProfile() {
+  if (!d_->tempProfile) return;
+  const QString name = QFileInfo(d_->profilePath).completeBaseName();
+  closeSessionLog();
+  QFile::remove(core::paths::appLogPath(name));
+  QFile::remove(core::paths::rsyncLogPath(name));
+  QFile::remove(d_->profilePath);
+  QFile::remove(d_->profilePath + QStringLiteral(".lock"));
+  d_->profileLock.reset();
+  d_->profilePath.clear();
+  d_->tempProfile = false;
+}
+
 void MainWindow::setProfilePath(const QString& path) {
   d_->profilePath = path;
-  if (!d_->tempProfile) core::storage::setCurrentProfilePath(path);
+  if (!d_->tempProfile) {
+    core::storage::setCurrentProfilePath(path);
+    openSessionLog(QFileInfo(path).completeBaseName());
+  }
   d_->profileButton->setText(QFileInfo(path).completeBaseName());
 }
 
@@ -394,6 +461,7 @@ void MainWindow::restoreProfile() {
       d_->profilePath = path;
       d_->profileButton->setText(QFileInfo(path).completeBaseName() +
                                  QStringLiteral(" (temporary)"));
+      openSessionLog(QFileInfo(path).completeBaseName());
       setStatus(QStringLiteral("Using temporary profile: %1")
                     .arg(QFileInfo(path).fileName()));
       return;
@@ -413,6 +481,7 @@ void MainWindow::saveProfileAs() {
     setStatus(QStringLiteral("That profile is open in another instance."));
     return;
   }
+  promoteTempProfile(QFileInfo(path).completeBaseName());
   d_->tempProfile = false;
   core::storage::saveProfile(path, d_->profile);
   d_->profileLock = std::move(lock);
@@ -431,6 +500,7 @@ void MainWindow::saveCurrentProfile() {
 }
 
 void MainWindow::loadProfile() {
+  discardTempProfile();
   const QString path = QFileDialog::getOpenFileName(
       this, QStringLiteral("Load Profile"), core::paths::profilesDirectory(),
       QStringLiteral("JSON (*.json)"));
@@ -464,6 +534,8 @@ void MainWindow::loadProfile() {
 }
 
 void MainWindow::resetProfile() {
+  discardTempProfile();
+  closeSessionLog();
   d_->profileLock.reset();
   d_->profilePath.clear();
   d_->tempProfile = false;

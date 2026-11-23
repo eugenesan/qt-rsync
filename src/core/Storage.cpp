@@ -351,6 +351,38 @@ QStringList listProfiles() {
   return names;
 }
 
+void migrateLegacyPaths() {
+  const QString oldConfig = paths::configHome() + QStringLiteral("/qpy-rsync");
+  const QString newConfig = paths::configHome() + QStringLiteral("/qt-rsync");
+  QDir().mkpath(newConfig);
+  QDir().mkpath(paths::profilesDirectory());
+  QDir().mkpath(paths::logDirectory());
+
+  auto copyFile = [](const QString& from, const QString& to) {
+    if (!QFile::exists(to) && QFile::exists(from)) QFile::copy(from, to);
+  };
+  copyFile(oldConfig + QStringLiteral("/settingsrc"),
+           newConfig + QStringLiteral("/settingsrc"));
+  copyFile(paths::stateHome() + QStringLiteral("/qpy-rsyncstaterc"),
+           paths::statePath());
+
+  const QString oldProfiles = oldConfig + QStringLiteral("/profiles");
+  if (QFileInfo(oldProfiles).isDir()) {
+    for (const QString& name : QDir(oldProfiles).entryList({"*.json"}, QDir::Files)) {
+      copyFile(oldProfiles + '/' + name, paths::profilesDirectory() + '/' + name);
+    }
+  }
+
+  Settings settings;
+  QString current = settings.value(QStringLiteral("profile/current_path")).toString();
+  if (current.contains(QStringLiteral("/qpy-rsync/profiles/"))) {
+    current.replace(QStringLiteral("/qpy-rsync/profiles/"),
+                    QStringLiteral("/qt-rsync/profiles/"));
+    settings.setValue(QStringLiteral("profile/current_path"), current);
+    settings.sync();
+  }
+}
+
 QString currentProfilePath() {
   Settings settings;
   return settings.value(QStringLiteral("profile/current_path")).toString();

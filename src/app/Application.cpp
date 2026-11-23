@@ -5,6 +5,7 @@
 
 #include "app/StartupOptions.h"
 #include "ui/MainWindow.h"
+#include "core/Storage.h"
 
 namespace qt_rsync::app {
 
@@ -27,6 +28,7 @@ int run(int argc, char** argv) {
     return 0;
   }
 
+  core::storage::migrateLegacyPaths();
   ui::MainWindow window;
   if (window.startupAborted()) return 0;
   window.applyStartupOptions(options);

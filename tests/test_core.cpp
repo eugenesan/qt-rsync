@@ -82,6 +82,7 @@ class CoreTest : public QObject {
   void legacyProfileFieldsMigrate();
   void settingsAreSplitByPrefix();
   void pidLocksDetectLiveOwnersAndTakeOverStaleOnes();
+  void legacyPathsAreMigrated();
 
   // Existing smoke checks
   void endpointOperandKeepsSshSyntax();
@@ -671,6 +672,33 @@ void CoreTest::endpointOperandKeepsSshSyntax() {
   QCOMPARE(endpoint.rsyncOperand(), QStringLiteral("example:/home/user/src"));
   endpoint.user = QStringLiteral("user");
   QCOMPARE(endpoint.rsyncOperand(), QStringLiteral("user@example:/home/user/src"));
+}
+
+void CoreTest::legacyPathsAreMigrated() {
+  QTemporaryDir dir;
+  qputenv("XDG_CONFIG_HOME", dir.path().toUtf8());
+  qputenv("XDG_STATE_HOME", dir.path().toUtf8());
+
+  const QString oldConfig = QString::fromLocal8Bit(qgetenv("XDG_CONFIG_HOME")) +
+                            QStringLiteral("/qpy-rsync");
+  const QString oldProfiles = oldConfig + QStringLiteral("/profiles");
+  QDir().mkpath(oldProfiles);
+  const QString profile = oldProfiles + QStringLiteral("/old.json");
+  SyncProfile original;
+  original.name = QStringLiteral("old");
+  original.source.path = QStringLiteral("/src");
+  original.destination.path = QStringLiteral("/dst");
+  storage::saveProfile(profile, original);
+  QSettings oldSettings(oldConfig + QStringLiteral("/settingsrc"),
+                        QSettings::IniFormat);
+  oldSettings.setValue(QStringLiteral("profile/current_path"), profile);
+  oldSettings.sync();
+
+  storage::migrateLegacyPaths();
+  QVERIFY(QFile::exists(qt_rsync::core::paths::profilesDirectory() + QStringLiteral("/old.json")));
+  QVERIFY(QFile::exists(qt_rsync::core::paths::configSettingsPath()));
+  QVERIFY(QFile::exists(qt_rsync::core::paths::logDirectory()));
+  QVERIFY(storage::currentProfilePath().contains(QStringLiteral("/qt-rsync/profiles/")));
 }
 
 QTEST_MAIN(CoreTest)

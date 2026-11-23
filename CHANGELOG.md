@@ -10,6 +10,11 @@
 - Temporary copies are not cached as the current profile. Saving under a new
   name promotes them and records the profile.
 - Added UI tests for cache restoration and the quit-without-changes path.
+- Temporary profiles now own a session log; discarding a temporary profile
+  removes its file, lock and logs, while saving under a new name renames the
+  logs to the new profile.
+- XDG paths are now `qt-rsync` names. A one-time migration copies settings,
+  profiles and the cached profile path from the old `qpy-rsync` locations.
 
 ## Unreleased — phase 3: verify and sync
 

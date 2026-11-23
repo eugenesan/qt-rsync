@@ -53,6 +53,7 @@ SyncProfile profileFromJson(const QString& payload);
 void saveProfile(const QString& path, const SyncProfile& profile);
 SyncProfile loadProfile(const QString& path);
 QStringList listProfiles();
+void migrateLegacyPaths();
 QString currentProfilePath();
 void setCurrentProfilePath(const QString& path);
 

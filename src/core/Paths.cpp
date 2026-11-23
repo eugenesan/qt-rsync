@@ -19,15 +19,15 @@ QString cacheHome() {
   return QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
 }
 
-QString profilesDirectory() { return configHome() + "/qpy-rsync/profiles"; }
+QString profilesDirectory() { return configHome() + "/qt-rsync/profiles"; }
 
-QString settingsPath() { return stateHome() + "/qpy-rsyncstaterc"; }
+QString settingsPath() { return stateHome() + "/qt-rsyncstaterc"; }
 
-QString statePath() { return stateHome() + "/qpy-rsyncstaterc"; }
+QString statePath() { return stateHome() + "/qt-rsyncstaterc"; }
 
-QString configSettingsPath() { return configHome() + "/qpy-rsync/settingsrc"; }
+QString configSettingsPath() { return configHome() + "/qt-rsync/settingsrc"; }
 
-QString logDirectory() { return cacheHome() + "/qpy-rsync"; }
+QString logDirectory() { return cacheHome() + "/qt-rsync"; }
 
 QString appLogPath(const QString& profileName) {
   return logDirectory() + "/app-" + profileName + ".log";
