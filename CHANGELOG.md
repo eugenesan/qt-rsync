@@ -18,6 +18,8 @@
   both apps report 106 changes, 2.0 KiB and 106 selected items.
 - Added Left/Right keyboard folding and a Collapse/Expand context submenu with
   the same behaviour as the Python/native view.
+- Row text now uses the action colours (green create, orange update, brown
+  destination-only), matching the reference UI.
 
 ## Unreleased — phase 4: profiles and multi-instance
 

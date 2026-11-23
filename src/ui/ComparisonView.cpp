@@ -67,6 +67,14 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   for (int column : {0, 1, 2, 3, 4, 8, 9, 10}) views_[2]->setColumnHidden(column, true);
   views_[1]->setFixedWidth(160);
 
+  store_.action_colours = {
+      QStringLiteral("#16A34A"),  // create
+      QStringLiteral("#EA580C"),  // update
+      QStringLiteral("#0891B2"),  // metadata
+      QStringLiteral("#DC2626"),  // delete
+      QStringLiteral("#B45309"),  // destination only
+      QStringLiteral("#64748B"),  // unchanged
+  };
   store_.folder_icon = icons::folderIcon();
   store_.root_icon = icons::rootFolderIcon();
   for (const char* extension : {".txt", ".md", ".json", ".py", ".log", ".zip"}) {
