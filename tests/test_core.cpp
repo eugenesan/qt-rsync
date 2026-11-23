@@ -5,6 +5,10 @@
 #include "core/Filter.h"
 #include "core/Plan.h"
 #include "core/Command.h"
+#include "core/Storage.h"
+#include "core/Paths.h"
+
+#include <QTemporaryDir>
 #include "core/Profile.h"
 
 using namespace qt_rsync::core;
@@ -68,6 +72,12 @@ class CoreTest : public QObject {
   void mirrorAndFuzzyChangeDeleteTiming();
   void nestedBackupAddsProtectionRules();
   void sshEndpointsUseSetsidAndRemoteShell();
+
+  // Storage (profiles, settings split, locks)
+  void profileJsonRoundTrip();
+  void legacyProfileFieldsMigrate();
+  void settingsAreSplitByPrefix();
+  void pidLocksDetectLiveOwnersAndTakeOverStaleOnes();
 
   // Existing smoke checks
   void endpointOperandKeepsSshSyntax();
@@ -540,6 +550,93 @@ void CoreTest::sshEndpointsUseSetsidAndRemoteShell() {
   QVERIFY(shell >= 0);
   QCOMPARE(args.at(shell + 1), QStringLiteral("env DISPLAY=:50 ssh"));
   QCOMPARE(args.last(), QStringLiteral("example:/home/user/dst"));
+}
+
+void CoreTest::profileJsonRoundTrip() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  SyncProfile profile = testProfile();
+  profile.id = QStringLiteral("abc");
+  profile.name = QStringLiteral("example");
+  profile.transfer.mode = SyncMode::Mirror;
+  profile.transfer.deleteTiming = DeleteTiming::After;
+  profile.backup.directory = QStringLiteral("/dst/.backup");
+  profile.filterText = QStringLiteral("*.tmp\n-s .parentlock");
+
+  const QString path = dir.path() + QStringLiteral("/profile.json");
+  storage::saveProfile(path, profile);
+  const SyncProfile loaded = storage::loadProfile(path);
+  QCOMPARE(loaded.name, profile.name);
+  QCOMPARE(loaded.id, profile.id);
+  QCOMPARE(loaded.transfer.mode, SyncMode::Mirror);
+  QCOMPARE(loaded.transfer.deleteTiming, DeleteTiming::After);
+  QCOMPARE(loaded.backup.directory, QStringLiteral("/dst/.backup"));
+  QCOMPARE(loaded.filterText, profile.filterText);
+  QCOMPARE(loaded.filters.size(), 2);
+  QCOMPARE(loaded.fingerprint(), profile.fingerprint());
+}
+
+void CoreTest::legacyProfileFieldsMigrate() {
+  QTemporaryDir dir;
+  const QString payload = QStringLiteral(R"({
+    "name": "legacy",
+    "source": {"kind": "local", "path": "/src/"},
+    "destination": {"kind": "local", "path": "/dst/"},
+    "transfer": {"delete": true, "delete_timing": "after"},
+    "backup": {"mode": "none", "directory": "/backup"}
+  })");
+  const SyncProfile profile = storage::profileFromJson(payload);
+  QCOMPARE(profile.transfer.mode, SyncMode::Mirror);
+  QCOMPARE(profile.transfer.deleteTiming, DeleteTiming::After);
+  QVERIFY(profile.backup.directory.isEmpty());
+}
+
+void CoreTest::settingsAreSplitByPrefix() {
+  QTemporaryDir dir;
+  qputenv("XDG_CONFIG_HOME", dir.path().toUtf8());
+  qputenv("XDG_STATE_HOME", dir.path().toUtf8());
+  storage::Settings settings;
+  settings.setValue(QStringLiteral("logging/timing"), true);
+  settings.setValue(QStringLiteral("decisions/preserve"), true);
+  settings.setValue(QStringLiteral("operation/clock"), 42);
+  settings.sync();
+  QVERIFY(settings.value(QStringLiteral("logging/timing")).toBool());
+  QCOMPARE(settings.value(QStringLiteral("operation/clock")).toInt(), 42);
+  QVERIFY(QFile::exists(settings.statePath()));
+  QVERIFY(QFile::exists(settings.configPath()));
+  QVERIFY(settings.configPath() != settings.statePath());
+
+  storage::setCurrentProfilePath(QStringLiteral("/tmp/profile.json"));
+  QCOMPARE(storage::currentProfilePath(), QStringLiteral("/tmp/profile.json"));
+}
+
+void CoreTest::pidLocksDetectLiveOwnersAndTakeOverStaleOnes() {
+  QTemporaryDir dir;
+  const QString path = dir.path() + QStringLiteral("/test.json");
+
+  storage::FileLock first(path);
+  QVERIFY(first.acquire());
+  QCOMPARE(storage::readLockPid(path), static_cast<qint64>(::getpid()));
+  first.release();
+  QVERIFY(!QFile::exists(first.lockPath()));
+
+  // PID 1 is always alive: a live foreign lock must block.
+  QFile live(first.lockPath());
+  QVERIFY(live.open(QIODevice::WriteOnly | QIODevice::Truncate));
+  live.write("1");
+  live.close();
+  storage::FileLock blocked(path, 0);
+  QVERIFY(!blocked.acquire());
+
+  // A dead PID is replaced silently.
+  QFile stale(first.lockPath());
+  QVERIFY(stale.open(QIODevice::WriteOnly | QIODevice::Truncate));
+  stale.write("999999");
+  stale.close();
+  storage::FileLock takeover(path, 0);
+  QVERIFY(takeover.acquire());
+  takeover.release();
+  QVERIFY(!QFile::exists(first.lockPath()));
 }
 
 void CoreTest::endpointOperandKeepsSshSyntax() {

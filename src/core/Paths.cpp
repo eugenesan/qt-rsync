@@ -23,7 +23,9 @@ QString profilesDirectory() { return configHome() + "/qpy-rsync/profiles"; }
 
 QString settingsPath() { return stateHome() + "/qpy-rsyncstaterc"; }
 
-QString statePath() { return configHome() + "/qpy-rsync/settingsrc"; }
+QString statePath() { return stateHome() + "/qpy-rsyncstaterc"; }
+
+QString configSettingsPath() { return configHome() + "/qpy-rsync/settingsrc"; }
 
 QString logDirectory() { return cacheHome() + "/qpy-rsync"; }
 

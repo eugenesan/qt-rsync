@@ -12,6 +12,7 @@ QString cacheHome();
 QString profilesDirectory();
 QString settingsPath();
 QString statePath();
+QString configSettingsPath();
 QString logDirectory();
 QString appLogPath(const QString& profileName);
 QString rsyncLogPath(const QString& profileName);
