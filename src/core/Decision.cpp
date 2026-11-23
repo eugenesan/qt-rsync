@@ -1,29 +1,308 @@
 #include "core/Decision.h"
 
+#include <QSet>
+
+#include <algorithm>
+
 namespace qt_rsync::core {
+namespace {
 
-void Decisions::set(const QString&, Decision) {}
-void Decisions::reset(const QString&) {}
-void Decisions::resetSubtree(const QString&) {}
-void Decisions::clear() {}
+QString parentOf(const QString& path) {
+  const int slash = path.lastIndexOf('/');
+  return slash < 0 ? QString() : path.left(slash);
+}
 
-Decision Decisions::explicitDecision(const QString&) const { return Decision::Inherit; }
+QString cleanPath(const QString& path) {
+  QString result = path;
+  while (result.endsWith('/')) result.chop(1);
+  return result;
+}
+
+}  // namespace
+
+QString Decisions::normalize(const QString& path) { return cleanPath(path); }
+
+void Decisions::set(const QString& path, Decision decision) {
+  const QString key = normalize(path);
+  conflicts_.remove(key);
+  if (decision == Decision::Inherit) {
+    explicit_.remove(key);
+  } else {
+    explicit_.insert(key, decision);
+  }
+}
+
+void Decisions::reset(const QString& path) {
+  const QString key = normalize(path);
+  explicit_.remove(key);
+  conflicts_.remove(key);
+}
+
+void Decisions::resetSubtree(const QString& path) {
+  const QString root = normalize(path);
+  const QString prefix = root + '/';
+  const auto keys = explicit_.keys();
+  for (const QString& key : keys) {
+    if (key == root || key.startsWith(prefix)) explicit_.remove(key);
+  }
+  const auto conflictKeys = conflicts_.keys();
+  for (const QString& key : conflictKeys) {
+    if (key == root || key.startsWith(prefix)) conflicts_.remove(key);
+  }
+}
+
+void Decisions::clear() {
+  explicit_.clear();
+  conflicts_.clear();
+}
+
+void Decisions::replace(const QHash<QString, Decision>& decisions) {
+  explicit_ = decisions;
+}
+
+Decision Decisions::explicitDecision(const QString& path) const {
+  return explicit_.value(normalize(path), Decision::Inherit);
+}
+
+std::optional<Decision> Decisions::inherited(const QString& path) const {
+  if (explicit_.isEmpty()) return std::nullopt;
+  QString current = normalize(path);
+  while (!current.isEmpty()) {
+    const auto it = explicit_.constFind(current);
+    if (it != explicit_.cend()) return it.value();
+    current = parentOf(current);
+  }
+  const auto root = explicit_.constFind(QString());
+  if (root != explicit_.cend()) return root.value();
+  return std::nullopt;
+}
+
+Decision Decisions::defaultFor(const QString& path) const {
+  return defaults_.value(normalize(path), Decision::Include);
+}
 
 Decision Decisions::effective(const Change& change) const {
-  if (change.action == Action::NoChange || change.action == Action::Message) {
-    return Decision::Exclude;
-  }
+  const auto inheritedDecision = inherited(change.path);
+  if (inheritedDecision == Decision::Delete) return Decision::Delete;
+  if (!selectable(change)) return Decision::Exclude;
+  if (inheritedDecision.has_value()) return *inheritedDecision;
   if (change.action == Action::DestinationOnly) return Decision::Exclude;
   return Decision::Include;
 }
 
-bool Decisions::isSelectable(const Change& change) const {
+Decision Decisions::effectivePath(const QString& path) const {
+  const auto value = inherited(path);
+  return value.value_or(Decision::Include);
+}
+
+bool Decisions::selectable(const Change& change) {
   return change.action != Action::NoChange && change.action != Action::Message;
 }
 
-QVector<QPair<QString, Decision>> Decisions::explicitItems() const { return {}; }
-QSet<QString> Decisions::excludedPaths() const { return {}; }
-DecisionSummary Decisions::summary(const QVector<Change>&) const { return {}; }
-int Decisions::reconcile(const QVector<Change>&, bool) { return 0; }
+bool Decisions::isSelectable(const Change& change) const {
+  return selectable(change) || inherited(change.path) == Decision::Delete;
+}
+
+QVector<QPair<QString, Decision>> Decisions::explicitItems() const {
+  QVector<QPair<QString, Decision>> items;
+  items.reserve(explicit_.size());
+  for (auto it = explicit_.cbegin(); it != explicit_.cend(); ++it) {
+    items.append({it.key(), it.value()});
+  }
+  std::sort(items.begin(), items.end(),
+            [](const auto& left, const auto& right) { return left.first < right.first; });
+  return items;
+}
+
+QSet<QString> Decisions::excludedPaths() const {
+  QSet<QString> paths;
+  for (auto it = explicit_.cbegin(); it != explicit_.cend(); ++it) {
+    if (it.value() == Decision::Exclude) paths.insert(it.key());
+  }
+  return paths;
+}
+
+Decision Decisions::defaultForPath(const QString& path,
+                                   const QVector<Change>& changes) {
+  const QString key = cleanPath(path);
+  bool hasDescendants = false;
+  bool allDestinationOnly = true;
+  for (const Change& change : changes) {
+    const QString candidate = cleanPath(change.path);
+    if (candidate == key) {
+      return change.action == Action::DestinationOnly ? Decision::Exclude
+                                                       : Decision::Include;
+    }
+    if (candidate.startsWith(key + '/')) {
+      hasDescendants = true;
+      if (change.action != Action::DestinationOnly) allDestinationOnly = false;
+    }
+  }
+  if (hasDescendants && allDestinationOnly) return Decision::Exclude;
+  return Decision::Include;
+}
+
+QSet<QString> Decisions::overridePaths(const QVector<Change>& changes) const {
+  QSet<QString> result;
+  for (auto it = explicit_.cbegin(); it != explicit_.cend(); ++it) {
+    Decision fallback = defaults_.value(it.key(), Decision::Inherit);
+    if (fallback == Decision::Inherit) {
+      fallback = defaultForPath(it.key(), changes);
+    }
+    if (it.value() != fallback) result.insert(it.key());
+  }
+  return result;
+}
+
+int Decisions::modifiedCount(const QVector<Change>& changes) const {
+  return overridePaths(changes).size();
+}
+
+DecisionSummary Decisions::summary(const QVector<Change>& changes) const {
+  DecisionSummary result;
+  for (const Change& change : changes) {
+    const Decision decision = effective(change);
+    if (decision == Decision::Delete) {
+      ++result.included;
+      ++result.destructive;
+      continue;
+    }
+    if (!selectable(change)) continue;
+    if (decision == Decision::Exclude) {
+      ++result.excluded;
+    } else {
+      ++result.included;
+      if (change.action == Action::Delete) ++result.destructive;
+    }
+  }
+  result.modified = modifiedCount(changes);
+  return result;
+}
+
+bool Decisions::conflicted(const QString& path) const {
+  return conflicts_.contains(normalize(path));
+}
+
+void Decisions::resolveConflict(const QString& path) {
+  conflicts_.remove(normalize(path));
+}
+
+int Decisions::acceptDefaultsForConflicts() {
+  const int count = conflicts_.size();
+  for (const QString& path : conflicts_.keys()) explicit_.remove(path);
+  conflicts_.clear();
+  return count;
+}
+
+QHash<QString, Decision> Decisions::buildDefaults(
+    const QHash<QString, QPair<Action, Kind>>& current) {
+  QHash<QString, Decision> defaults;
+  QSet<QString> nonDestination;
+  for (auto it = current.cbegin(); it != current.cend(); ++it) {
+    const bool destinationOnly = it.value().first == Action::DestinationOnly;
+    defaults.insert(it.key(), destinationOnly ? Decision::Exclude : Decision::Include);
+    if (!destinationOnly) {
+      QString ancestor = it.key();
+      while (!ancestor.isEmpty()) {
+        nonDestination.insert(ancestor);
+        ancestor = parentOf(ancestor);
+      }
+    }
+  }
+  for (auto it = current.cbegin(); it != current.cend(); ++it) {
+    QString ancestor = parentOf(it.key());
+    while (!ancestor.isEmpty()) {
+      if (!defaults.contains(ancestor)) {
+        defaults.insert(ancestor, nonDestination.contains(ancestor)
+                                      ? Decision::Include
+                                      : Decision::Exclude);
+      }
+      ancestor = parentOf(ancestor);
+    }
+  }
+  return defaults;
+}
+
+int Decisions::reconcile(const QVector<Change>& changes, bool preserve,
+                         bool detectInherited) {
+  QHash<QString, QPair<Action, Kind>> current;
+  for (const Change& change : changes) {
+    current.insert(cleanPath(change.path), {change.action, change.kind});
+  }
+  const QStringList currentPaths = current.keys();
+  conflicts_.clear();
+  QSet<QString> stale;
+
+  for (auto it = explicit_.cbegin(); it != explicit_.cend(); ++it) {
+    const QString& path = it.key();
+    const Decision decision = it.value();
+    const bool exists = current.contains(path);
+    bool hasDescendants = false;
+    for (const QString& candidate : currentPaths) {
+      if (candidate.startsWith(path + '/')) {
+        hasDescendants = true;
+        break;
+      }
+    }
+    const bool identityChanged = identities_.contains(path) &&
+                                 identities_.value(path) != current.value(path);
+
+    if (!exists && !hasDescendants) {
+      stale.insert(path);
+      continue;
+    }
+    if (!preserve) {
+      if (identityChanged || decision == Decision::Delete) stale.insert(path);
+      continue;
+    }
+    if (decision == Decision::Delete) continue;
+    if (!identityChanged) continue;
+    if (decision == Decision::Exclude) continue;
+    const Action newAction = exists ? current.value(path).first : Action::NoChange;
+    if (newAction == Action::DestinationOnly) {
+      stale.insert(path);
+      conflicts_.insert(path, QStringLiteral(
+          "The item is now destination-only; including it would delete it."));
+    }
+  }
+
+  if (detectInherited && preserve && !identities_.isEmpty()) {
+    for (auto it = explicit_.cbegin(); it != explicit_.cend(); ++it) {
+      const QString path = it.key();
+      if (stale.contains(path) || it.value() != Decision::Include) continue;
+      const QString prefix = path.isEmpty() ? QString() : path + '/';
+      QSet<QString> covered;
+      for (auto currentIt = current.cbegin(); currentIt != current.cend(); ++currentIt) {
+        if (currentIt.value().first == Action::DestinationOnly &&
+            (currentIt.key() == path || currentIt.key().startsWith(prefix))) {
+          covered.insert(currentIt.key());
+        }
+      }
+      if (covered.isEmpty()) continue;
+      QSet<QString> previous;
+      for (auto identityIt = identities_.cbegin(); identityIt != identities_.cend();
+           ++identityIt) {
+        if (identityIt.value().first == Action::DestinationOnly &&
+            (identityIt.key() == path || identityIt.key().startsWith(prefix))) {
+          previous.insert(identityIt.key());
+        }
+      }
+      QSet<QString> appearedPaths = covered;
+      appearedPaths.subtract(previous);
+      const int appeared = appearedPaths.size();
+      if (appeared > 0) {
+        stale.insert(path);
+        conflicts_.insert(path, QStringLiteral("%1 destination-only item(s) "
+                                                "appeared below this included folder.")
+                                     .arg(appeared));
+      }
+    }
+  }
+
+  for (const QString& path : stale) explicit_.remove(path);
+  identities_ = current;
+  defaults_ = buildDefaults(current);
+  return stale.size();
+}
 
 }  // namespace qt_rsync::core
