@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — phase 4: profiles and multi-instance
+
+- Added a Profile menu with Save, Save As, Load, recent profiles and Reset.
+- Startup restores the cached profile. If it is locked by another process, a
+  dialog offers a temporary copy with an editable name, retrying inside the
+  same dialog with an orange warning, or quitting without changing settings or
+  profiles.
+- Temporary copies are not cached as the current profile. Saving under a new
+  name promotes them and records the profile.
+- Added UI tests for cache restoration and the quit-without-changes path.
+
 ## Unreleased — phase 3: verify and sync
 
 - Added Verify (F8): runs the compare dry run with the temporary decision

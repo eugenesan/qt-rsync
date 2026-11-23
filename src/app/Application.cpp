@@ -28,6 +28,7 @@ int run(int argc, char** argv) {
   }
 
   ui::MainWindow window;
+  if (window.startupAborted()) return 0;
   window.applyStartupOptions(options);
   window.show();
   return QApplication::exec();

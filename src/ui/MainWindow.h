@@ -6,6 +6,9 @@
 #include "app/StartupOptions.h"
 #include "core/Change.h"
 #include "core/Plan.h"
+#include "core/Storage.h"
+
+#include <memory>
 
 class QLabel;
 class QLineEdit;
@@ -21,6 +24,7 @@ class MainWindow : public QMainWindow {
   ~MainWindow() override;
 
   void applyStartupOptions(const app::StartupOptions& options);
+  [[nodiscard]] bool startupAborted() const;
 
  private slots:
   void startCompare();
@@ -33,6 +37,14 @@ class MainWindow : public QMainWindow {
   void refreshPlan();
   void addFilterPattern(const QString& pattern, const QString& path);
   void setStatus(const QString& text);
+  void setProfilePath(const QString& path);
+  void restoreProfile();
+  void loadProfileFile(const QString& path);
+  void saveProfileAs();
+  void saveCurrentProfile();
+  void loadProfile();
+  void resetProfile();
+  void updateProfileMenu();
 
  private:
   class Private;

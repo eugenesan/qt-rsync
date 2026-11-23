@@ -19,6 +19,7 @@
 #include "ui/ComparisonView.h"
 #include "ui/SettingsDialog.h"
 #include "core/Storage.h"
+#include "core/Paths.h"
 
 using namespace qt_rsync;
 
@@ -30,6 +31,8 @@ class UiTest : public QObject {
   void spaceExcludesEverySelectedItem();
   void settingsDialogPersistsDiagnostics();
   void verifyAndSyncKeepComparisonStale();
+  void restoresCachedProfileOnStartup();
+  void lockedProfileCanQuitWithoutChanges();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -195,6 +198,57 @@ void UiTest::verifyAndSyncKeepComparisonStale() {
   QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QStringLiteral("click Compare to refresh")), 5000);
   QVERIFY(!status->text().contains(QStringLiteral("Comparison complete")));
   qputenv("PATH", oldPath);
+}
+
+void UiTest::restoresCachedProfileOnStartup() {
+  QTemporaryDir dir;
+  qputenv("XDG_CONFIG_HOME", dir.path().toUtf8());
+  qputenv("XDG_STATE_HOME", dir.path().toUtf8());
+  core::SyncProfile profile;
+  profile.name = QStringLiteral("example");
+  profile.source.path = QStringLiteral("/src");
+  profile.destination.path = QStringLiteral("/dst");
+  const QString path = core::paths::profilesDirectory() + QStringLiteral("/example.json");
+  core::storage::saveProfile(path, profile);
+  core::storage::setCurrentProfilePath(path);
+
+  ui::MainWindow window;
+  QVERIFY(!window.startupAborted());
+  const auto edits = window.findChildren<QLineEdit*>();
+  QCOMPARE(edits.at(0)->text(), QStringLiteral("/src"));
+  QCOMPARE(edits.at(1)->text(), QStringLiteral("/dst"));
+  QCOMPARE(core::storage::currentProfilePath(), path);
+}
+
+void UiTest::lockedProfileCanQuitWithoutChanges() {
+  QTemporaryDir dir;
+  qputenv("XDG_CONFIG_HOME", dir.path().toUtf8());
+  qputenv("XDG_STATE_HOME", dir.path().toUtf8());
+  core::SyncProfile profile;
+  profile.name = QStringLiteral("locked");
+  profile.source.path = QStringLiteral("/src");
+  profile.destination.path = QStringLiteral("/dst");
+  const QString path = core::paths::profilesDirectory() + QStringLiteral("/locked.json");
+  core::storage::saveProfile(path, profile);
+  core::storage::setCurrentProfilePath(path);
+  QFile lock(core::storage::FileLock(path).lockPath());
+  QVERIFY(lock.open(QIODevice::WriteOnly | QIODevice::Truncate));
+  lock.write("1");
+  lock.close();
+
+  QTimer::singleShot(100, []() {
+    for (QWidget* widget : QApplication::topLevelWidgets()) {
+      auto* dialog = dynamic_cast<QDialog*>(widget);
+      if (dialog == nullptr || !dialog->isVisible()) continue;
+      for (QAbstractButton* button : dialog->findChildren<QAbstractButton*>()) {
+        if (button->text() == QLatin1String("Quit without changes")) button->click();
+      }
+      return;
+    }
+  });
+  ui::MainWindow window;
+  QVERIFY(window.startupAborted());
+  QCOMPARE(core::storage::currentProfilePath(), path);
 }
 
 QTEST_MAIN(UiTest)

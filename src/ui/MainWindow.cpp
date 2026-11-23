@@ -1,7 +1,10 @@
 #include "ui/MainWindow.h"
 
 #include <QDialogButtonBox>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFormLayout>
+#include <QMenu>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -18,11 +21,13 @@
 #include "core/Command.h"
 #include "core/Filter.h"
 #include "core/Parser.h"
+#include "core/Paths.h"
 #include "core/Storage.h"
 #include "ui/ComparisonView.h"
 #include "ui/OverviewPane.h"
 #include "ui/SettingsDialog.h"
 #include "ui/SyncDialog.h"
+#include "ui/LockedProfileDialog.h"
 
 namespace qt_rsync::ui {
 namespace {
@@ -58,6 +63,11 @@ class MainWindow::Private {
   bool verified = false;
   bool stale = false;
   bool syncing = false;
+  bool startupAborted = false;
+  bool tempProfile = false;
+  QString profilePath;
+  std::unique_ptr<core::storage::FileLock> profileLock;
+  QPushButton* profileButton = nullptr;
 };
 
 MainWindow::MainWindow(QWidget* parent)
@@ -90,6 +100,12 @@ MainWindow::MainWindow(QWidget* parent)
   actionLayout->addWidget(d_->verify);
   actionLayout->addWidget(d_->sync);
   form->addRow(QString(), actions);
+
+  d_->profileButton = new QPushButton(QStringLiteral("Profile"), paths);
+  d_->profileButton->setMenu(new QMenu(d_->profileButton));
+  connect(d_->profileButton->menu(), &QMenu::aboutToShow,
+          this, &MainWindow::updateProfileMenu);
+  form->addRow(QStringLiteral("Profile:"), d_->profileButton);
 
   auto* settingsButton = new QPushButton(QStringLiteral("Settings..."), paths);
   connect(settingsButton, &QPushButton::clicked, this, [this]() {
@@ -135,7 +151,7 @@ MainWindow::MainWindow(QWidget* parent)
     for (const QString& line : text.split('\r')) {
       const QString clean = line.trimmed();
       if (clean.isEmpty()) continue;
-      static const QRegularExpression percent(QStringLiteral("(\d+)%"));
+      static const QRegularExpression percent(QStringLiteral("(\\d+)%"));
       const auto match = percent.match(clean);
       if (match.hasMatch()) {
         d_->progress->setValue(match.captured(1).toInt());
@@ -143,6 +159,8 @@ MainWindow::MainWindow(QWidget* parent)
       d_->journal->appendPlainText(clean);
     }
   });
+  restoreProfile();
+
   connect(d_->comparison, &ComparisonView::decisionChanged, this, [this]() {
     d_->verified = false;
     refreshPlan();
@@ -314,6 +332,181 @@ void MainWindow::addFilterPattern(const QString& pattern, const QString& path) {
                            QStringLiteral("\n") + pattern;
   d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
   setStatus(QStringLiteral("Filter added: %1").arg(pattern));
+}
+
+bool MainWindow::startupAborted() const {
+  return d_->startupAborted;
+}
+
+void MainWindow::setProfilePath(const QString& path) {
+  d_->profilePath = path;
+  if (!d_->tempProfile) core::storage::setCurrentProfilePath(path);
+  d_->profileButton->setText(QFileInfo(path).completeBaseName());
+}
+
+void MainWindow::loadProfileFile(const QString& path) {
+  d_->profile = core::storage::loadProfile(path);
+  d_->source->setText(d_->profile.source.path);
+  d_->destination->setText(d_->profile.destination.path);
+  setProfilePath(path);
+  setStatus(QStringLiteral("Profile loaded: %1").arg(QFileInfo(path).fileName()));
+}
+
+void MainWindow::restoreProfile() {
+  const QString current = core::storage::currentProfilePath();
+  if (current.isEmpty() || !QFile::exists(current)) {
+    setStatus(QStringLiteral("No profile loaded"));
+    return;
+  }
+  auto lock = std::make_unique<core::storage::FileLock>(current, 0);
+  if (lock->acquire()) {
+    d_->profileLock = std::move(lock);
+    loadProfileFile(current);
+    return;
+  }
+  const QString suggested = QFileInfo(current).completeBaseName() +
+                            QStringLiteral("~tmp");
+  auto result = promptLockedProfile(this, current, suggested);
+  switch (result.choice) {
+    case LockedChoice::Quit:
+      d_->startupAborted = true;
+      return;
+    case LockedChoice::UseOriginal:
+      d_->profileLock = std::move(result.lock);
+      loadProfileFile(current);
+      return;
+    case LockedChoice::Temporary: {
+      QString name = result.name;
+      if (name.isEmpty()) name = suggested;
+      if (!name.endsWith(QLatin1String(".json"))) name += QLatin1String(".json");
+      const QString path = core::paths::profilesDirectory() + '/' + name;
+      auto tempLock = std::make_unique<core::storage::FileLock>(path, 0);
+      if (!tempLock->acquire()) {
+        setStatus(QStringLiteral("Temporary profile name is locked."));
+        return;
+      }
+      d_->profile = core::storage::loadProfile(current);
+      core::storage::saveProfile(path, d_->profile);
+      d_->profileLock = std::move(tempLock);
+      d_->tempProfile = true;
+      d_->source->setText(d_->profile.source.path);
+      d_->destination->setText(d_->profile.destination.path);
+      d_->profilePath = path;
+      d_->profileButton->setText(QFileInfo(path).completeBaseName() +
+                                 QStringLiteral(" (temporary)"));
+      setStatus(QStringLiteral("Using temporary profile: %1")
+                    .arg(QFileInfo(path).fileName()));
+      return;
+    }
+  }
+}
+
+void MainWindow::saveProfileAs() {
+  const QString path = QFileDialog::getSaveFileName(
+      this, QStringLiteral("Save Profile"),
+      core::paths::profilesDirectory() + QStringLiteral("/profile.json"),
+      QStringLiteral("JSON (*.json)"));
+  if (path.isEmpty()) return;
+  d_->profileLock.reset();
+  auto lock = std::make_unique<core::storage::FileLock>(path, 0);
+  if (!lock->acquire()) {
+    setStatus(QStringLiteral("That profile is open in another instance."));
+    return;
+  }
+  d_->tempProfile = false;
+  core::storage::saveProfile(path, d_->profile);
+  d_->profileLock = std::move(lock);
+  setProfilePath(path);
+  setStatus(QStringLiteral("Profile saved: %1").arg(QFileInfo(path).fileName()));
+}
+
+void MainWindow::saveCurrentProfile() {
+  if (d_->profilePath.isEmpty()) {
+    saveProfileAs();
+    return;
+  }
+  core::storage::saveProfile(d_->profilePath, d_->profile);
+  setProfilePath(d_->profilePath);
+  setStatus(QStringLiteral("Profile saved"));
+}
+
+void MainWindow::loadProfile() {
+  const QString path = QFileDialog::getOpenFileName(
+      this, QStringLiteral("Load Profile"), core::paths::profilesDirectory(),
+      QStringLiteral("JSON (*.json)"));
+  if (path.isEmpty()) return;
+  auto lock = std::make_unique<core::storage::FileLock>(path, 0);
+  if (!lock->acquire()) {
+    auto result = promptLockedProfile(this, path,
+                                            QFileInfo(path).completeBaseName() +
+                                                QStringLiteral("~tmp"));
+    if (result.choice == LockedChoice::Quit) return;
+    if (result.choice == LockedChoice::UseOriginal) {
+      d_->profileLock = std::move(result.lock);
+      d_->tempProfile = false;
+      loadProfileFile(path);
+      return;
+    }
+    const QString tempPath = core::paths::profilesDirectory() + '/' +
+                             result.name + QStringLiteral(".json");
+    d_->profile = core::storage::loadProfile(path);
+    core::storage::saveProfile(tempPath, d_->profile);
+    d_->profileLock = std::make_unique<core::storage::FileLock>(tempPath, 0);
+    d_->profileLock->acquire();
+    d_->tempProfile = true;
+    d_->profilePath = tempPath;
+    setStatus(QStringLiteral("Using temporary profile copy"));
+    return;
+  }
+  d_->profileLock = std::move(lock);
+  d_->tempProfile = false;
+  loadProfileFile(path);
+}
+
+void MainWindow::resetProfile() {
+  d_->profileLock.reset();
+  d_->profilePath.clear();
+  d_->tempProfile = false;
+  core::storage::setCurrentProfilePath(QString());
+  d_->profileButton->setText(QStringLiteral("Profile"));
+  d_->source->clear();
+  d_->destination->clear();
+  d_->profile = core::SyncProfile{};
+  setStatus(QStringLiteral("Profile reset"));
+}
+
+void MainWindow::updateProfileMenu() {
+  auto* menu = d_->profileButton->menu();
+  menu->clear();
+  const QString name = d_->profilePath.isEmpty()
+                           ? QStringLiteral("no profile")
+                           : QFileInfo(d_->profilePath).fileName();
+  auto* heading = menu->addAction(name);
+  heading->setEnabled(false);
+  menu->addSeparator();
+  connect(menu->addAction(QStringLiteral("Save")), &QAction::triggered,
+          this, &MainWindow::saveCurrentProfile);
+  connect(menu->addAction(QStringLiteral("Save As...")), &QAction::triggered,
+          this, &MainWindow::saveProfileAs);
+  connect(menu->addAction(QStringLiteral("Load...")), &QAction::triggered,
+          this, &MainWindow::loadProfile);
+  menu->addSeparator();
+  for (const QString& file : core::storage::listProfiles()) {
+    const QString path = core::paths::profilesDirectory() + '/' + file;
+    connect(menu->addAction(file), &QAction::triggered, this,
+            [this, path]() {
+              d_->profileLock.reset();
+              auto lock = std::make_unique<core::storage::FileLock>(path, 0);
+              if (lock->acquire()) {
+                d_->profileLock = std::move(lock);
+                d_->tempProfile = false;
+                loadProfileFile(path);
+              }
+            });
+  }
+  menu->addSeparator();
+  connect(menu->addAction(QStringLiteral("Reset")), &QAction::triggered,
+          this, &MainWindow::resetProfile);
 }
 
 }  // namespace qt_rsync::ui

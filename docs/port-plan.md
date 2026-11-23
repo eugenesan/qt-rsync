@@ -115,11 +115,19 @@ rsync cancellation and real mirror-mode validation against a disposable tree.
 Exit criterion: a verified and confirmed mirror sync against a disposable tree,
 with journal continuity and stale state afterwards.
 
-## Phase 4 — profiles, settings and multi-instance
+## Phase 4 — profiles, settings and multi-instance (in progress)
 
 Profile save/load/save-as, locked-profile startup dialog, PID locks, settings
 pages, diagnostics toggles, CLI option application, path rename migration
 (ADR-006).
+
+Delivered so far: profile menu, cached-profile startup, locked-profile dialog
+with in-place retry and a no-changes quit path, and PID locks. The settings
+pages and XDG split were ported in earlier phases.
+
+Still to do in this phase: log renaming when a temporary profile is promoted,
+cleanup of discarded temporary files, and the final path-name migration from
+`qpy-rsync` to `qt-rsync`.
 
 Exit criterion: two instances can run against different profiles; a locked
 profile offers temporary copy / retry / quit; no settings or profiles are
