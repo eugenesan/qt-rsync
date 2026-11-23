@@ -22,9 +22,13 @@ class ComparisonView : public QWidget {
   [[nodiscard]] model::DataStore& store() { return store_; }
   [[nodiscard]] core::Decisions& decisions() { return decisions_; }
   void setChanges(const QVector<core::Change>& changes);
+  void markDelete(const QString& path);
 
  signals:
   void decisionChanged();
+  void filterRequested(const QString& pattern, const QString& path);
+  void deleteFilterRequested(const QString& pattern, const QString& path);
+  void deleteRequested(const QString& path);
 
  private slots:
   void applyDecision(const QString& path, int decision);
@@ -33,6 +37,8 @@ class ComparisonView : public QWidget {
   void syncDecisionsToStore();
   void onSortIndicatorChanged(int pane, int section, Qt::SortOrder order);
   void onCurrentChanged(int origin, const QModelIndex& index);
+  void showContextMenu(int pane, const QPoint& position);
+  void showHeaderMenu(int pane, const QPoint& position);
 
   bool sorting_ = false;
   bool selecting_ = false;

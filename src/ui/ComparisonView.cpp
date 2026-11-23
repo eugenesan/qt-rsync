@@ -1,6 +1,11 @@
 #include "ui/ComparisonView.h"
 
+#include "core/Filter.h"
+
+#include <QApplication>
+#include <QClipboard>
 #include <QHeaderView>
+#include <QMenu>
 #include <QScrollBar>
 #include <QHBoxLayout>
 #include <QTableView>
@@ -44,6 +49,13 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   for (QTableView* view : views_) {
     view->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     view->installEventFilter(keyFilter_);
+    view->setContextMenuPolicy(Qt::CustomContextMenu);
+    const int pane = views_.indexOf(view);
+    connect(view, &QTableView::customContextMenuRequested, this,
+            [this, pane](const QPoint& position) { showContextMenu(pane, position); });
+    view->horizontalHeader()->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(view->horizontalHeader(), &QHeaderView::customContextMenuRequested,
+            this, [this, pane](const QPoint& position) { showHeaderMenu(pane, position); });
   }
   views_[0]->horizontalHeader()->setStretchLastSection(true);
   views_[2]->horizontalHeader()->setStretchLastSection(true);
@@ -69,6 +81,10 @@ void ComparisonView::setChanges(const QVector<core::Change>& changes) {
   syncDecisionsToStore();
   for (model::TableModel* model : models_) model->reset();
   emit decisionChanged();
+}
+
+void ComparisonView::markDelete(const QString& path) {
+  applyDecision(path, static_cast<int>(core::Decision::Delete));
 }
 
 void ComparisonView::applyDecision(const QString& path, int decision) {
@@ -117,6 +133,84 @@ void ComparisonView::onSortIndicatorChanged(int pane, int section,
     header->blockSignals(blocked);
   }
   sorting_ = false;
+}
+
+void ComparisonView::showContextMenu(int pane, const QPoint& position) {
+  QTableView* view = views_[pane];
+  const QModelIndex index = view->indexAt(position);
+  const QString path = index.data(Qt::UserRole).toString();
+  QMenu menu(view);
+  if (!path.isEmpty()) {
+    menu.addAction(QStringLiteral("Copy Path"), [path]() {
+      QApplication::clipboard()->setText(path);
+    });
+    menu.addAction(QStringLiteral("Copy Filename"), [path]() {
+      QApplication::clipboard()->setText(path.section('/', -1));
+    });
+    menu.addSeparator();
+
+    const auto id = store_.path_to_id.find(path.toStdString());
+    const bool isDirectory = id != store_.path_to_id.end() &&
+                             id->second < static_cast<int>(store_.is_dir.size()) &&
+                             store_.is_dir[id->second] != 0;
+    auto* exclude = menu.addMenu(QStringLiteral("Exclude via Filter"));
+    for (const core::FilterPhrase& phrase : core::phrasesFor(path, isDirectory)) {
+      exclude->addAction(phrase.label, [this, phrase, path]() {
+        emit filterRequested(phrase.pattern, path);
+      });
+    }
+    auto* deleteMenu = menu.addMenu(QStringLiteral("Delete on Destination"));
+    for (const core::FilterPhrase& phrase :
+         core::deletePhrasesFor(path, isDirectory)) {
+      deleteMenu->addAction(phrase.label, [this, phrase, path]() {
+        emit deleteFilterRequested(phrase.pattern, path);
+      });
+    }
+    deleteMenu->addSeparator();
+    deleteMenu->addAction(QStringLiteral("Decision only (apply at sync)"),
+                          [this, path]() { emit deleteRequested(path); });
+    menu.addSeparator();
+
+    const int decision = decisions_.explicitDecision(path) ==
+                                 core::Decision::Inherit
+                             ? 0
+                             : static_cast<int>(decisions_.explicitDecision(path));
+    if (decision == 2) {
+      menu.addAction(QStringLiteral("Include Item"),
+                     [this, path]() { applyDecision(path, 0); });
+    } else if (decision == 3) {
+      menu.addAction(QStringLiteral("Remove Delete Decision"),
+                     [this, path]() { applyDecision(path, 0); });
+    } else {
+      menu.addAction(QStringLiteral("Exclude Item"),
+                     [this, path]() { applyDecision(path, 2); });
+    }
+  }
+  menu.exec(view->viewport()->mapToGlobal(position));
+}
+
+void ComparisonView::showHeaderMenu(int pane, const QPoint& position) {
+  QHeaderView* header = views_[pane]->horizontalHeader();
+  QMenu menu(header);
+  static const QVector<QPair<QString, int>> names{
+      {QStringLiteral("Item"), 0},
+      {QStringLiteral("Items"), 1},
+      {QStringLiteral("Size"), 2},
+      {QStringLiteral("Modified"), 3},
+      {QStringLiteral("Size (bytes)"), 9},
+  };
+  for (const auto& name : names) {
+    const int column = (pane == 2 && name.second < 4) ? name.second + 5
+                                                      : name.second;
+    auto* action = menu.addAction(name.first);
+    action->setCheckable(true);
+    action->setChecked(!header->isSectionHidden(column));
+    action->setEnabled(pane != 1 || column == 4);
+    connect(action, &QAction::toggled, header, [header, column](bool checked) {
+      header->setSectionHidden(column, !checked);
+    });
+  }
+  menu.exec(header->mapToGlobal(position));
 }
 
 }  // namespace qt_rsync::ui

@@ -23,6 +23,7 @@ class MainWindow : public QMainWindow {
   void startCompare();
   void onCompareFinished(int exitCode, QProcess::ExitStatus status);
   void onCompareError(QProcess::ProcessError error);
+  void addFilterPattern(const QString& pattern, const QString& path);
 
  private:
   class Private;

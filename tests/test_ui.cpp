@@ -3,7 +3,11 @@
 #include <QFile>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QAbstractButton>
+#include <QCheckBox>
+#include <QDialogButtonBox>
 #include <QItemSelectionModel>
+#include <QTabWidget>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QTemporaryDir>
@@ -11,6 +15,8 @@
 
 #include "ui/MainWindow.h"
 #include "ui/ComparisonView.h"
+#include "ui/SettingsDialog.h"
+#include "core/Storage.h"
 
 using namespace qt_rsync;
 
@@ -20,6 +26,7 @@ class UiTest : public QObject {
  private slots:
   void compareRendersFakeRsyncOutput();
   void spaceExcludesEverySelectedItem();
+  void settingsDialogPersistsDiagnostics();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -111,6 +118,27 @@ void UiTest::spaceExcludesEverySelectedItem() {
   }
   QVERIFY(excluded >= 3);
   qputenv("PATH", oldPath);
+}
+
+void UiTest::settingsDialogPersistsDiagnostics() {
+  QTemporaryDir dir;
+  qputenv("XDG_CONFIG_HOME", dir.path().toUtf8());
+  qputenv("XDG_STATE_HOME", dir.path().toUtf8());
+  ui::SettingsDialog dialog;
+  QCOMPARE(dialog.findChildren<QTabWidget*>().size(), 1);
+  QCOMPARE(dialog.findChildren<QCheckBox*>().size(), 4);
+  for (QCheckBox* box : dialog.findChildren<QCheckBox*>()) {
+    if (box->text().contains(QStringLiteral("timing"))) box->setChecked(true);
+  }
+  for (QDialogButtonBox* buttons : dialog.findChildren<QDialogButtonBox*>()) {
+    for (QAbstractButton* button : buttons->buttons()) {
+      if (button->text().contains(QStringLiteral("OK"))) {
+        const_cast<QAbstractButton*>(button)->click();
+      }
+    }
+  }
+  core::storage::Settings settings;
+  QVERIFY(settings.value(QStringLiteral("logging/timing")).toBool());
 }
 
 QTEST_MAIN(UiTest)

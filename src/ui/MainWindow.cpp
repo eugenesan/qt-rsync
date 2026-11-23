@@ -12,6 +12,7 @@
 #include "core/Parser.h"
 #include "ui/ComparisonView.h"
 #include "ui/OverviewPane.h"
+#include "ui/SettingsDialog.h"
 
 namespace qt_rsync::ui {
 
@@ -46,6 +47,12 @@ MainWindow::MainWindow(QWidget* parent)
   form->addRow(QStringLiteral("Destination:"), d_->destination);
   d_->compare = new QPushButton(QStringLiteral("Compare"), paths);
   form->addRow(QString(), d_->compare);
+  auto* settingsButton = new QPushButton(QStringLiteral("Settings..."), paths);
+  connect(settingsButton, &QPushButton::clicked, this, [this]() {
+    SettingsDialog dialog(this);
+    dialog.exec();
+  });
+  form->addRow(QString(), settingsButton);
   layout->addWidget(paths);
 
   auto* splitter = new QSplitter(Qt::Vertical, central);
@@ -60,6 +67,16 @@ MainWindow::MainWindow(QWidget* parent)
   d_->status = new QLabel(QStringLiteral("Ready"), central);
   layout->addWidget(d_->status);
 
+  connect(d_->comparison, &ComparisonView::filterRequested, this,
+          [this](const QString& pattern, const QString& path) {
+            addFilterPattern(pattern, path);
+          });
+  connect(d_->comparison, &ComparisonView::deleteFilterRequested, this,
+          [this](const QString& pattern, const QString& path) {
+            addFilterPattern(pattern, path);
+          });
+  connect(d_->comparison, &ComparisonView::deleteRequested, this,
+          [this](const QString& path) { d_->comparison->markDelete(path); });
   connect(d_->comparison, &ComparisonView::decisionChanged,
           this, [this]() { d_->overview->rebuild(d_->comparison->store()); });
 
@@ -121,6 +138,17 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   d_->overview->rebuild(d_->comparison->store());
   d_->status->setText(QStringLiteral("Comparison complete: %1 item(s)")
                           .arg(parsed.changes.size()));
+}
+
+void MainWindow::addFilterPattern(const QString& pattern, const QString& path) {
+  const QString text = d_->profile.filterText;
+  if (text.split('\n').contains(pattern)) return;
+  d_->profile.filterText =
+      text.isEmpty() ? pattern
+                     : text + QStringLiteral("\n# Added from ") + path +
+                           QStringLiteral("\n") + pattern;
+  d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
+  d_->status->setText(QStringLiteral("Filter added: %1").arg(pattern));
 }
 
 void MainWindow::onCompareError(QProcess::ProcessError error) {

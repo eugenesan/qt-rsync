@@ -13,6 +13,9 @@
   spec, parses stdout, populates the views and reports progress/status.
 - Added a QtTest end-to-end check with a fake rsync executable: 2 test targets,
   43 assertions total.
+- Added row context menus (copy path/name, Exclude via Filter, Delete on
+  Destination with permanent-filter and decision-only options), a column
+  header editor, and the four settings pages wired to the XDG settings split.
 - Ported the decision-column delegate, Space handling for multi-row selection,
   linked sorting, synchronized selection/scrollbars and the statistics strip.
   Decisions now live only in `core::Decisions`; the view store mirrors them

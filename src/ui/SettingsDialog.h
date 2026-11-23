@@ -2,13 +2,23 @@
 
 #include <QDialog>
 
+class QCheckBox;
+
 namespace qt_rsync::ui {
 
-// Placeholder for the General / Logging / Backup / Tools / Advanced pages.
 class SettingsDialog : public QDialog {
   Q_OBJECT
  public:
   explicit SettingsDialog(QWidget* parent = nullptr);
+
+ private slots:
+  void save();
+
+ private:
+  QCheckBox* sound_ = nullptr;
+  QCheckBox* timing_ = nullptr;
+  QCheckBox* debug_ = nullptr;
+  QCheckBox* preserve_ = nullptr;
 };
 
 }  // namespace qt_rsync::ui
