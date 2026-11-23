@@ -1,31 +1,57 @@
 #include "ui/MainWindow.h"
 
+#include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QProcessEnvironment>
 #include <QPushButton>
 #include <QSplitter>
+#include <QTemporaryFile>
 #include <QVBoxLayout>
 
 #include "core/Command.h"
+#include "core/Filter.h"
 #include "core/Parser.h"
+#include "core/Storage.h"
 #include "ui/ComparisonView.h"
 #include "ui/OverviewPane.h"
 #include "ui/SettingsDialog.h"
+#include "ui/SyncDialog.h"
 
 namespace qt_rsync::ui {
+namespace {
+
+void setProcessEnvironment(const core::ProcessSpec& spec, QProcess* process) {
+  QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+  for (auto it = spec.environment.cbegin(); it != spec.environment.cend(); ++it) {
+    environment.insert(it.key(), it.value());
+  }
+  process->setProcessEnvironment(environment);
+}
+
+}  // namespace
 
 class MainWindow::Private {
  public:
   QLineEdit* source = nullptr;
   QLineEdit* destination = nullptr;
   QPushButton* compare = nullptr;
+  QPushButton* verify = nullptr;
+  QPushButton* sync = nullptr;
   QLabel* status = nullptr;
   ComparisonView* comparison = nullptr;
   OverviewPane* overview = nullptr;
-  QProcess* process = nullptr;
+  QProcess* compareProcess = nullptr;
+  QProcess* operationProcess = nullptr;
+  QTemporaryFile* filterFile = nullptr;
   core::SyncProfile profile;
+  QVector<core::Change> changes;
+  core::ExecutionPlan plan;
+  bool verified = false;
+  bool stale = false;
+  bool syncing = false;
 };
 
 MainWindow::MainWindow(QWidget* parent)
@@ -45,8 +71,20 @@ MainWindow::MainWindow(QWidget* parent)
   d_->destination->setPlaceholderText(QStringLiteral("/home/user/destination"));
   form->addRow(QStringLiteral("Source:"), d_->source);
   form->addRow(QStringLiteral("Destination:"), d_->destination);
-  d_->compare = new QPushButton(QStringLiteral("Compare"), paths);
-  form->addRow(QString(), d_->compare);
+
+  auto* actions = new QWidget(paths);
+  auto* actionLayout = new QHBoxLayout(actions);
+  actionLayout->setContentsMargins(0, 0, 0, 0);
+  d_->compare = new QPushButton(QStringLiteral("Compare"), actions);
+  d_->verify = new QPushButton(QStringLiteral("Verify (F8)"), actions);
+  d_->sync = new QPushButton(QStringLiteral("Synchronize (F9)"), actions);
+  d_->verify->setEnabled(false);
+  d_->sync->setEnabled(false);
+  actionLayout->addWidget(d_->compare);
+  actionLayout->addWidget(d_->verify);
+  actionLayout->addWidget(d_->sync);
+  form->addRow(QString(), actions);
+
   auto* settingsButton = new QPushButton(QStringLiteral("Settings..."), paths);
   connect(settingsButton, &QPushButton::clicked, this, [this]() {
     SettingsDialog dialog(this);
@@ -67,6 +105,20 @@ MainWindow::MainWindow(QWidget* parent)
   d_->status = new QLabel(QStringLiteral("Ready"), central);
   layout->addWidget(d_->status);
 
+  d_->compareProcess = new QProcess(this);
+  d_->operationProcess = new QProcess(this);
+  connect(d_->compare, &QPushButton::clicked, this, &MainWindow::startCompare);
+  connect(d_->verify, &QPushButton::clicked, this, &MainWindow::verifyPlan);
+  connect(d_->sync, &QPushButton::clicked, this, &MainWindow::synchronize);
+  connect(d_->compareProcess, &QProcess::finished, this, &MainWindow::onCompareFinished);
+  connect(d_->compareProcess, &QProcess::errorOccurred, this, &MainWindow::onCompareError);
+  connect(d_->operationProcess, &QProcess::finished, this, &MainWindow::onOperationFinished);
+  connect(d_->operationProcess, &QProcess::errorOccurred, this, &MainWindow::onOperationError);
+  connect(d_->comparison, &ComparisonView::decisionChanged, this, [this]() {
+    d_->verified = false;
+    refreshPlan();
+    d_->overview->rebuild(d_->comparison->store());
+  });
   connect(d_->comparison, &ComparisonView::filterRequested, this,
           [this](const QString& pattern, const QString& path) {
             addFilterPattern(pattern, path);
@@ -77,13 +129,6 @@ MainWindow::MainWindow(QWidget* parent)
           });
   connect(d_->comparison, &ComparisonView::deleteRequested, this,
           [this](const QString& path) { d_->comparison->markDelete(path); });
-  connect(d_->comparison, &ComparisonView::decisionChanged,
-          this, [this]() { d_->overview->rebuild(d_->comparison->store()); });
-
-  d_->process = new QProcess(this);
-  connect(d_->compare, &QPushButton::clicked, this, &MainWindow::startCompare);
-  connect(d_->process, &QProcess::finished, this, &MainWindow::onCompareFinished);
-  connect(d_->process, &QProcess::errorOccurred, this, &MainWindow::onCompareError);
 }
 
 MainWindow::~MainWindow() { delete d_; }
@@ -109,22 +154,18 @@ void MainWindow::startCompare() {
     d_->status->setText(QStringLiteral("Enter Source and Destination first."));
     return;
   }
-
+  d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
   const core::ProcessSpec spec = core::buildCompareSpec(d_->profile);
-  QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
-  for (auto it = spec.environment.cbegin(); it != spec.environment.cend(); ++it) {
-    environment.insert(it.key(), it.value());
-  }
-  d_->process->setProcessEnvironment(environment);
+  setProcessEnvironment(spec, d_->compareProcess);
   d_->compare->setEnabled(false);
   d_->status->setText(QStringLiteral("Comparing..."));
-  d_->process->start(spec.program, spec.arguments);
+  d_->compareProcess->start(spec.program, spec.arguments);
 }
 
 void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   d_->compare->setEnabled(true);
-  const QByteArray output = d_->process->readAllStandardOutput();
-  const QString stderr = QString::fromLocal8Bit(d_->process->readAllStandardError());
+  const QByteArray output = d_->compareProcess->readAllStandardOutput();
+  const QString stderr = QString::fromLocal8Bit(d_->compareProcess->readAllStandardError());
   if (status != QProcess::NormalExit || exitCode != 0) {
     d_->status->setText(QStringLiteral("Compare failed: %1")
                             .arg(stderr.trimmed().isEmpty()
@@ -134,10 +175,96 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   }
   const core::ParseResult parsed = core::parseOutput(
       QString::fromUtf8(output), d_->profile.transfer.mirrorEnabled());
+  d_->changes = parsed.changes;
   d_->comparison->setChanges(parsed.changes);
   d_->overview->rebuild(d_->comparison->store());
+  refreshPlan();
+  d_->stale = false;
   d_->status->setText(QStringLiteral("Comparison complete: %1 item(s)")
                           .arg(parsed.changes.size()));
+}
+
+void MainWindow::onCompareError(QProcess::ProcessError error) {
+  Q_UNUSED(error)
+  d_->compare->setEnabled(true);
+  d_->status->setText(QStringLiteral("Could not start rsync: %1")
+                          .arg(d_->compareProcess->errorString()));
+}
+
+void MainWindow::refreshPlan() {
+  d_->plan = core::buildExecutionPlan(d_->profile, d_->changes,
+                                      d_->comparison->decisions());
+  const bool actionable = d_->plan.summary.included > 0;
+  d_->verify->setEnabled(actionable);
+  d_->sync->setEnabled(actionable);
+}
+
+void MainWindow::verifyPlan() {
+  if (d_->plan.items.isEmpty()) refreshPlan();
+  d_->filterFile = new QTemporaryFile(this);
+  if (!d_->filterFile->open()) {
+    d_->status->setText(QStringLiteral("Could not write decision rules."));
+    return;
+  }
+  d_->filterFile->write(core::decisionFilterText(d_->plan).toUtf8());
+  d_->filterFile->flush();
+  const core::ProcessSpec spec =
+      core::buildVerifySpec(d_->profile, d_->filterFile->fileName());
+  setProcessEnvironment(spec, d_->operationProcess);
+  d_->syncing = false;
+  d_->status->setText(QStringLiteral("Verifying..."));
+  d_->operationProcess->start(spec.program, spec.arguments);
+}
+
+void MainWindow::synchronize() {
+  if (d_->plan.items.isEmpty() || d_->stale) refreshPlan();
+  d_->filterFile = new QTemporaryFile(this);
+  if (!d_->filterFile->open()) {
+    d_->status->setText(QStringLiteral("Could not write decision rules."));
+    return;
+  }
+  d_->filterFile->write(core::decisionFilterText(d_->plan).toUtf8());
+  d_->filterFile->flush();
+
+  SyncDialog dialog(d_->profile, d_->plan, d_->filterFile->fileName(), this);
+  if (dialog.exec() != QDialog::Accepted) return;
+
+  const core::ProcessSpec spec =
+      core::buildSyncSpec(d_->profile, d_->filterFile->fileName());
+  setProcessEnvironment(spec, d_->operationProcess);
+  d_->syncing = true;
+  d_->status->setText(QStringLiteral("Synchronizing..."));
+  d_->operationProcess->start(spec.program, spec.arguments);
+}
+
+void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) {
+  const QString stderr = QString::fromLocal8Bit(d_->operationProcess->readAllStandardError());
+  const bool ok = status == QProcess::NormalExit && exitCode == 0;
+  if (d_->syncing) {
+    d_->syncing = false;
+    if (!ok) {
+      d_->status->setText(QStringLiteral("Synchronization failed: %1")
+                              .arg(stderr.trimmed()));
+      return;
+    }
+    // The destination changed: the comparison is stale until the user asks
+    // for a fresh Compare. Never refresh automatically.
+    d_->stale = true;
+    d_->verified = false;
+    d_->status->setText(QStringLiteral(
+        "Synchronization complete — click Compare to refresh the comparison."));
+    return;
+  }
+  d_->verified = ok;
+  d_->status->setText(ok ? QStringLiteral("Verification matched the plan.")
+                         : QStringLiteral("Verification failed: %1")
+                               .arg(stderr.trimmed()));
+}
+
+void MainWindow::onOperationError(QProcess::ProcessError error) {
+  Q_UNUSED(error)
+  d_->status->setText(QStringLiteral("Operation failed: %1")
+                          .arg(d_->operationProcess->errorString()));
 }
 
 void MainWindow::addFilterPattern(const QString& pattern, const QString& path) {
@@ -149,13 +276,6 @@ void MainWindow::addFilterPattern(const QString& pattern, const QString& path) {
                            QStringLiteral("\n") + pattern;
   d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
   d_->status->setText(QStringLiteral("Filter added: %1").arg(pattern));
-}
-
-void MainWindow::onCompareError(QProcess::ProcessError error) {
-  d_->compare->setEnabled(true);
-  Q_UNUSED(error)
-  d_->status->setText(QStringLiteral("Could not start rsync: %1")
-                          .arg(d_->process->errorString()));
 }
 
 }  // namespace qt_rsync::ui

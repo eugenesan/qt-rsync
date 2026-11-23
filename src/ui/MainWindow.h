@@ -4,10 +4,13 @@
 #include <QProcess>
 
 #include "app/StartupOptions.h"
+#include "core/Change.h"
+#include "core/Plan.h"
 
 class QLabel;
 class QLineEdit;
 class QPushButton;
+class QTemporaryFile;
 
 namespace qt_rsync::ui {
 
@@ -23,6 +26,11 @@ class MainWindow : public QMainWindow {
   void startCompare();
   void onCompareFinished(int exitCode, QProcess::ExitStatus status);
   void onCompareError(QProcess::ProcessError error);
+  void verifyPlan();
+  void synchronize();
+  void onOperationFinished(int exitCode, QProcess::ExitStatus status);
+  void onOperationError(QProcess::ProcessError error);
+  void refreshPlan();
   void addFilterPattern(const QString& pattern, const QString& path);
 
  private:

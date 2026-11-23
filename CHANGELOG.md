@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — phase 3: verify and sync
+
+- Added Verify (F8): runs the compare dry run with the temporary decision
+  filter file and reports whether the output matches the execution plan.
+- Added Synchronize (F9): confirmation dialog with command preview, decision
+  rules, counts and destructive-operation warning; runs a write-capable rsync
+  with `QProcess`.
+- After a successful sync the comparison is marked stale and is never
+  refreshed automatically; the user must press Compare.
+- Added a fake-rsync UI test covering compare → verify → confirm → sync →
+  stale state.
+
 ## Unreleased — phase 2: first vertical slice
 
 - Lifted the proven native view layer: `DataStore`, `TableModel` and

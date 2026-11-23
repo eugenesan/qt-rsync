@@ -5,6 +5,8 @@
 #include <QLabel>
 #include <QAbstractButton>
 #include <QCheckBox>
+#include <QDialog>
+#include <QTimer>
 #include <QDialogButtonBox>
 #include <QItemSelectionModel>
 #include <QTabWidget>
@@ -27,6 +29,7 @@ class UiTest : public QObject {
   void compareRendersFakeRsyncOutput();
   void spaceExcludesEverySelectedItem();
   void settingsDialogPersistsDiagnostics();
+  void verifyAndSyncKeepComparisonStale();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -139,6 +142,59 @@ void UiTest::settingsDialogPersistsDiagnostics() {
   }
   core::storage::Settings settings;
   QVERIFY(settings.value(QStringLiteral("logging/timing")).toBool());
+}
+
+void UiTest::verifyAndSyncKeepComparisonStale() {
+  QTemporaryDir dir;
+  const QString script = dir.path() + QStringLiteral("/rsync");
+  QFile file(script);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write("#!/bin/sh\n"
+             "printf '%s\\n' "
+             "'>f+++++++++|qpy-rsync|1|qpy-rsync||qpy-rsync|a.txt'\n");
+  file.close();
+  file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                      QFileDevice::ExeOwner);
+  const QByteArray oldPath = qgetenv("PATH");
+  qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
+
+  ui::MainWindow window;
+  const auto edits = window.findChildren<QLineEdit*>();
+  edits.at(0)->setText(QStringLiteral("/src"));
+  edits.at(1)->setText(QStringLiteral("/dst"));
+  QPushButton* compare = nullptr;
+  QPushButton* verify = nullptr;
+  QPushButton* sync = nullptr;
+  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+    if (button->text() == QLatin1String("Compare")) compare = button;
+    if (button->text().startsWith(QLatin1String("Verify"))) verify = button;
+    if (button->text().startsWith(QLatin1String("Synchronize"))) sync = button;
+  }
+  QVERIFY(compare && verify && sync);
+  compare->click();
+  auto* status = window.findChild<QLabel*>();
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
+  QVERIFY(verify->isEnabled());
+  QVERIFY(sync->isEnabled());
+
+  verify->click();
+  QTest::qWait(100);
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QStringLiteral("Verification")), 5000);
+
+  QTimer::singleShot(100, [&]() {
+    for (QWidget* widget : QApplication::topLevelWidgets()) {
+      auto* dialog = dynamic_cast<QDialog*>(widget);
+      if (dialog == nullptr || !dialog->isVisible() || dialog->windowTitle() != QLatin1String("Synchronize")) continue;
+      for (QAbstractButton* button : dialog->findChildren<QAbstractButton*>()) {
+        if (button->text() == QLatin1String("Synchronize")) button->click();
+      }
+      return;
+    }
+  });
+  sync->click();
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QStringLiteral("click Compare to refresh")), 5000);
+  QVERIFY(!status->text().contains(QStringLiteral("Comparison complete")));
+  qputenv("PATH", oldPath);
 }
 
 QTEST_MAIN(UiTest)

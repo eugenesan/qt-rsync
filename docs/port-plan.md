@@ -98,12 +98,19 @@ Destination), column header editor, and the settings dialog pages.
 Exit criterion: a real Compare of the example-sized tree renders and decisions can
 be toggled, with no mirrored state and no Python process involved.
 
-## Phase 3 — plan, verification and sync
+## Phase 3 — plan, verification and sync (in progress)
 
 Execution plan summary and validation dry run; sync confirmation dialog with
 command preview and decision rules; `QProcess` sync with progress, cancel and
 journal. Preserve qpy-rsync's rule that the comparison goes stale after sync
 and is never refreshed automatically.
+
+Delivered so far: plan summary wiring, verify dry run, sync confirmation
+dialog with command/rules preview, and stale-after-sync behaviour, covered by
+a fake-rsync UI test.
+
+Still to do in this phase: a persistent journal widget, rsync progress parsing
+and cancellation, and real mirror-mode validation against a disposable tree.
 
 Exit criterion: a verified and confirmed mirror sync against a disposable tree,
 with journal continuity and stale state afterwards.
