@@ -34,8 +34,16 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   for (int column : {0, 1, 2, 3, 4, 8, 9, 10}) views_[2]->setColumnHidden(column, true);
   views_[1]->setFixedWidth(160);
 
+  delegate_ = new DecisionDelegate(this);
+  views_[1]->setItemDelegateForColumn(4, delegate_);
+  keyFilter_ = new DecisionKeyFilter(this);
+  connect(delegate_, &DecisionDelegate::decisionToggled,
+          this, &ComparisonView::applyDecision);
+  connect(keyFilter_, &DecisionKeyFilter::decisionToggled,
+          this, &ComparisonView::applyDecision);
   for (QTableView* view : views_) {
     view->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    view->installEventFilter(keyFilter_);
   }
   views_[0]->horizontalHeader()->setStretchLastSection(true);
   views_[2]->horizontalHeader()->setStretchLastSection(true);
@@ -50,8 +58,33 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
 }
 
 void ComparisonView::setChanges(const QVector<core::Change>& changes) {
+  decisions_.reconcile(changes, true);
   loadChanges(store_, changes);
+  syncDecisionsToStore();
   for (model::TableModel* model : models_) model->reset();
+  emit decisionChanged();
+}
+
+void ComparisonView::applyDecision(const QString& path, int decision) {
+  const core::Decision value = static_cast<core::Decision>(decision);
+  decisions_.set(path, value);
+  syncDecisionsToStore();
+  for (model::TableModel* model : models_) model->reset();
+  emit decisionChanged();
+}
+
+void ComparisonView::syncDecisionsToStore() {
+  const auto items = decisions_.explicitItems();
+  for (const auto& item : items) {
+    const std::string key = item.first.toStdString();
+    for (std::size_t id = 0; id < store_.paths.size(); ++id) {
+      const std::string& path = store_.paths[id];
+      if (path != key && path.rfind(key + '/', 0) != 0) continue;
+      if (id < store_.decisions.size()) {
+        store_.decisions[id] = static_cast<int>(item.second);
+      }
+    }
+  }
 }
 
 }  // namespace qt_rsync::ui

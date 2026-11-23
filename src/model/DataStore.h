@@ -830,6 +830,9 @@ class TableModel : public QAbstractTableModel {
       }
       return {};
     }
+    if (role == Qt::UserRole) {
+      return QString::fromStdString(store_->paths[id]);
+    }
     if (role == Qt::ToolTipRole) {
       const std::string& path = id < static_cast<int>(store_->paths.size())
                                     ? store_->paths[id] : std::string();

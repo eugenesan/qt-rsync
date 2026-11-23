@@ -4,7 +4,9 @@
 #include <QWidget>
 
 #include "core/Change.h"
+#include "core/Decision.h"
 #include "model/DataStore.h"
+#include "ui/DecisionDelegate.h"
 
 class QTableView;
 
@@ -18,12 +20,24 @@ class ComparisonView : public QWidget {
   explicit ComparisonView(QWidget* parent = nullptr);
 
   [[nodiscard]] model::DataStore& store() { return store_; }
+  [[nodiscard]] core::Decisions& decisions() { return decisions_; }
   void setChanges(const QVector<core::Change>& changes);
 
+ signals:
+  void decisionChanged();
+
+ private slots:
+  void applyDecision(const QString& path, int decision);
+
  private:
+  void syncDecisionsToStore();
+
   model::DataStore store_;
+  core::Decisions decisions_;
   QVector<QTableView*> views_;
   QVector<model::TableModel*> models_;
+  DecisionDelegate* delegate_ = nullptr;
+  DecisionKeyFilter* keyFilter_ = nullptr;
 };
 
 }  // namespace qt_rsync::ui

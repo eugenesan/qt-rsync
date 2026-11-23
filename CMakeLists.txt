@@ -45,6 +45,7 @@ target_link_libraries(qt_rsync_model PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets qt_r
 add_library(qt_rsync_ui
     src/ui/MainWindow.cpp
     src/ui/ComparisonView.cpp
+    src/ui/DecisionDelegate.cpp
     src/ui/OverviewPane.cpp
     src/ui/SettingsDialog.cpp
 )
