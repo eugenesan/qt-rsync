@@ -23,6 +23,9 @@ class ComparisonView : public QWidget {
   [[nodiscard]] core::Decisions& decisions() { return decisions_; }
   void setChanges(const QVector<core::Change>& changes);
   void setRootNames(const QString& source, const QString& destination);
+  void selectPath(const QString& path);
+  void foldCurrent(int pane, bool collapse);
+  void foldAll(bool collapse);
   void applyDestinationMetadata(
       const QHash<QString, QPair<qlonglong, QString>>& metadata);
   void markDelete(const QString& path);

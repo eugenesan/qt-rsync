@@ -5,6 +5,8 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QHash>
+#include <QKeyEvent>
 #include <QHeaderView>
 #include <QMenu>
 #include <QScrollBar>
@@ -12,6 +14,31 @@
 #include <QTableView>
 
 namespace qt_rsync::ui {
+namespace {
+
+class FoldKeyFilter : public QObject {
+ public:
+  FoldKeyFilter(ComparisonView* view, QObject* parent)
+      : QObject(parent), view_(view) {}
+
+  void watch(QObject* object, int pane) { panes_.insert(object, pane); }
+
+  bool eventFilter(QObject* watched, QEvent* event) override {
+    auto* key = dynamic_cast<QKeyEvent*>(event);
+    if (key == nullptr || key->type() != QEvent::KeyPress) return false;
+    if (key->key() != Qt::Key_Left && key->key() != Qt::Key_Right) return false;
+    auto it = panes_.constFind(watched);
+    if (it == panes_.cend()) return false;
+    view_->foldCurrent(it.value(), key->key() == Qt::Key_Left);
+    return true;
+  }
+
+ private:
+  ComparisonView* view_;
+  QHash<QObject*, int> panes_;
+};
+
+}  // namespace
 
 ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   auto* layout = new QHBoxLayout(this);
@@ -45,6 +72,12 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   for (const char* extension : {".txt", ".md", ".json", ".py", ".log", ".zip"}) {
     store_.file_icons[extension] = icons::fileIcon(
         QString::fromLatin1("file") + QLatin1String(extension));
+  }
+
+  auto* foldFilter = new FoldKeyFilter(this, this);
+  for (int i = 0; i < 3; ++i) {
+    views_[i]->installEventFilter(foldFilter);
+    foldFilter->watch(views_[i], i);
   }
 
   delegate_ = new DecisionDelegate(this);
@@ -162,6 +195,46 @@ void ComparisonView::onSortIndicatorChanged(int pane, int section,
   sorting_ = false;
 }
 
+void ComparisonView::selectPath(const QString& path) {
+  const std::string key = path.toStdString();
+  int row = -1;
+  for (int r = 0; r < static_cast<int>(store_.visible.size()); ++r) {
+    if (store_.paths[store_.visible[r]] == key) {
+      row = r;
+      break;
+    }
+  }
+  if (row < 0) return;
+  for (QTableView* view : views_) {
+    view->setCurrentIndex(view->model()->index(row, 0));
+  }
+}
+
+void ComparisonView::foldCurrent(int pane, bool collapse) {
+  if (pane < 0 || pane >= views_.size()) return;
+  const QModelIndex current = views_[pane]->currentIndex();
+  if (!current.isValid()) return;
+  const int row = current.row();
+  if (row < 0 || row >= static_cast<int>(store_.visible.size())) return;
+  const int id = store_.visible[row];
+  if (id < 0 || id >= static_cast<int>(store_.is_dir.size()) || !store_.is_dir[id]) {
+    return;
+  }
+  const QString path = QString::fromStdString(store_.paths[id]);
+  store_.set_collapsed(id, collapse);
+  store_.rebuild_visible();
+  for (model::TableModel* model : models_) model->reset();
+  selectPath(path);
+}
+
+void ComparisonView::foldAll(bool collapse) {
+  for (std::size_t id = 0; id < store_.is_dir.size(); ++id) {
+    if (store_.is_dir[id]) store_.set_collapsed(static_cast<int>(id), collapse);
+  }
+  store_.rebuild_visible();
+  for (model::TableModel* model : models_) model->reset();
+}
+
 void ComparisonView::showContextMenu(int pane, const QPoint& position) {
   QTableView* view = views_[pane];
   const QModelIndex index = view->indexAt(position);
@@ -196,6 +269,23 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
     deleteMenu->addSeparator();
     deleteMenu->addAction(QStringLiteral("Decision only (apply at sync)"),
                           [this, path]() { emit deleteRequested(path); });
+    
+    const bool directory = id != store_.path_to_id.end() &&
+                           id->second < static_cast<int>(store_.is_dir.size()) &&
+                           store_.is_dir[id->second] != 0;
+    if (directory) {
+      auto* fold = menu.addMenu(QStringLiteral("Collapse / Expand"));
+      fold->addAction(store_.is_collapsed(id->second) ? QStringLiteral("Expand Folder")
+                                                     : QStringLiteral("Collapse Folder"),
+                      [this, pane, id]() {
+                        foldCurrent(pane, !store_.is_collapsed(id->second));
+                      });
+      fold->addSeparator();
+      fold->addAction(QStringLiteral("Collapse All Folders"),
+                      [this]() { foldAll(true); });
+      fold->addAction(QStringLiteral("Expand All Folders"),
+                      [this]() { foldAll(false); });
+    }
     menu.addSeparator();
 
     const int decision = decisions_.explicitDecision(path) ==

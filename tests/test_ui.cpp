@@ -33,6 +33,7 @@ class UiTest : public QObject {
   void verifyAndSyncKeepComparisonStale();
   void restoresCachedProfileOnStartup();
   void lockedProfileCanQuitWithoutChanges();
+  void arrowKeysFoldAndExpandFolders();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -250,6 +251,53 @@ void UiTest::lockedProfileCanQuitWithoutChanges() {
   ui::MainWindow window;
   QVERIFY(window.startupAborted());
   QCOMPARE(core::storage::currentProfilePath(), path);
+}
+
+void UiTest::arrowKeysFoldAndExpandFolders() {
+  QTemporaryDir dir;
+  const QString script = dir.path() + QStringLiteral("/rsync");
+  QFile file(script);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write("#!/bin/sh\n"
+             "printf '%s\\n' "
+             "'>f+++++++++|qpy-rsync|6|qpy-rsync||qpy-rsync|docs/a.txt' "
+             "'>f+++++++++|qpy-rsync|6|qpy-rsync||qpy-rsync|docs/b.txt'\n");
+  file.close();
+  file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                      QFileDevice::ExeOwner);
+  const QByteArray oldPath = qgetenv("PATH");
+  qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
+
+  ui::MainWindow window;
+  const auto edits = window.findChildren<QLineEdit*>();
+  edits.at(0)->setText(QStringLiteral("/src"));
+  edits.at(1)->setText(QStringLiteral("/dst"));
+  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+    if (button->text() == QLatin1String("Compare")) button->click();
+  }
+  auto* status = window.findChild<QLabel*>();
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
+  const auto tables = window.findChildren<QTableView*>();
+  auto* table = tables.at(0);
+  const int before = table->model()->rowCount();
+
+  int docsRow = -1;
+  for (int row = 0; row < before; ++row) {
+    if (table->model()->data(table->model()->index(row, 0), Qt::UserRole).toString() ==
+        QLatin1String("docs")) {
+      docsRow = row;
+      break;
+    }
+  }
+  QVERIFY(docsRow >= 0);
+  table->setCurrentIndex(table->model()->index(docsRow, 0));
+  QKeyEvent left(QEvent::KeyPress, Qt::Key_Left, Qt::KeyboardModifier::NoModifier);
+  QApplication::sendEvent(table, &left);
+  QVERIFY(table->model()->rowCount() < before);
+  QKeyEvent right(QEvent::KeyPress, Qt::Key_Right, Qt::KeyboardModifier::NoModifier);
+  QApplication::sendEvent(table, &right);
+  QCOMPARE(table->model()->rowCount(), before);
+  qputenv("PATH", oldPath);
 }
 
 QTEST_MAIN(UiTest)

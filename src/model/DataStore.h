@@ -463,6 +463,10 @@ struct DataStore {
     }
   }
 
+  bool is_collapsed(int id) const {
+    return id >= 0 && id < static_cast<int>(collapsed.size()) && collapsed[id] != 0;
+  }
+
   bool matches(int id) const {
     if (action_mask == -1) {
       // "Only excluded" mode: only excluded items pass; their ancestor
