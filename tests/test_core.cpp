@@ -2,6 +2,7 @@
 
 #include "core/Change.h"
 #include "core/Decision.h"
+#include "core/Filter.h"
 #include "core/Profile.h"
 
 using namespace qt_rsync::core;
@@ -36,6 +37,14 @@ class CoreTest : public QObject {
   void freshComparisonDropsStaleDecisionsWithoutConflicts();
   void inheritedDestinationOnlyDetectionIsOptIn();
   void deleteDecisionSurvivesPreserveWhileItemExists();
+
+  // Filters (ported from qpy-rsync filter tests)
+  void advancedRuleParsing();
+  void filterTextConvertsBarePatterns();
+  void filterArgumentsPreserveOrderAndTypes();
+  void contextMenuPhrases();
+  void patternMatching();
+  void cleanQtNoiseRemovesOnlyBenignLines();
 
   // Existing smoke checks
   void endpointOperandKeepsSshSyntax();
@@ -190,6 +199,82 @@ void CoreTest::deleteDecisionSurvivesPreserveWhileItemExists() {
   QVERIFY(decisions.isSelectable(changes.first()));
   QCOMPARE(decisions.reconcile(changes, false), 1);
   QCOMPARE(decisions.effective(changes.first()), Decision::Exclude);
+}
+
+void CoreTest::advancedRuleParsing() {
+  QVERIFY(isAdvancedRule(QStringLiteral("-s *.kate-swp")));
+  QVERIFY(isAdvancedRule(QStringLiteral("exclude *.tmp")));
+  QVERIFY(isAdvancedRule(QStringLiteral("clear")));
+  QVERIFY(!isAdvancedRule(QStringLiteral("-z foo")));
+  QVERIFY(!isAdvancedRule(QStringLiteral("-s")));
+  QVERIFY(!isAdvancedRule(QStringLiteral("! keep.txt")));
+  const auto parsed = parseAdvancedRule(QStringLiteral("-s *.kate-swp"));
+  QVERIFY(parsed.has_value());
+  QCOMPARE(parsed->token, QStringLiteral("-s"));
+  QCOMPARE(parsed->pattern, QStringLiteral("*.kate-swp"));
+}
+
+void CoreTest::filterTextConvertsBarePatterns() {
+  const auto rules = filterTextToRules(QStringLiteral(
+      "# comment\n*.tmp\n-s .parentlock\n\ninclude /.git/"));
+  QCOMPARE(rules.size(), 3);
+  QCOMPARE(rules.at(0).rule, QStringLiteral("- *.tmp"));
+  QCOMPARE(rules.at(1).rule, QStringLiteral("-s .parentlock"));
+  QCOMPARE(rules.at(2).rule, QStringLiteral("include /.git/"));
+  for (const auto& rule : rules) QCOMPARE(rule.type, RuleType::Advanced);
+}
+
+void CoreTest::filterArgumentsPreserveOrderAndTypes() {
+  QVector<FilterRule> rules{
+      FilterRule{QStringLiteral("*.txt"), RuleType::Include},
+      FilterRule{QStringLiteral("- *.tmp"), RuleType::Advanced},
+      FilterRule{QStringLiteral("skip"), RuleType::Exclude},
+  };
+  rules.append(FilterRule{QStringLiteral("off"), RuleType::Exclude, false});
+  QCOMPARE(filterArguments(rules), QStringList({
+      QStringLiteral("--include=*.txt"),
+      QStringLiteral("--filter"),
+      QStringLiteral("- *.tmp"),
+      QStringLiteral("--exclude=skip"),
+  }));
+}
+
+void CoreTest::contextMenuPhrases() {
+  const auto filePhrases = phrasesFor(QStringLiteral("docs/pictures/photo.jpg"), false);
+  QStringList patterns;
+  for (const auto& phrase : filePhrases) patterns << phrase.pattern;
+  QCOMPARE(patterns, QStringList({QStringLiteral("*.jpg"),
+                                  QStringLiteral("photo.jpg"),
+                                  QStringLiteral("/docs/pictures/photo.jpg")}));
+  const auto dirPhrases = phrasesFor(QStringLiteral("docs/pictures"), true);
+  QStringList dirPatterns;
+  for (const auto& phrase : dirPhrases) dirPatterns << phrase.pattern;
+  QCOMPARE(dirPatterns, QStringList({QStringLiteral("pictures/"),
+                                     QStringLiteral("/docs/pictures/")}));
+  const auto deletePhrases = deletePhrasesFor(QStringLiteral(".parentlock"), false);
+  QStringList deletePatterns;
+  for (const auto& phrase : deletePhrases) deletePatterns << phrase.pattern;
+  QCOMPARE(deletePatterns, QStringList({QStringLiteral("-s *.parentlock"),
+                                        QStringLiteral("-s .parentlock"),
+                                        QStringLiteral("-s /.parentlock")}));
+}
+
+void CoreTest::patternMatching() {
+  QVERIFY(patternMatches(QStringLiteral("*.jpg"), QStringLiteral("docs/photo.jpg")));
+  QVERIFY(patternMatches(QStringLiteral("photo.jpg"), QStringLiteral("photo.jpg")));
+  QVERIFY(!patternMatches(QStringLiteral("/docs/pictures/photo.jpg"),
+                          QStringLiteral("other/photo.jpg")));
+  QVERIFY(patternMatches(QStringLiteral("docs/"), QStringLiteral("docs/a/b.txt")));
+  QVERIFY(patternMatches(QStringLiteral("a/**/x.txt"), QStringLiteral("a/b/c/x.txt")));
+  QVERIFY(!patternMatches(QString(), QStringLiteral("a.txt")));
+}
+
+void CoreTest::cleanQtNoiseRemovesOnlyBenignLines() {
+  const QString raw = QStringLiteral(
+      "QXcbIntegration: Cannot create platform OpenGL context\n"
+      "Warning: fallback to QtQuick software backend.\n"
+      "Permission denied, please try again.");
+  QCOMPARE(cleanQtNoise(raw), QStringLiteral("Permission denied, please try again."));
 }
 
 void CoreTest::endpointOperandKeepsSshSyntax() {
