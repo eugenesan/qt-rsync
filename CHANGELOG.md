@@ -14,6 +14,8 @@
   source and destination counts/sizes and the same overview totals.
 - Added C++-drawn file/folder icons and coloured action icons in the decision
   column (no Python icon generator or cross-language QIcon handoff).
+- Verified a larger tree (620 source / 514 destination files) on X11 :50:
+  both apps report 106 changes, 2.0 KiB and 106 selected items.
 
 ## Unreleased — phase 4: profiles and multi-instance
 
