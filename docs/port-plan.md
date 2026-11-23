@@ -51,9 +51,9 @@ ctest --test-dir /tmp/opencode/qt-rsync-build --output-on-failure
 
 All three succeed. No functionality is required beyond an empty window.
 
-## Phase 1 — core semantics in C++
+## Phase 1 — core semantics in C++ (complete)
 
-Port, in order, with direct C++ tests for each:
+Ported in order, each with direct C++ tests:
 
 1. `core::Change`, `core::Decisions` (INCLUDE / EXCLUDE / INHERIT /
    DELETE), reconcile, decision summary.
@@ -72,7 +72,10 @@ translation.
 Exit criterion: `ctest` green for the ported semantics and the generated
 argv strings byte-identical to qpy-rsync for the same fixture profile.
 
-## Phase 2 — first vertical slice
+Phase 1 is complete: 41 QtTest cases pass. `core::Decisions`, filters, plans,
+command specs and storage are implemented in `src/core`.
+
+## Phase 2 — first vertical slice (next)
 
 - Replace the placeholder `ComparisonView` with the lifted `DataStore`,
   `TableModel`, `OverviewModel`, delegates, key/mouse filters, stats bar and

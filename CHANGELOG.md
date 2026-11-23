@@ -41,8 +41,8 @@ the inherited command-line surface.
   settings dialog. Widgets are constructed in C++; no QML and no `.ui` files.
 - `tests`: first QtTest smoke case, runnable with `ctest` under the offscreen
   Qt platform.
-- `docs/PORT-PLAN.md` with the phased port and exit criteria, `docs/DECISIONS.md`
-  with the up-front architecture decisions, `docs/CLI.md`, and the inherited
+- `docs/port-plan.md` with the phased port and exit criteria, `docs/decisions.md`
+  with the up-front architecture decisions, `docs/cli.md`, and the inherited
   qpy-rsync specification, performance and experiment reports.
 
 ### Exit criteria met

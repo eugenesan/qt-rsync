@@ -6,8 +6,8 @@ No comparison, plan or sync functionality is implemented yet.
 
 The product semantics are inherited from [qpy-rsync](https://github.com/eugenesan/qpy-rsync)
 and documented in [docs/design.md](docs/design.md). The migration sequence and exit criteria are
-in [docs/PORT-PLAN.md](docs/PORT-PLAN.md); the up-front architecture choices
-are in [docs/DECISIONS.md](docs/DECISIONS.md). Release notes start in [CHANGELOG.md](CHANGELOG.md).
+in [docs/port-plan.md](docs/port-plan.md); the up-front architecture choices
+are in [docs/decisions.md](docs/decisions.md). Release notes start in [CHANGELOG.md](CHANGELOG.md).
 
 ## Build
 
