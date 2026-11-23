@@ -10,8 +10,10 @@
   column.
 - Added a destination inventory pass after Compare so destination sizes and
   folder aggregates match the Python app.
-- Verified side-by-side against qpy-rsync on X11: same 6 changes, same source
-  and destination counts/sizes and the same overview totals.
+- Verified side-by-side against qpy-rsync on X11 :50: same 6 changes, same
+  source and destination counts/sizes and the same overview totals.
+- Added C++-drawn file/folder icons and coloured action icons in the decision
+  column (no Python icon generator or cross-language QIcon handoff).
 
 ## Unreleased — phase 4: profiles and multi-instance
 

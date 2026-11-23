@@ -833,6 +833,21 @@ class TableModel : public QAbstractTableModel {
     if (role == Qt::UserRole) {
       return QString::fromStdString(store_->paths[id]);
     }
+    if (role == Qt::DecorationRole) {
+      if (index.column() != 0 && index.column() != 5) return {};
+      const std::string& path = store_->paths[id];
+      if (path == DataStore::root_path()) return store_->root_icon;
+      if (id < static_cast<int>(store_->is_dir.size()) && store_->is_dir[id]) {
+        return store_->folder_icon;
+      }
+      const std::size_t dot = path.find_last_of('.');
+      if (dot != std::string::npos) {
+        const std::string extension = path.substr(dot);
+        auto it = store_->file_icons.find(extension);
+        if (it != store_->file_icons.end()) return it->second;
+      }
+      return {};
+    }
     if (role == Qt::ToolTipRole) {
       const std::string& path = id < static_cast<int>(store_->paths.size())
                                     ? store_->paths[id] : std::string();

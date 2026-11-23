@@ -1,6 +1,7 @@
 #include "ui/ComparisonView.h"
 
 #include "core/Filter.h"
+#include "ui/Icons.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -38,6 +39,13 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   }
   for (int column : {0, 1, 2, 3, 4, 8, 9, 10}) views_[2]->setColumnHidden(column, true);
   views_[1]->setFixedWidth(160);
+
+  store_.folder_icon = icons::folderIcon();
+  store_.root_icon = icons::rootFolderIcon();
+  for (const char* extension : {".txt", ".md", ".json", ".py", ".log", ".zip"}) {
+    store_.file_icons[extension] = icons::fileIcon(
+        QString::fromLatin1("file") + QLatin1String(extension));
+  }
 
   delegate_ = new DecisionDelegate(this);
   views_[1]->setItemDelegateForColumn(4, delegate_);
