@@ -3,6 +3,7 @@
 #include "core/Change.h"
 #include "core/Decision.h"
 #include "core/Filter.h"
+#include "core/Plan.h"
 #include "core/Profile.h"
 
 using namespace qt_rsync::core;
@@ -45,6 +46,19 @@ class CoreTest : public QObject {
   void contextMenuPhrases();
   void patternMatching();
   void cleanQtNoiseRemovesOnlyBenignLines();
+
+  // Execution plan (ported from qpy-rsync plan/decision-filter tests)
+  void planSummaryAndCounts();
+  void destinationOnlyIsNotExecutableByDefault();
+  void planFreshnessDetectsChanges();
+  void profileFingerprintIgnoresIdentity();
+  void selectedDestinationOnlyBecomesDelete();
+  void includedSizeCountsOnlyTransferredData();
+  void deletedSizeUsesMetadataWithoutDoubleCounting();
+  void syntheticDeleteEntersPlan();
+  void decisionFilterRulesAndOrdering();
+  void retainedDestinationOnlyIsProtected();
+  void planFreshnessAcceptsSyntheticDelete();
 
   // Existing smoke checks
   void endpointOperandKeepsSshSyntax();
@@ -275,6 +289,178 @@ void CoreTest::cleanQtNoiseRemovesOnlyBenignLines() {
       "Warning: fallback to QtQuick software backend.\n"
       "Permission denied, please try again.");
   QCOMPARE(cleanQtNoise(raw), QStringLiteral("Permission denied, please try again."));
+}
+
+namespace {
+
+SyncProfile testProfile() {
+  SyncProfile profile;
+  profile.name = QStringLiteral("plan");
+  profile.source.path = QStringLiteral("/src/");
+  profile.destination.path = QStringLiteral("/dst/");
+  return profile;
+}
+
+}  // namespace
+
+void CoreTest::planSummaryAndCounts() {
+  const QVector<Change> changes{
+      makeChange("new", Action::Create, Kind::File, 10),
+      makeChange("old", Action::Delete),
+      makeChange("skip", Action::UpdateContent),
+  };
+  Decisions decisions;
+  decisions.reconcile(changes, false);
+  decisions.set("skip", Decision::Exclude);
+  const auto plan = buildExecutionPlan(testProfile(), changes, decisions);
+  QCOMPARE(plan.summary.included, 2);
+  QCOMPARE(plan.summary.excluded, 1);
+  QCOMPARE(plan.summary.destructive, 1);
+  QCOMPARE(plan.summary.creates, 1);
+  QCOMPARE(plan.summary.deletions, 1);
+}
+
+void CoreTest::destinationOnlyIsNotExecutableByDefault() {
+  const QVector<Change> changes{makeChange("kept", Action::DestinationOnly)};
+  Decisions decisions;
+  decisions.reconcile(changes, false);
+  const auto plan = buildExecutionPlan(testProfile(), changes, decisions);
+  QCOMPARE(plan.summary.included, 0);
+  QCOMPARE(plan.summary.excluded, 0);
+  QCOMPARE(plan.summary.retainedDestinationOnly, 1);
+}
+
+void CoreTest::planFreshnessDetectsChanges() {
+  const QVector<Change> changes{makeChange("a", Action::Create)};
+  Decisions decisions;
+  decisions.reconcile(changes, false);
+  SyncProfile profile = testProfile();
+  const auto plan = buildExecutionPlan(profile, changes, decisions);
+  QVERIFY(checkPlanFreshness(plan, profile, changes).fresh);
+
+  profile.backup.directory = QStringLiteral("/recovery");
+  const auto staleProfile = checkPlanFreshness(plan, profile, changes);
+  QVERIFY(!staleProfile.fresh);
+  QVERIFY(staleProfile.reasons.contains("profile options changed"));
+
+  QVector<Change> changed{makeChange("a", Action::UpdateContent)};
+  const auto staleChanges = checkPlanFreshness(plan, testProfile(), changed);
+  QVERIFY(!staleChanges.fresh);
+  QVERIFY(staleChanges.reasons.contains("comparison actions changed"));
+}
+
+void CoreTest::profileFingerprintIgnoresIdentity() {
+  SyncProfile first = testProfile();
+  first.id = QStringLiteral("first");
+  SyncProfile second = testProfile();
+  second.id = QStringLiteral("second");
+  QCOMPARE(first.fingerprint(), second.fingerprint());
+  second.transfer.deletionEnabled = true;
+  QVERIFY(first.fingerprint() != second.fingerprint());
+}
+
+void CoreTest::selectedDestinationOnlyBecomesDelete() {
+  const QVector<Change> changes{makeChange("old", Action::DestinationOnly)};
+  Decisions decisions;
+  decisions.reconcile(changes, false);
+  decisions.set("old", Decision::Include);
+  const auto plan = buildExecutionPlan(testProfile(), changes, decisions);
+  QCOMPARE(plan.summary.included, 1);
+  QCOMPARE(plan.summary.retainedDestinationOnly, 0);
+  QCOMPARE(plan.summary.deletions, 1);
+  QCOMPARE(plan.items.first().action, Action::Delete);
+  QCOMPARE(plan.items.first().comparisonAction, Action::DestinationOnly);
+  QVERIFY(plan.items.first().destructive);
+}
+
+void CoreTest::includedSizeCountsOnlyTransferredData() {
+  const QVector<Change> changes{
+      makeChange("a.bin", Action::Create, Kind::File, 1000),
+      makeChange("b.bin", Action::Delete, Kind::File, 2000),
+  };
+  Decisions decisions;
+  decisions.reconcile(changes, false);
+  decisions.set("b.bin", Decision::Exclude);
+  const auto plan = buildExecutionPlan(testProfile(), changes, decisions);
+  QCOMPARE(plan.summary.included, 1);
+  QCOMPARE(plan.summary.totalSize, 1000);
+}
+
+void CoreTest::deletedSizeUsesMetadataWithoutDoubleCounting() {
+  const QVector<Change> changes{
+      makeChange("old", Action::Delete, Kind::Directory),
+      makeChange("old/a", Action::Delete, Kind::File),
+      makeChange("old/b", Action::Delete, Kind::File),
+      makeChange("lone.txt", Action::Delete, Kind::File),
+  };
+  Decisions decisions;
+  decisions.reconcile(changes, false);
+  DestinationMetadata metadata;
+  metadata.insert(QStringLiteral("old"), {4096, QString()});
+  metadata.insert(QStringLiteral("old/a"), {1000, QString()});
+  metadata.insert(QStringLiteral("old/b"), {2000, QString()});
+  metadata.insert(QStringLiteral("lone.txt"), {500, QString()});
+  const auto plan = buildExecutionPlan(testProfile(), changes, decisions, metadata);
+  QCOMPARE(plan.summary.deletedSize, 3500);
+}
+
+void CoreTest::syntheticDeleteEntersPlan() {
+  const QVector<Change> changes{makeChange(".parentlock", Action::NoChange)};
+  Decisions decisions;
+  decisions.reconcile(changes, false);
+  decisions.set(".parentlock", Decision::Delete);
+  const auto plan = buildExecutionPlan(testProfile(), changes, decisions);
+  QCOMPARE(plan.items.size(), 1);
+  QVERIFY(plan.items.first().included);
+  QVERIFY(plan.items.first().syntheticDelete);
+  QCOMPARE(plan.items.first().comparisonAction, Action::NoChange);
+  QCOMPARE(plan.summary.deletions, 1);
+  QCOMPARE(decisionFilterLines(plan),
+           QStringList({QStringLiteral("-s /.parentlock")}));
+  QVERIFY(!checkPlanFreshness(plan, testProfile(), changes,
+                              decisionSignature(decisions)).reasons.contains(
+      "comparison actions changed"));
+}
+
+void CoreTest::decisionFilterRulesAndOrdering() {
+  const QVector<Change> changes{
+      makeChange("docs", Action::UpdateMetadata, Kind::Directory),
+      makeChange("old.txt", Action::Delete),
+  };
+  Decisions decisions;
+  decisions.reconcile(changes, false);
+  decisions.set("docs", Decision::Exclude);
+  decisions.set("old.txt", Decision::Exclude);
+  const auto plan = buildExecutionPlan(testProfile(), changes, decisions);
+  QCOMPARE(decisionFilterLines(plan), QStringList({
+      QStringLiteral("- /docs/***"),
+      QStringLiteral("P /old.txt"),
+      QStringLiteral("- /old.txt"),
+  }));
+}
+
+void CoreTest::retainedDestinationOnlyIsProtected() {
+  const QVector<Change> changes{makeChange("extra.txt", Action::DestinationOnly)};
+  Decisions decisions;
+  decisions.reconcile(changes, false);
+  const auto retained = buildExecutionPlan(testProfile(), changes, decisions);
+  QCOMPARE(decisionFilterLines(retained), QStringList({
+      QStringLiteral("P /extra.txt"),
+      QStringLiteral("- /extra.txt"),
+  }));
+  decisions.set("extra.txt", Decision::Include);
+  const auto selected = buildExecutionPlan(testProfile(), changes, decisions);
+  QVERIFY(decisionFilterLines(selected).isEmpty());
+}
+
+void CoreTest::planFreshnessAcceptsSyntheticDelete() {
+  const QVector<Change> changes{makeChange(".parentlock", Action::NoChange)};
+  Decisions decisions;
+  decisions.reconcile(changes, false);
+  decisions.set(".parentlock", Decision::Delete);
+  const auto plan = buildExecutionPlan(testProfile(), changes, decisions);
+  QVERIFY(checkPlanFreshness(plan, testProfile(), changes,
+                             decisionSignature(decisions)).fresh);
 }
 
 void CoreTest::endpointOperandKeepsSshSyntax() {

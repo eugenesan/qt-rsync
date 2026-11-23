@@ -1,8 +1,12 @@
 #pragma once
 
 #include <QHash>
+#include <QPair>
 #include <QString>
+#include <QStringList>
 #include <QVector>
+
+#include <optional>
 
 #include "core/Change.h"
 #include "core/Decision.h"
@@ -19,6 +23,8 @@ struct PlanItem {
   bool destructive = false;
   bool syntheticDelete = false;
   std::optional<std::int64_t> size;
+
+  QString identity() const;
 };
 
 struct PlanSummary {
@@ -34,6 +40,7 @@ struct PlanSummary {
   std::int64_t deletedSize = 0;
   std::int64_t totalSize = 0;
   std::int64_t includedSize = 0;
+  bool backupEnabled = false;
 };
 
 struct ExecutionPlan {
@@ -45,14 +52,34 @@ struct ExecutionPlan {
   QString comparisonSignature;
   QString sourceOperand;
   QString destinationOperand;
+
+  [[nodiscard]] QVector<PlanItem> includedItems() const;
 };
+
+struct PlanFreshness {
+  bool fresh = false;
+  QStringList reasons;
+};
+
+using DestinationMetadata =
+    QHash<QString, QPair<std::optional<std::int64_t>, QString>>;
+
+QString actionName(Action action);
+QString kindName(Kind kind);
+QString planItemsFingerprint(const QVector<PlanItem>& items);
+QString decisionSignature(const Decisions& decisions);
+QString comparisonSignature(const QVector<Change>& changes,
+                            const QSet<QString>& extraPaths = {});
 
 ExecutionPlan buildExecutionPlan(const SyncProfile& profile,
                                  const QVector<Change>& changes,
-                                 const Decisions& decisions);
+                                 const Decisions& decisions,
+                                 const DestinationMetadata& metadata = {});
+QStringList decisionFilterLines(const ExecutionPlan& plan);
 QString decisionFilterText(const ExecutionPlan& plan);
-bool isPlanFresh(const ExecutionPlan& plan, const SyncProfile& profile,
-                 const QVector<Change>& changes,
-                 const QString& decisionSignature);
+PlanFreshness checkPlanFreshness(const ExecutionPlan& plan,
+                                 const SyncProfile& profile,
+                                 const QVector<Change>& changes,
+                                 const QString& signature = {});
 
 }  // namespace qt_rsync::core
