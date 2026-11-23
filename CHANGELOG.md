@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — phase 1: core semantics
+
+- Ported the decision model to C++: INCLUDE / EXCLUDE / INHERIT / DELETE,
+  inheritance, defaults, reconcile (including type-aware preservation and
+  opt-in inherited-destination-only detection), summaries and conflict
+  handling. 11 ported cases.
+- Ported filter parsing, context-menu phrase generation (`-s` delete rules),
+  rsync pattern matching and benign Qt-output cleanup.
+- Ported execution plans: item/summary construction, synthetic deletes,
+  fingerprints, freshness checks and decision filter-rule generation.
+- Ported rsync command construction: compare/verify/sync/inventory specs,
+  delete timing, filter merge ordering, nested-backup protection and
+  SSH remote-shell handling.
+- Ported profiles and storage: JSON profile round-trip with legacy migration,
+  XDG settings split, PID-based locks and current-profile caching.
+- QtTest suite: 41 tests passing under `./test.sh`.
+
 ## 0.1.0 — phase 0 scaffold (2026-11-23)
 
 Initial commit of the pure Qt/C++ port of qpy-rsync. No sync functionality is
