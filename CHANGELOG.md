@@ -13,6 +13,11 @@
   spec, parses stdout, populates the views and reports progress/status.
 - Added a QtTest end-to-end check with a fake rsync executable: 2 test targets,
   43 assertions total.
+- Ported the decision-column delegate, Space handling for multi-row selection,
+  linked sorting, synchronized selection/scrollbars and the statistics strip.
+  Decisions now live only in `core::Decisions`; the view store mirrors them
+  for painting, and a UI test verifies three selected rows are excluded at
+  once.
 
 ## Unreleased — phase 1: core semantics
 

@@ -60,6 +60,9 @@ MainWindow::MainWindow(QWidget* parent)
   d_->status = new QLabel(QStringLiteral("Ready"), central);
   layout->addWidget(d_->status);
 
+  connect(d_->comparison, &ComparisonView::decisionChanged,
+          this, [this]() { d_->overview->rebuild(d_->comparison->store()); });
+
   d_->process = new QProcess(this);
   connect(d_->compare, &QPushButton::clicked, this, &MainWindow::startCompare);
   connect(d_->process, &QProcess::finished, this, &MainWindow::onCompareFinished);

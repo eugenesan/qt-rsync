@@ -54,6 +54,12 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
       connect(views_[i]->verticalScrollBar(), &QScrollBar::valueChanged,
               views_[j]->verticalScrollBar(), &QScrollBar::setValue);
     }
+    connect(views_[i]->selectionModel(), &QItemSelectionModel::currentChanged,
+            this, [this, i](const QModelIndex& index) { onCurrentChanged(i, index); });
+    connect(views_[i]->horizontalHeader(), &QHeaderView::sortIndicatorChanged,
+            this, [this, i](int section, Qt::SortOrder order) {
+              onSortIndicatorChanged(i, section, order);
+            });
   }
 }
 
@@ -85,6 +91,32 @@ void ComparisonView::syncDecisionsToStore() {
       }
     }
   }
+}
+
+void ComparisonView::onCurrentChanged(int origin, const QModelIndex& index) {
+  if (selecting_ || !index.isValid()) return;
+  selecting_ = true;
+  for (int pane = 0; pane < 3; ++pane) {
+    if (pane == origin) continue;
+    const QModelIndex target = views_[pane]->model()->index(index.row(), 0);
+    views_[pane]->setCurrentIndex(target);
+  }
+  selecting_ = false;
+}
+
+void ComparisonView::onSortIndicatorChanged(int pane, int section,
+                                            Qt::SortOrder order) {
+  if (sorting_) return;
+  sorting_ = true;
+  const int logical = (pane == 1) ? 4 : section;
+  models_[pane]->sort(logical, order);
+  for (int other = 0; other < 3; ++other) {
+    QHeaderView* header = views_[other]->horizontalHeader();
+    const bool blocked = header->blockSignals(true);
+    header->setSortIndicator(other == 1 ? 4 : section, order);
+    header->blockSignals(blocked);
+  }
+  sorting_ = false;
 }
 
 }  // namespace qt_rsync::ui

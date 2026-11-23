@@ -88,9 +88,12 @@ Delivered so far: the lifted models, the parser, three synchronized panes,
 the overview tree and a working Compare driven by `QProcess`. A fake-rsync
 QtTest verifies the full path from CLI-style startup to rendered rows.
 
-Still to do in this phase: port the delegates, key/mouse filters and context
-menus from the Qt-only part of `native-hybrid/hybrid.cpp`, and wire the
-decision checkbox to the single `core::Decisions` store.
+Delivered in the second slice: decision delegate, Space handling for all
+selected rows, linked sorting, synchronized selection and scrollbars, and a
+statistics strip. Decisions are owned only by `core::Decisions`.
+
+Still to do in this phase: context menus (Exclude via Filter, Delete on
+Destination), column header editor, and the settings dialog pages.
 
 Exit criterion: a real Compare of the example-sized tree renders and decisions can
 be toggled, with no mirrored state and no Python process involved.

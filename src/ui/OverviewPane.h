@@ -3,6 +3,7 @@
 #include <QWidget>
 
 #include "model/DataStore.h"
+#include "ui/StatsBar.h"
 
 class QTreeView;
 
@@ -18,6 +19,7 @@ class OverviewPane : public QWidget {
  private:
   QTreeView* tree_;
   model::OverviewModel* model_;
+  StatsBar* stats_;
 };
 
 }  // namespace qt_rsync::ui

@@ -31,6 +31,11 @@ class ComparisonView : public QWidget {
 
  private:
   void syncDecisionsToStore();
+  void onSortIndicatorChanged(int pane, int section, Qt::SortOrder order);
+  void onCurrentChanged(int origin, const QModelIndex& index);
+
+  bool sorting_ = false;
+  bool selecting_ = false;
 
   model::DataStore store_;
   core::Decisions decisions_;
