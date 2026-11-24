@@ -11,6 +11,7 @@
 #include <QItemSelectionModel>
 #include <QTabWidget>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QTemporaryDir>
 #include <QTableView>
@@ -37,6 +38,8 @@ class UiTest : public QObject {
   void arrowKeysFoldAndExpandFolders();
   void sshProfileKeepsItsEndpointKind();
   void cancelStopsARunningCompare();
+  void deleteDecisionAppearsInSyncRules();
+  void mirrorModeTreatsDestinationOnlyAsDeletion();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -370,6 +373,96 @@ void UiTest::cancelStopsARunningCompare() {
   QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QStringLiteral("cancel")), 5000);
   QVERIFY(compare->isEnabled());
   QVERIFY(!cancel->isEnabled());
+  qputenv("PATH", oldPath);
+}
+
+void UiTest::deleteDecisionAppearsInSyncRules() {
+  QTemporaryDir dir;
+  const QString script = dir.path() + QStringLiteral("/rsync");
+  QFile file(script);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write("#!/bin/sh\n"
+             "printf '%s\\n' '=f..........|qpy-rsync|5|qpy-rsync||qpy-rsync|.parentlock'\n");
+  file.close();
+  file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                      QFileDevice::ExeOwner);
+  const QByteArray oldPath = qgetenv("PATH");
+  qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
+
+  ui::MainWindow window;
+  const auto edits = window.findChildren<QLineEdit*>();
+  edits.at(0)->setText(QStringLiteral("/src"));
+  edits.at(1)->setText(QStringLiteral("/dst"));
+  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+    if (button->text() == QLatin1String("Compare")) button->click();
+  }
+  auto* status = window.findChild<QLabel*>();
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
+
+  auto* comparison = window.findChild<ui::ComparisonView*>();
+  comparison->markDelete(QStringLiteral(".parentlock"));
+  QCOMPARE(comparison->decisions().explicitDecision(QStringLiteral(".parentlock")),
+           core::Decision::Delete);
+
+  QPushButton* sync = nullptr;
+  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+    if (button->text().startsWith(QLatin1String("Synchronize"))) sync = button;
+  }
+  QVERIFY(sync != nullptr);
+  QTimer::singleShot(100, []() {
+    for (QWidget* widget : QApplication::topLevelWidgets()) {
+      auto* dialog = dynamic_cast<QDialog*>(widget);
+      if (dialog == nullptr ||
+          dialog->windowTitle() != QLatin1String("Synchronize")) {
+        continue;
+      }
+      QString rules;
+      for (QPlainTextEdit* text : dialog->findChildren<QPlainTextEdit*>()) {
+        if (text->toPlainText().contains(QStringLiteral("-s /"))) {
+          rules = text->toPlainText();
+        }
+      }
+      QVERIFY(rules.contains(QStringLiteral("-s /.parentlock")));
+      for (QAbstractButton* button : dialog->findChildren<QAbstractButton*>()) {
+        if (button->text() == QLatin1String("Cancel")) button->click();
+      }
+      return;
+    }
+  });
+  sync->click();
+  QVERIFY(!status->text().contains(QStringLiteral("Synchronizing")));
+  qputenv("PATH", oldPath);
+}
+
+void UiTest::mirrorModeTreatsDestinationOnlyAsDeletion() {
+  QTemporaryDir dir;
+  const QString script = dir.path() + QStringLiteral("/rsync");
+  QFile file(script);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write("#!/bin/sh\n"
+             "printf '%s\\n' '*deleting|qpy-rsync|5|qpy-rsync||qpy-rsync|old.txt'\n");
+  file.close();
+  file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                      QFileDevice::ExeOwner);
+  const QByteArray oldPath = qgetenv("PATH");
+  qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
+
+  ui::MainWindow window;
+  app::StartupOptions options;
+  options.mode = QStringLiteral("mirror");
+  window.applyStartupOptions(options);
+  const auto edits = window.findChildren<QLineEdit*>();
+  edits.at(0)->setText(QStringLiteral("/src"));
+  edits.at(1)->setText(QStringLiteral("/dst"));
+  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+    if (button->text() == QLatin1String("Compare")) button->click();
+  }
+  auto* status = window.findChild<QLabel*>();
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
+  auto* comparison = window.findChild<ui::ComparisonView*>();
+  auto it = comparison->store().path_to_id.find("old.txt");
+  QVERIFY(it != comparison->store().path_to_id.end());
+  QCOMPARE(comparison->store().actions.at(it->second), 3);  // model::Delete
   qputenv("PATH", oldPath);
 }
 

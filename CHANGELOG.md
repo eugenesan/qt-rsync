@@ -11,6 +11,8 @@
 - Added a Cancel button that terminates a running compare, verify or sync
   process and restores the idle state.
 - Fixed a QSet aliasing bug in plan mismatch computation.
+- Added end-to-end tests for decision-only deletes (the sync dialog shows the
+  `-s` rule) and mirror-mode destination-only deletions.
 
 ## Unreleased — undo and hierarchy fixes
 
