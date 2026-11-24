@@ -137,7 +137,7 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   QHeaderView* decisionHeader = views_[1]->horizontalHeader();
   decisionHeader->setStretchLastSection(false);
   decisionHeader->setSectionResizeMode(4, QHeaderView::Fixed);
-  decisionHeader->resizeSection(4, 140);
+  decisionHeader->resizeSection(4, 88);
 
   for (QTableView* view : views_) {
     view->installEventFilter(keyFilter_);

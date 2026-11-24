@@ -24,12 +24,14 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
     line->setFixedWidth(1);
     layout->addWidget(line);
   };
+  int boxCounter = 0;
   const auto check = [&](const QString& tooltip, const QIcon& icon,
                          int shortcutNumber, bool checked = true) {
     auto* box = new QCheckBox(this);
     box->setIcon(icon);
     box->setToolTip(tooltip);
     box->setAccessibleName(tooltip);
+    box->setObjectName(QStringLiteral("filter-box-%1").arg(++boxCounter));
     box->setChecked(checked);
     box->setFixedSize(44, 40);
     layout->addWidget(box);

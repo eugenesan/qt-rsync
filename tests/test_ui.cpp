@@ -42,6 +42,7 @@ class UiTest : public QObject {
   void mirrorModeTreatsDestinationOnlyAsDeletion();
   void realMirrorSyncDeletesDestinationOnlyFiles();
   void excludedFileIsNotTransferredByRealSync();
+  void excludedCheckboxShowsExcludedRows();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -604,6 +605,47 @@ void UiTest::excludedFileIsNotTransferredByRealSync() {
   QFile unchanged(destination + QStringLiteral("/b.txt"));
   QVERIFY(unchanged.open(QIODevice::ReadOnly | QIODevice::Text));
   QCOMPARE(unchanged.readAll().trimmed(), QByteArray("old b content"));
+}
+
+void UiTest::excludedCheckboxShowsExcludedRows() {
+  QTemporaryDir dir;
+  const QString script = dir.path() + QStringLiteral("/rsync");
+  QFile file(script);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write("#!/bin/sh\n"
+             "printf '%s\\n' "
+             "'>f+++++++++|qpy-rsync|1|qpy-rsync||qpy-rsync|a.txt' "
+             "'>f+++++++++|qpy-rsync|1|qpy-rsync||qpy-rsync|b.txt'\n");
+  file.close();
+  file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                      QFileDevice::ExeOwner);
+  const QByteArray oldPath = qgetenv("PATH");
+  qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
+
+  ui::MainWindow window;
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
+  edits.at(0)->setText(QStringLiteral("/src"));
+  edits.at(1)->setText(QStringLiteral("/dst"));
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
+    if (button->text() == QLatin1String("Compare")) button->click();
+  }
+  auto* status = window.findChild<QLineEdit*>("status-label");
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
+
+  const auto tables = window.findChildren<QTableView*>();
+  const int before = tables.at(0)->model()->rowCount();
+  auto* comparison = window.findChild<ui::ComparisonView*>();
+  comparison->applyDecision(QStringLiteral("a.txt"),
+                            static_cast<int>(core::Decision::Exclude));
+  const int hidden = tables.at(0)->model()->rowCount();
+  QVERIFY(hidden < before);
+
+  auto* excludedBox = window.findChild<QCheckBox*>("filter-box-1");
+  QVERIFY(excludedBox != nullptr);
+  excludedBox->setChecked(true);
+  QVERIFY(tables.at(0)->model()->rowCount() > hidden);
+  qputenv("PATH", oldPath);
 }
 
 QTEST_MAIN(UiTest)

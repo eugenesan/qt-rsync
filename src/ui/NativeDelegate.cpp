@@ -4,6 +4,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QStyleOptionViewItem>
+#include <QDebug>
 
 #include "ui/Icons.h"
 
@@ -39,6 +40,7 @@ bool NativeDelegate::editorEvent(QEvent* event, QAbstractItemModel*,
   if (row < 0 || row >= static_cast<int>(store_->visible.size())) return false;
   const int id = store_->visible[row];
 
+  qDebug() << "DELEGATE CLICK" << pane_ << index.column() << mouse->pos() << option.rect;
   if (pane_ == 1 && index.column() == 4) {
     const int start = option.rect.left() +
                       qMax(0, (option.rect.width() - (16 + 8 + 16)) / 2);
