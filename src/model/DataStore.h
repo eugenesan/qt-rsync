@@ -839,6 +839,14 @@ class TableModel : public QAbstractTableModel {
     }
     if (role == Qt::DecorationRole) {
       if (index.column() != 0 && index.column() != 5) return {};
+      const int row_action = id < static_cast<int>(store_->actions.size())
+                                 ? store_->actions[id] : NoChange;
+      const bool source_present = row_action != DestOnly && row_action != Delete;
+      const bool dest_present = row_action != Create;
+      if ((pane_ == 0 && !source_present) ||
+          (pane_ == 2 && !dest_present)) {
+        return {};
+      }
       const std::string& path = store_->paths[id];
       if (path == DataStore::root_path()) return store_->root_icon;
       if (id < static_cast<int>(store_->is_dir.size()) && store_->is_dir[id]) {

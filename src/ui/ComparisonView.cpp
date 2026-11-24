@@ -95,8 +95,26 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
           this, &ComparisonView::applyDecision);
   connect(keyFilter_, &DecisionKeyFilter::decisionToggled,
           this, &ComparisonView::applyDecision);
+  // Column widths in the ballpark of qpy-rsync: a wide name column, narrow
+  // Items and Size columns, and a compact decision pane.
+  for (int pane : {0, 2}) {
+    QHeaderView* header = views_[pane]->horizontalHeader();
+    const int nameColumn = pane == 0 ? 0 : 5;
+    const int itemsColumn = pane == 0 ? 1 : 6;
+    const int sizeColumn = pane == 0 ? 2 : 7;
+    header->setStretchLastSection(false);
+    header->setSectionResizeMode(nameColumn, QHeaderView::Stretch);
+    header->setSectionResizeMode(itemsColumn, QHeaderView::Fixed);
+    header->setSectionResizeMode(sizeColumn, QHeaderView::Fixed);
+    header->resizeSection(itemsColumn, 70);
+    header->resizeSection(sizeColumn, 140);
+  }
+  QHeaderView* decisionHeader = views_[1]->horizontalHeader();
+  decisionHeader->setStretchLastSection(false);
+  decisionHeader->setSectionResizeMode(4, QHeaderView::Fixed);
+  decisionHeader->resizeSection(4, 140);
+
   for (QTableView* view : views_) {
-    view->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     view->installEventFilter(keyFilter_);
     view->setContextMenuPolicy(Qt::CustomContextMenu);
     const int pane = views_.indexOf(view);
@@ -106,9 +124,6 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
     connect(view->horizontalHeader(), &QHeaderView::customContextMenuRequested,
             this, [this, pane](const QPoint& position) { showHeaderMenu(pane, position); });
   }
-  views_[0]->horizontalHeader()->setStretchLastSection(true);
-  views_[2]->horizontalHeader()->setStretchLastSection(true);
-
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 3; ++j) {
       if (i == j) continue;

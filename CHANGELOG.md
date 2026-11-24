@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — layout parity
+
+- Set explicit column widths close to qpy-rsync: wide Item column, narrow Items
+  and Size columns, compact decision pane.
+- Suppressed file/folder icons on rows that have no content on that side (the
+  blank spacer rows), matching the reference view.
+
 ## Unreleased — first real-tree run fixes
 
 - Profile-loaded SSH endpoints keep their `ssh` kind when Compare runs; the
