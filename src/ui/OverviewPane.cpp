@@ -108,7 +108,9 @@ void OverviewPane::rebuild(const model::DataStore& store) {
   model_->build(store, true);
 
   if (firstBuild_) {
-    tree_->expandToDepth(1);
+    // Expand only the synthetic Total row; every real directory starts
+    // collapsed, matching qpy's overview.
+    tree_->expandToDepth(0);
     firstBuild_ = false;
   } else {
     for (const QString& path : expandedPaths_) {

@@ -18,6 +18,21 @@ qt_standard_project_setup()
 
 option(QT_RSYNC_BUILD_TESTS "Build the QtTest suite" ON)
 
+# Embed the checkout commit in --version so a shared binary can be identified.
+set(QT_RSYNC_GIT_COMMIT "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND)
+  execute_process(
+    COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    OUTPUT_VARIABLE QT_RSYNC_GIT_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+  if(QT_RSYNC_GIT_COMMIT STREQUAL "")
+    set(QT_RSYNC_GIT_COMMIT "unknown")
+  endif()
+endif()
+
 # ---------------------------------------------------------------------------
 # Libraries. Keep one C++ source of truth (core) and let the UI observe it;
 # there is no Python layer and no second decision model to keep in sync.
@@ -68,6 +83,9 @@ add_executable(qt-rsync
     resources/resources.qrc
 )
 target_link_libraries(qt-rsync PRIVATE qt_rsync_ui qt_rsync_core Qt6::Widgets)
+target_compile_definitions(qt-rsync PRIVATE
+    QT_RSYNC_VERSION="${PROJECT_VERSION}"
+    QT_RSYNC_GIT_COMMIT="${QT_RSYNC_GIT_COMMIT}")
 set_target_properties(qt-rsync PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 include(GNUInstallDirs)

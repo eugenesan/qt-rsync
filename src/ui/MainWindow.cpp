@@ -1,5 +1,6 @@
 #include "ui/MainWindow.h"
 
+#include <QCloseEvent>
 #include <QDialogButtonBox>
 #include <QDebug>
 #include <QDir>
@@ -124,6 +125,7 @@ class MainWindow::Private {
   QSplitter* mainSplitter = nullptr;
   QWidget* logPanel = nullptr;
   QSplitter* logSplitter = nullptr;
+  QString layoutMode = QStringLiteral("normal");
   QAction* undoAction = nullptr;
   QAction* redoAction = nullptr;
   QAction* verifyAction = nullptr;
@@ -164,6 +166,9 @@ class MainWindow::Private {
   QString operationOutput;
   QElapsedTimer compareClock;
   QElapsedTimer viewClock;
+  double lastCompareSeconds = 0.0;
+  int pendingCompareChanges = 0;
+  bool comparisonAwaitingMetadata = false;
   bool destinationInventoryForUnchanged = false;
   bool startupAborted = false;
   bool tempProfile = false;
@@ -999,6 +1004,7 @@ MainWindow::MainWindow(QWidget* parent)
   updateVerificationVisibility();
   updateStateIcons();
   restoreProfile();
+  restoreWindowState();
 
   connect(d_->comparison, &ComparisonView::viewChanged, this, [this]() {
     d_->overview->rebuild(d_->comparison->store());
@@ -1247,7 +1253,13 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
       QStringLiteral("Comparison view built in %1 s.")
           .arg(d_->viewClock.elapsed() / 1000.0, 0, 'f', 2));
   refreshPlan();
-  d_->stale = false;
+  // The comparison is not complete until the destination metadata listing
+  // finishes. Keep Compare disabled and Sync/Verify unavailable meanwhile.
+  d_->sync->setEnabled(false);
+  d_->verify->setEnabled(false);
+  d_->lastCompareSeconds = compareSeconds;
+  d_->pendingCompareChanges = parsed.changes.size();
+  d_->comparisonAwaitingMetadata = true;
   const auto& summary = d_->plan.summary;
   appendJournalLine(
       QStringLiteral(
@@ -1265,22 +1277,13 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
           .arg(summary.destructive)
           .arg(summary.backupEnabled ? QStringLiteral("on")
                                      : QStringLiteral("off")));
-  appendJournalLine(QStringLiteral("STATE comparison-complete changes=%1")
-                        .arg(parsed.changes.size()));
-  updateStateIcons();
   // qpy keeps the progress bar hidden for a comparison; it is only shown
   // while verifying or synchronizing. Leaving a bright 100% bar on screen
   // after Compare was a visible mismatch.
   d_->progress->hide();
-  d_->progressLabel->setText(QStringLiteral("Comparison completed"));
+  d_->progressLabel->setText(QStringLiteral("Gathering destination metadata..."));
   startDestinationInventory();
-  setStatus(QStringLiteral("Comparison complete: %1 changed item(s)")
-                          .arg(parsed.changes.size()));
-  appendJournalLine(
-      QStringLiteral("Comparison ready in %1 s.")
-          .arg(d_->compareClock.isValid()
-                   ? d_->compareClock.elapsed() / 1000.0 : 0.0,
-               0, 'f', 2));
+  setStatus(QStringLiteral("Gathering destination metadata..."));
 }
 
 void MainWindow::onCompareError(QProcess::ProcessError error) {
@@ -1404,6 +1407,23 @@ void MainWindow::onDestinationInventoryFinished(int, QProcess::ExitStatus) {
   if (!d_->destinationListingCache.isEmpty()) {
     d_->comparison->applyDestinationMetadata(d_->destinationListingCache);
     d_->overview->rebuild(d_->comparison->store());
+  }
+  if (d_->comparisonAwaitingMetadata) {
+    d_->comparisonAwaitingMetadata = false;
+    d_->stale = false;
+    updateStateIcons();
+    refreshPlan();
+    d_->compare->setEnabled(true);
+    d_->cancel->setEnabled(false);
+    d_->progress->hide();
+    d_->progressLabel->setText(QStringLiteral("Comparison completed"));
+    appendJournalLine(QStringLiteral("STATE comparison-complete changes=%1")
+                          .arg(d_->pendingCompareChanges));
+    setStatus(QStringLiteral("Comparison complete: %1 changed item(s)")
+                            .arg(d_->pendingCompareChanges));
+    appendJournalLine(
+        QStringLiteral("Comparison ready in %1 s.")
+            .arg(d_->lastCompareSeconds, 0, 'f', 2));
   }
   d_->progress->hide();
 }
@@ -1801,6 +1821,7 @@ void MainWindow::applyLayoutMode(const QString& mode) {
       d_->logSplitter == nullptr || d_->overview == nullptr) {
     return;
   }
+  d_->layoutMode = mode;
   if (mode == QLatin1String("focus")) {
     d_->mainSplitter->setOrientation(Qt::Vertical);
     d_->logPanel->hide();
@@ -1829,6 +1850,50 @@ void MainWindow::applyLayoutMode(const QString& mode) {
   d_->logSplitter->setStretchFactor(1, 0);
   d_->logSplitter->setSizes({680, 620});
   d_->mainSplitter->setSizes({500, 280});
+}
+
+void MainWindow::restoreWindowState() {
+  core::storage::Settings settings;
+  const auto decode = [&settings](const QString& key) {
+    const QString encoded = settings.value(key).toString();
+    if (encoded.isEmpty()) return QByteArray();
+    return QByteArray::fromBase64(encoded.toLatin1());
+  };
+  const QByteArray geometry = decode(QStringLiteral("main-window/geometry"));
+  if (!geometry.isEmpty()) restoreGeometry(geometry);
+  const QByteArray state = decode(QStringLiteral("main-window/state"));
+  if (!state.isEmpty()) restoreState(state);
+  const QString mode =
+      settings.value(QStringLiteral("main-window/layout-mode"),
+                     QStringLiteral("normal"))
+          .toString();
+  applyLayoutMode(mode);
+  const QByteArray splitter = decode(
+      QStringLiteral("main-window/layout-state-") +
+      (d_->layoutMode.isEmpty() ? QStringLiteral("normal") : d_->layoutMode));
+  if (!splitter.isEmpty()) d_->mainSplitter->restoreState(splitter);
+  const QByteArray logSplitter = decode(QStringLiteral("main-window/log-splitter"));
+  if (!logSplitter.isEmpty()) d_->logSplitter->restoreState(logSplitter);
+}
+
+void MainWindow::saveWindowState() {
+  core::storage::Settings settings;
+  settings.setValue(QStringLiteral("main-window/geometry"),
+                    QString::fromLatin1(saveGeometry().toBase64()));
+  settings.setValue(QStringLiteral("main-window/state"),
+                    QString::fromLatin1(saveState().toBase64()));
+  settings.setValue(QStringLiteral("main-window/layout-mode"), d_->layoutMode);
+  settings.setValue(
+      QStringLiteral("main-window/layout-state-") + d_->layoutMode,
+      QString::fromLatin1(d_->mainSplitter->saveState().toBase64()));
+  settings.setValue(QStringLiteral("main-window/log-splitter"),
+                    QString::fromLatin1(d_->logSplitter->saveState().toBase64()));
+  settings.sync();
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+  saveWindowState();
+  QMainWindow::closeEvent(event);
 }
 
 void MainWindow::updateStateIcons() {

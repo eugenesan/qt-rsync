@@ -366,10 +366,37 @@ void migrateLegacyPaths() {
   copyFile(paths::stateHome() + QStringLiteral("/qpy-rsyncstaterc"),
            paths::statePath());
 
+  // Merge rather than only copy: qt-rsync may have created its settings file
+  // during earlier runs. Missing qpy keys (including window geometry and
+  // splitter state) are brought over without overwriting qt values.
+  const auto mergeSettings = [](const QString& oldPath, const QString& newPath) {
+    if (!QFile::exists(oldPath) || oldPath == newPath) return;
+    QSettings oldSettings(oldPath, QSettings::IniFormat);
+    QSettings newSettings(newPath, QSettings::IniFormat);
+    for (const QString& key : oldSettings.allKeys()) {
+      if (!newSettings.contains(key)) {
+        newSettings.setValue(key, oldSettings.value(key));
+      }
+    }
+    newSettings.sync();
+  };
+  mergeSettings(oldConfig + QStringLiteral("/settingsrc"),
+                paths::configSettingsPath());
+  mergeSettings(paths::stateHome() + QStringLiteral("/qpy-rsyncstaterc"),
+                paths::statePath());
+
   const QString oldProfiles = oldConfig + QStringLiteral("/profiles");
   if (QFileInfo(oldProfiles).isDir()) {
     for (const QString& name : QDir(oldProfiles).entryList({"*.json"}, QDir::Files)) {
       copyFile(oldProfiles + '/' + name, paths::profilesDirectory() + '/' + name);
+    }
+  }
+
+  const QString oldCache = paths::cacheHome() + QStringLiteral("/qpy-rsync");
+  if (QFileInfo(oldCache).isDir()) {
+    for (const QString& name :
+         QDir(oldCache).entryList({"*.log"}, QDir::Files)) {
+      copyFile(oldCache + '/' + name, paths::logDirectory() + '/' + name);
     }
   }
 

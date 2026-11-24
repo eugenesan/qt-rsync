@@ -16,7 +16,18 @@ int run(int argc, char** argv) {
   // under KDE both apps use Breeze and the same dark palette. Forcing Fusion
   // here produced the wrong colours, separators and button frames.
   QCoreApplication::setApplicationName(QStringLiteral("qt-rsync"));
-  QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+#ifndef QT_RSYNC_VERSION
+#define QT_RSYNC_VERSION "0.1.0"
+#endif
+#ifndef QT_RSYNC_GIT_COMMIT
+#define QT_RSYNC_GIT_COMMIT "unknown"
+#endif
+  QString version = QStringLiteral(QT_RSYNC_VERSION);
+  const QString commit = QStringLiteral(QT_RSYNC_GIT_COMMIT);
+  if (!commit.isEmpty() && commit != QLatin1String("unknown")) {
+    version += QStringLiteral(" (%1)").arg(commit);
+  }
+  QCoreApplication::setApplicationVersion(version);
   QCoreApplication::setOrganizationName(QStringLiteral("qt-rsync"));
   application.setWindowIcon(QIcon(QStringLiteral(":/qt-rsync.svg")));
 

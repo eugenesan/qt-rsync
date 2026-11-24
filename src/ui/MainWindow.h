@@ -29,6 +29,9 @@ class MainWindow : public QMainWindow {
   void applyStartupOptions(const app::StartupOptions& options);
   [[nodiscard]] bool startupAborted() const;
 
+ protected:
+  void closeEvent(QCloseEvent* event) override;
+
  private slots:
   void startCompare();
   void onCompareFinished(int exitCode, QProcess::ExitStatus status);
@@ -70,6 +73,8 @@ class MainWindow : public QMainWindow {
   void updateVerificationVisibility();
   void updateStateIcons();
   void applyLayoutMode(const QString& mode);
+  void restoreWindowState();
+  void saveWindowState();
   void filterUnchangedAgainstDestination();
   void mergeInventoryChanges();
 

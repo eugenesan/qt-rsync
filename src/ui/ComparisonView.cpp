@@ -40,6 +40,32 @@ class FoldKeyFilter : public QObject {
   QHash<QObject*, int> panes_;
 };
 
+int logicalSortColumn(int section) {
+  switch (section) {
+    case 0: case 5: return 0;
+    case 1: case 6: return 1;
+    case 2: case 7: return 2;
+    case 3: case 8: return 3;
+    case 4: return 4;
+    case 9: case 10: return 9;
+    default: return 0;
+  }
+}
+
+int sortSectionFor(int logical, int pane) {
+  if (pane == 1) return logical == 4 ? 4 : -1;
+  if (logical == 4) return -1;
+  if (pane == 0) return logical;
+  switch (logical) {
+    case 0: return 5;
+    case 1: return 6;
+    case 2: return 7;
+    case 3: return 8;
+    case 9: return 10;
+    default: return 5;
+  }
+}
+
 }  // namespace
 
 ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
@@ -145,10 +171,14 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   QHeaderView* decisionHeader = views_[1]->horizontalHeader();
   decisionHeader->setStretchLastSection(false);
   decisionHeader->setSectionResizeMode(4, QHeaderView::Stretch);
-  // qpy shows an ascending arrow on the source name column; it tells the
-  // user which order the shared tree is in.
-  views_[0]->horizontalHeader()->setSortIndicatorShown(true);
-  views_[0]->horizontalHeader()->setSortIndicator(0, Qt::AscendingOrder);
+  // The sort indicator belongs to the shared tree, so show it on every pane
+  // that has the corresponding column.
+  for (int pane = 0; pane < 3; ++pane) {
+    QHeaderView* header = views_[pane]->horizontalHeader();
+    header->setSortIndicatorShown(true);
+    const int section = sortSectionFor(0, pane);
+    header->setSortIndicator(section, Qt::AscendingOrder);
+  }
 
   for (QTableView* view : views_) {
     view->installEventFilter(keyFilter_);
@@ -371,13 +401,17 @@ void ComparisonView::onCurrentChanged(int origin, const QModelIndex& index) {
 void ComparisonView::onSortIndicatorChanged(int pane, int section,
                                             Qt::SortOrder order) {
   if (sorting_) return;
+  (void)pane;
+  const int logical = logicalSortColumn(section);
   sorting_ = true;
-  const int logical = (pane == 1) ? 4 : section;
-  models_[pane]->sort(logical, order);
+  store_.sort_column = logical;
+  store_.sort_desc = order == Qt::DescendingOrder;
+  store_.rebuild_visible();
+  for (model::TableModel* model : models_) model->reset();
   for (int other = 0; other < 3; ++other) {
     QHeaderView* header = views_[other]->horizontalHeader();
     const bool blocked = header->blockSignals(true);
-    header->setSortIndicator(other == 1 ? 4 : section, order);
+    header->setSortIndicator(sortSectionFor(logical, other), order);
     header->blockSignals(blocked);
   }
   sorting_ = false;

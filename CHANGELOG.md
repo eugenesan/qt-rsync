@@ -51,6 +51,16 @@ KDE dark-theme and final UI parity pass.
 - The journal records the compare command, parse/run timing, preserved
   decisions, selected summary, inventory command, metadata count, completion
   state and total ready time, and scrolls to the newest line.
+- Main-window geometry, state, layout mode and splitter positions are stored
+  and restored. qpy-rsync's base64 window state is decoded directly.
+- XDG migration now merges qpy-rsync settings when qt-rsync files already
+  exist, including window geometry, splitter state and cached logs.
+- Compare declares completion only after the destination metadata listing
+  finishes; Compare/Sync/Verify stay unavailable until then.
+- Sorting any comparison column sorts the shared data and updates the
+  indicators on all three panes.
+- Overview directories start collapsed; only the synthetic Total row is open.
+- `--version` includes the checkout commit hash.
 - Layout modes now work: Normal, Compare only and Compare with overview.
 - Overview statistics use labels instead of painter text, so entries cannot
   be clipped and each action keeps its tooltip.

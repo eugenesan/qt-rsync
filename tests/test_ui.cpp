@@ -3,6 +3,7 @@
 #include <QAction>
 #include <QFile>
 #include <QFrame>
+#include <QHeaderView>
 #include <QIcon>
 #include <QKeyEvent>
 #include <QLabel>
@@ -67,6 +68,7 @@ class UiTest : public QObject {
   void actionFiltersHideAndKeepAncestors();
   void filterCheckboxesOnlyTakeKeyboardFocus();
   void actionFilterBarSeparatesEveryPair();
+  void sortIndicatorsAndRowsAreLinked();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -893,6 +895,55 @@ void UiTest::actionFilterBarSeparatesEveryPair() {
     if (frame->frameShape() == QFrame::VLine) ++separators;
   }
   QCOMPARE(separators, 8);
+}
+
+void UiTest::sortIndicatorsAndRowsAreLinked() {
+  ui::ComparisonView view;
+  ui::ActionFilterBar bar;
+  view.setFilterBar(&bar);
+  QVector<core::Change> changes;
+  const auto add = [&changes](const QString& path, qlonglong size) {
+    core::Change change;
+    change.path = path;
+    change.action = core::Action::Create;
+    change.kind = core::Kind::File;
+    change.size = size;
+    changes.append(change);
+  };
+  add(QStringLiteral("small.txt"), 10);
+  add(QStringLiteral("large.txt"), 1000);
+  add(QStringLiteral("medium.txt"), 100);
+  view.setChanges(changes);
+  const auto tables = view.findChildren<QTableView*>();
+  QCOMPARE(tables.size(), 3);
+  QHeaderView* sourceHeader = tables.at(0)->horizontalHeader();
+  QHeaderView* actionHeader = tables.at(1)->horizontalHeader();
+  QHeaderView* destinationHeader = tables.at(2)->horizontalHeader();
+
+  sourceHeader->setSortIndicator(2, Qt::DescendingOrder);
+  QTest::qWait(1);
+  QCOMPARE(sourceHeader->sortIndicatorSection(), 2);
+  QCOMPARE(destinationHeader->sortIndicatorSection(), 7);
+  QCOMPARE(actionHeader->sortIndicatorSection(), -1);
+  QCOMPARE(sourceHeader->sortIndicatorOrder(), Qt::DescendingOrder);
+  QCOMPARE(destinationHeader->sortIndicatorOrder(), Qt::DescendingOrder);
+
+  int firstFileSize = -1;
+  for (int id : view.store().visible) {
+    if (id < static_cast<int>(view.store().is_dir.size()) &&
+        view.store().is_dir[id]) {
+      continue;
+    }
+    firstFileSize = static_cast<int>(view.store().sizes.at(id));
+    break;
+  }
+  QCOMPARE(firstFileSize, 1000);
+
+  destinationHeader->setSortIndicator(6, Qt::AscendingOrder);
+  QTest::qWait(1);
+  QCOMPARE(sourceHeader->sortIndicatorSection(), 1);
+  QCOMPARE(destinationHeader->sortIndicatorSection(), 6);
+  QCOMPARE(sourceHeader->sortIndicatorOrder(), Qt::AscendingOrder);
 }
 
 QTEST_MAIN(UiTest)
