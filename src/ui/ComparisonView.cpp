@@ -10,6 +10,7 @@
 #include <QKeyEvent>
 #include <QHeaderView>
 #include <QMenu>
+#include <QPainter>
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QHBoxLayout>
@@ -38,6 +39,24 @@ class FoldKeyFilter : public QObject {
  private:
   ComparisonView* view_;
   QHash<QObject*, int> panes_;
+};
+
+class DecisionTableView : public QTableView {
+ public:
+  using QTableView::QTableView;
+
+ protected:
+  void paintEvent(QPaintEvent* event) override {
+    QTableView::paintEvent(event);
+    QPainter painter(viewport());
+    QColor border = palette().color(QPalette::Mid);
+    if (!border.isValid()) border = palette().color(QPalette::Text);
+    painter.setPen(border);
+    const int bottom = viewport()->height() - 1;
+    const int right = viewport()->width() - 1;
+    painter.drawLine(0, 0, 0, bottom);
+    painter.drawLine(right, 0, right, bottom);
+  }
 };
 
 int logicalSortColumn(int section) {
@@ -77,7 +96,8 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   tableLayout->setSpacing(0);
 
   for (int pane = 0; pane < 3; ++pane) {
-    auto* view = new QTableView(this);
+    auto* view = pane == 1 ? static_cast<QTableView*>(new DecisionTableView(this))
+                           : new QTableView(this);
     view->verticalHeader()->hide();
     if (pane != 2) {
       view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -163,11 +183,6 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
     header->resizeSection(itemsColumn, 60);
     header->resizeSection(sizeColumn, 85);
   }
-  views_[1]->setObjectName(QStringLiteral("decision-pane"));
-  views_[1]->setStyleSheet(
-      QStringLiteral("QTableView#decision-pane {"
-                     " border-left: 1px solid palette(mid);"
-                     " border-right: 1px solid palette(mid); }"));
   QHeaderView* decisionHeader = views_[1]->horizontalHeader();
   decisionHeader->setStretchLastSection(false);
   decisionHeader->setSectionResizeMode(4, QHeaderView::Stretch);
