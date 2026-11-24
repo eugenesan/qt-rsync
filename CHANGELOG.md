@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — undo and hierarchy fixes
+
+- Undo now clears the mirrored view decisions before reapplying the snapshot,
+  so excluded rows return to the list and the summary updates.
+- Decision changes refresh folder aggregates and the visible tree order, and
+  unchecked decision boxes are drawn as outlines instead of solid blue blocks.
+
 ## Unreleased — real-tree feedback fixes
 
 - Startup with no `--dir-pair` no longer clears the endpoints loaded from the

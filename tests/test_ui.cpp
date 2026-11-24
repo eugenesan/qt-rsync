@@ -127,6 +127,7 @@ void UiTest::spaceExcludesEverySelectedItem() {
     if (item.second == core::Decision::Exclude) ++excluded;
   }
   QVERIFY(excluded >= 3);
+  const int hiddenRows = decisionTable->model()->rowCount();
 
   QPushButton* undo = nullptr;
   for (QPushButton* button : window.findChildren<QPushButton*>()) {
@@ -136,6 +137,7 @@ void UiTest::spaceExcludesEverySelectedItem() {
   QVERIFY(undo->isEnabled());
   undo->click();
   QVERIFY(comparison->decisions().explicitItems().isEmpty());
+  QVERIFY(decisionTable->model()->rowCount() > hiddenRows);
   QVERIFY(!undo->isEnabled());
   qputenv("PATH", oldPath);
 }

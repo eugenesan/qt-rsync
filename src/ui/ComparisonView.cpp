@@ -193,6 +193,7 @@ bool ComparisonView::undoDecision() {
   if (decisionHistory_.isEmpty()) return false;
   decisions_.replace(decisionHistory_.takeLast());
   syncDecisionsToStore();
+  store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
   emit decisionChanged();
   emit undoAvailable(!decisionHistory_.isEmpty());
@@ -208,12 +209,18 @@ void ComparisonView::applyDecision(const QString& path, int decision) {
   }
   decisions_.set(path, value);
   syncDecisionsToStore();
+  store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
   emit decisionChanged();
   emit undoAvailable(!decisionHistory_.isEmpty());
 }
 
 void ComparisonView::syncDecisionsToStore() {
+  // Clear the mirrored decisions first: an undo removes entries, and stale
+  // values would otherwise keep the rows hidden.
+  for (int& value : store_.decisions) value = model::Inherit;
+  store_.decision_log.clear();
+  store_.compute_aggregates();
   const auto items = decisions_.explicitItems();
   for (const auto& item : items) {
     const std::string key = item.first.toStdString();

@@ -52,14 +52,18 @@ void DecisionDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
   QRect box(QPoint(), QSize(indicator, indicator));
   box.moveCenter(option.rect.center());
   painter->save();
-  painter->setPen(Qt::NoPen);
-  painter->setBrush(option.palette.color(QPalette::Highlight));
-  painter->drawRoundedRect(box, 3, 3);
   if (checked) {
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(option.palette.color(QPalette::Highlight));
+    painter->drawRoundedRect(box, 3, 3);
     painter->setPen(QPen(option.palette.color(QPalette::HighlightedText), 2,
                          Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     painter->drawLine(box.left() + 3, box.center().y(), box.left() + 6, box.bottom() - 3);
     painter->drawLine(box.left() + 6, box.bottom() - 3, box.right() - 3, box.top() + 3);
+  } else {
+    painter->setPen(QPen(option.palette.color(QPalette::Mid), 1.5));
+    painter->setBrush(Qt::NoBrush);
+    painter->drawRoundedRect(box, 3, 3);
   }
   painter->restore();
 
