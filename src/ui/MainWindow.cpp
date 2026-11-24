@@ -394,6 +394,7 @@ MainWindow::MainWindow(QWidget* parent)
     if (dialog.exec() == QDialog::Accepted) {
       d_->profile.filterText = editor->toPlainText();
       d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
+      updateStateIcons();
     }
   });
 
@@ -811,6 +812,7 @@ MainWindow::MainWindow(QWidget* parent)
     settings.setValue(QStringLiteral("decisions/preserve"),
                       d_->preserve->isChecked());
     settings.sync();
+    updateStateIcons();
   });
   connect(d_->filterBar, &ActionFilterBar::unchangedToggled, this,
           [this](bool enabled) {
@@ -893,6 +895,7 @@ MainWindow::MainWindow(QWidget* parent)
   });
   applyActionColours();
   updateVerificationVisibility();
+  updateStateIcons();
   restoreProfile();
 
   connect(d_->comparison, &ComparisonView::decisionChanged, this, [this]() {
@@ -1065,6 +1068,7 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   d_->overview->rebuild(d_->comparison->store());
   refreshPlan();
   d_->stale = false;
+  updateStateIcons();
   // qpy keeps the progress bar hidden for a comparison; it is only shown
   // while verifying or synchronizing. Leaving a bright 100% bar on screen
   // after Compare was a visible mismatch.
@@ -1223,6 +1227,7 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
     // for a fresh Compare. Never refresh automatically.
     d_->stale = true;
     d_->verified = false;
+    updateStateIcons();
     setStatus(QStringLiteral(
         "Synchronization complete — click Compare to refresh the comparison."));
     return;
@@ -1238,6 +1243,7 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
   const core::PlanMismatch mismatch = core::comparePlanToChanges(
       d_->plan, parsed.changes, &d_->comparison->decisions());
   d_->verified = mismatch.valid();
+  updateStateIcons();
   if (d_->verified) {
     setStatus(QStringLiteral("Verification matched the plan."));
   } else {
@@ -1350,6 +1356,7 @@ void MainWindow::setProfilePath(const QString& path) {
     openSessionLog(QFileInfo(path).completeBaseName());
   }
   d_->profileButton->setText(QFileInfo(path).completeBaseName());
+  updateStateIcons();
 }
 
 void MainWindow::loadProfileFile(const QString& path) {
@@ -1513,6 +1520,43 @@ void MainWindow::applyActionColours() {
   if (d_->comparison != nullptr) d_->comparison->setActionColours(colours);
   if (d_->filterBar != nullptr) d_->filterBar->setActionColours(colours);
   if (d_->overview != nullptr) d_->overview->setActionColours(colours);
+}
+
+void MainWindow::updateStateIcons() {
+  const QColor info(QStringLiteral("#0891B2"));
+  const QColor warning(QStringLiteral("#f59e0b"));
+  QIcon compare = icons::toolbarIcon(QStringLiteral("compare"));
+  if (d_->stale) {
+    compare = icons::badgedIcon(compare, warning);
+  } else if (!d_->changes.isEmpty()) {
+    compare = icons::badgedIcon(compare, info);
+  }
+  d_->compare->setIcon(compare);
+
+  QIcon preserve = icons::toolbarIcon(QStringLiteral("undo"));
+  d_->preserve->setIcon(d_->preserve->isChecked()
+                            ? icons::badgedIcon(preserve, info)
+                            : preserve);
+
+  QIcon verify = icons::toolbarIcon(QStringLiteral("verify"));
+  if (d_->verified) {
+    verify = icons::badgedIcon(verify, info);
+  } else if (d_->stale) {
+    verify = icons::badgedIcon(verify, warning);
+  }
+  d_->verify->setIcon(verify);
+
+  QIcon profile = icons::toolbarIcon(QStringLiteral("profile"));
+  if (!d_->profilePath.isEmpty()) {
+    profile = icons::badgedIcon(profile, info);
+  }
+  d_->profileButton->setIcon(profile);
+
+  QIcon filters = icons::toolbarIcon(QStringLiteral("filters"));
+  if (!d_->profile.filterText.trimmed().isEmpty()) {
+    filters = icons::badgedIcon(filters, info);
+  }
+  d_->filtersButton->setIcon(filters);
 }
 
 void MainWindow::updateVerificationVisibility() {

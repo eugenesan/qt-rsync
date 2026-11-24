@@ -125,6 +125,19 @@ QIcon actionIcon(int action, const QColor& colour) {
   }
 }
 
+QIcon badgedIcon(const QIcon& base, const QColor& colour) {
+  QPixmap pixmap(64, 64);
+  pixmap.fill(Qt::transparent);
+  QPainter painter(&pixmap);
+  painter.setRenderHint(QPainter::Antialiasing, true);
+  base.paint(&painter, 0, 0, 64, 64);
+  painter.setPen(Qt::NoPen);
+  painter.setBrush(QBrush(colour));
+  painter.drawEllipse(QPointF(50.0, 50.0), 11.0, 11.0);
+  painter.end();
+  return QIcon(pixmap);
+}
+
 QIcon fileIcon(const QString&) {
   return actionIcon(5);  // neutral glyph; file-type icons are not generated yet
 }

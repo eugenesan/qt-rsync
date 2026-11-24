@@ -67,6 +67,7 @@ class MainWindow : public QMainWindow {
   void stepSearch(int direction);
   void applyActionColours();
   void updateVerificationVisibility();
+  void updateStateIcons();
 
  private:
   class Private;
