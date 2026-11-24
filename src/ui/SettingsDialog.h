@@ -3,6 +3,7 @@
 #include <QDialog>
 
 class QListWidget;
+class QTableWidget;
 
 class QCheckBox;
 
@@ -29,6 +30,7 @@ class SettingsDialog : public QDialog {
   QCheckBox* rawRsync_ = nullptr;
   QCheckBox* twoPass_ = nullptr;
   QCheckBox* inventoryPreload_ = nullptr;
+  QTableWidget* colours_ = nullptr;
 };
 
 }  // namespace qt_rsync::ui

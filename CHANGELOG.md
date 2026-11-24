@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — UI parity completion
+
+- Added the General-page action colour table and the remaining toolbar buttons
+  (swap, pause, backup/log open).
+- Verified with real rsync that an Exclude decision adds `- /path` to the
+  merged filter and the file is not transferred.
+
 ## Unreleased — UI parity follow-ups
 
 - Decision-column checkbox clicks now use the pane-independent decision role.

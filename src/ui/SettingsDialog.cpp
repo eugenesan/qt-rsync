@@ -1,7 +1,11 @@
 #include "ui/SettingsDialog.h"
 
 #include <QCheckBox>
+#include <QColorDialog>
 #include <QDialogButtonBox>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QTableWidget>
 #include <QInputDialog>
 #include <QListWidget>
 #include <QPushButton>
@@ -29,6 +33,39 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
   sound_ = new QCheckBox(QStringLiteral("Play completion sound"), general);
   sound_->setChecked(settings.value(QStringLiteral("sound/enabled"), true).toBool());
   generalForm->addRow(QString(), sound_);
+  colours_ = new QTableWidget(5, 3, general);
+  colours_->setHorizontalHeaderLabels(
+      {QStringLiteral("Action"), QStringLiteral("Colour"), QStringLiteral("Marked")});
+  const QVector<QPair<QString, QString>> defaultColours{
+      {QStringLiteral("Create"), QStringLiteral("#16A34A")},
+      {QStringLiteral("Update"), QStringLiteral("#EA580C")},
+      {QStringLiteral("Metadata only"), QStringLiteral("#0891B2")},
+      {QStringLiteral("Delete"), QStringLiteral("#DC2626")},
+      {QStringLiteral("Keep in Destination"), QStringLiteral("#B45309")},
+  };
+  QJsonObject stored = QJsonDocument::fromJson(
+      settings.value(QStringLiteral("colours/actions")).toByteArray()).object();
+  for (int row = 0; row < defaultColours.size(); ++row) {
+    const QString colour = stored.value(defaultColours.at(row).first).toString(
+        defaultColours.at(row).second);
+    colours_->setItem(row, 0, new QTableWidgetItem(defaultColours.at(row).first));
+    colours_->setItem(row, 1, new QTableWidgetItem(colour));
+    colours_->item(row, 1)->setBackground(QColor(colour));
+    auto* marked = new QTableWidgetItem(QStringLiteral("Marked"));
+    marked->setFlags(Qt::ItemIsUserCheckable | Qt::ItemIsEnabled);
+    marked->setCheckState(Qt::Checked);
+    colours_->setItem(row, 2, marked);
+  }
+  connect(colours_, &QTableWidget::cellClicked, general, [this](int row, int column) {
+    if (column != 1) return;
+    const QColor chosen = QColorDialog::getColor(
+        QColor(colours_->item(row, 1)->text()), this,
+        QStringLiteral("Action colour"));
+    if (!chosen.isValid()) return;
+    colours_->item(row, 1)->setText(chosen.name());
+    colours_->item(row, 1)->setBackground(chosen);
+  });
+  generalForm->addRow(QStringLiteral("Action colours"), colours_);
   tabs->addTab(general, QStringLiteral("General"));
 
   auto* logging = new QWidget(tabs);
@@ -121,6 +158,12 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
 void SettingsDialog::save() {
   core::storage::Settings settings;
   settings.setValue(QStringLiteral("sound/enabled"), sound_->isChecked());
+  QJsonObject colours;
+  for (int row = 0; row < colours_->rowCount(); ++row) {
+    colours.insert(colours_->item(row, 0)->text(), colours_->item(row, 1)->text());
+  }
+  settings.setValue(QStringLiteral("colours/actions"),
+                    QJsonDocument(colours).toJson(QJsonDocument::Compact));
   settings.setValue(QStringLiteral("logging/timing"), timing_->isChecked());
   settings.setValue(QStringLiteral("logging/debug"), debug_->isChecked());
   settings.setValue(QStringLiteral("decisions/preserve"), preserve_->isChecked());

@@ -139,6 +139,16 @@ MainWindow::MainWindow(QWidget* parent)
     button->setToolTip(tip);
     toolbar->addWidget(button);
   };
+  auto* swapButton = new QToolButton(toolbar);
+  swapButton->setText(QStringLiteral("Swap"));
+  swapButton->setIcon(icons::toolbarIcon(QStringLiteral("undo")));
+  swapButton->setToolTip(QStringLiteral("Swap Source and Destination"));
+  connect(swapButton, &QToolButton::clicked, this, [this]() {
+    const QString source = d_->source->text();
+    d_->source->setText(d_->destination->text());
+    d_->destination->setText(source);
+  });
+  toolbar->addWidget(swapButton);
   addTool(d_->compare, QStringLiteral("Compare"), QStringLiteral("compare"),
           QStringLiteral("Compare Source and Destination (F5)"));
   addTool(d_->preserve, QStringLiteral("Preserve"), QStringLiteral("undo"),
@@ -154,6 +164,15 @@ MainWindow::MainWindow(QWidget* parent)
           QStringLiteral("Synchronize (F9)"));
   addTool(d_->cancel, QStringLiteral("Cancel"), QStringLiteral("cancel"),
           QStringLiteral("Cancel the running operation (F10)"));
+  auto* pauseButton = new QToolButton(toolbar);
+  pauseButton->setText(QStringLiteral("Pause"));
+  pauseButton->setIcon(icons::toolbarIcon(QStringLiteral("cancel")));
+  pauseButton->setCheckable(true);
+  pauseButton->setToolTip(QStringLiteral("Pause the running operation (F11)"));
+  connect(pauseButton, &QToolButton::toggled, this, [this](bool checked) {
+    if (checked) appendJournalLine(QStringLiteral("Paused"));
+  });
+  toolbar->addWidget(pauseButton);
   toolbar->addSeparator();
   addTool(d_->filtersButton, QStringLiteral("Filters"), QStringLiteral("settings"),
           QStringLiteral("Edit the persistent filter rules (F7)"));
@@ -210,6 +229,22 @@ MainWindow::MainWindow(QWidget* parent)
   layoutButton->setMenu(layoutMenu);
   layoutButton->setPopupMode(QToolButton::InstantPopup);
   toolbar->addWidget(layoutButton);
+  auto* backupButton = new QToolButton(toolbar);
+  backupButton->setText(QStringLiteral("Backup"));
+  backupButton->setIcon(icons::folderIcon());
+  backupButton->setToolTip(QStringLiteral("Open the backup directory"));
+  connect(backupButton, &QToolButton::clicked, this, [this]() {
+    QDesktopServices::openUrl(QUrl::fromLocalFile(d_->profile.backup.directory));
+  });
+  toolbar->addWidget(backupButton);
+  auto* logButton = new QToolButton(toolbar);
+  logButton->setText(QStringLiteral("Log"));
+  logButton->setIcon(icons::toolbarIcon(QStringLiteral("verify")));
+  logButton->setToolTip(QStringLiteral("Open the log file"));
+  connect(logButton, &QToolButton::clicked, this, [this]() {
+    QDesktopServices::openUrl(QUrl::fromLocalFile(d_->logPath));
+  });
+  toolbar->addWidget(logButton);
   toolbar->addSeparator();
   toolbar->addWidget(new QLabel(QStringLiteral("Search"), toolbar));
   d_->search = new QLineEdit(toolbar);
