@@ -44,6 +44,7 @@ SyncDialog::SyncDialog(const core::SyncProfile& profile,
   layout->addWidget(heading);
 
   auto* details = new QFormLayout();
+  details->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
   details->addRow(QStringLiteral("Source"), new QLabel(profile.source.path, this));
   details->addRow(QStringLiteral("Destination"),
                   new QLabel(profile.destination.path, this));

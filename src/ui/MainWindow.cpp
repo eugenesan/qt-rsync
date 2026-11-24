@@ -2,6 +2,7 @@
 
 #include <QDialogButtonBox>
 #include <QDebug>
+#include <QDir>
 #include <QFile>
 #include <QDesktopServices>
 #include <QFileDialog>
@@ -1210,7 +1211,8 @@ void MainWindow::refreshPlan() {
 
 void MainWindow::verifyPlan() {
   if (d_->plan.items.isEmpty()) refreshPlan();
-  d_->filterFile = new QTemporaryFile(this);
+  d_->filterFile = new QTemporaryFile(
+      QDir::tempPath() + QStringLiteral("/qt-rsync-plan-XXXXXX.rules"), this);
   if (!d_->filterFile->open()) {
     setStatus(QStringLiteral("Could not write decision rules."));
     return;
@@ -1231,7 +1233,8 @@ void MainWindow::verifyPlan() {
 
 void MainWindow::synchronize() {
   if (d_->plan.items.isEmpty() || d_->stale) refreshPlan();
-  d_->filterFile = new QTemporaryFile(this);
+  d_->filterFile = new QTemporaryFile(
+      QDir::tempPath() + QStringLiteral("/qt-rsync-plan-XXXXXX.rules"), this);
   if (!d_->filterFile->open()) {
     setStatus(QStringLiteral("Could not write decision rules."));
     return;
