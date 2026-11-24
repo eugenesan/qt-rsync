@@ -1721,6 +1721,7 @@ void MainWindow::findPrevious() {
 }
 
 void MainWindow::editProfile() {
+  const QString previousFilters = d_->profile.filterText;
   ProfileEditorDialog dialog(d_->profile, this);
   if (dialog.exec() != QDialog::Accepted) return;
   const core::SyncProfile updated = dialog.profile();
@@ -1732,7 +1733,16 @@ void MainWindow::editProfile() {
   d_->profile.inventoryAfterCompare = updated.inventoryAfterCompare;
   d_->mode->setCurrentIndex(static_cast<int>(d_->profile.transfer.mode));
   d_->inventoryAfter->setChecked(d_->profile.inventoryAfterCompare);
+  if (d_->profile.filterText != previousFilters) {
+    d_->stale = true;
+    updateStateIcons();
+    setStatus(QStringLiteral(
+        "Stale comparison: filter rules changed. Compare again to refresh "
+        "results."));
+    return;
+  }
   updateStateIcons();
+  refreshPlan();
   setStatus(QStringLiteral("Profile options updated."));
 }
 
