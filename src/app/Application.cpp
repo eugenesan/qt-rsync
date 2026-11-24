@@ -2,6 +2,7 @@
 
 #include <QApplication>
 #include <QCoreApplication>
+#include <QIcon>
 
 #include "app/StartupOptions.h"
 #include "ui/MainWindow.h"
@@ -17,6 +18,7 @@ int run(int argc, char** argv) {
   QCoreApplication::setApplicationName(QStringLiteral("qt-rsync"));
   QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
   QCoreApplication::setOrganizationName(QStringLiteral("qt-rsync"));
+  application.setWindowIcon(QIcon(QStringLiteral(":/qt-rsync.svg")));
 
   QString error;
   const StartupOptions options = StartupOptions::parse(

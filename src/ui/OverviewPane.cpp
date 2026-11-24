@@ -67,6 +67,13 @@ OverviewPane::OverviewPane(QWidget* parent)
   tree_->header()->setSectionsClickable(true);
   tree_->header()->setSortIndicatorShown(true);
   tree_->header()->setDefaultAlignment(Qt::AlignHCenter);
+  // The item column owns the remaining width; the numeric columns keep their
+  // width and the last one ends exactly at the viewport edge.
+  tree_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+  for (int column = 1; column <= 3; ++column) {
+    tree_->header()->setSectionResizeMode(column, QHeaderView::Fixed);
+  }
+  tree_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   tree_->header()->setFixedHeight(qMax(16, tree_->fontMetrics().height() + 2));
   tree_->header()->resizeSection(1, 56);
   tree_->header()->resizeSection(2, 64);

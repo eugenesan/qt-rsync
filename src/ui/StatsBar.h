@@ -6,10 +6,13 @@
 
 #include <QPair>
 
+class QHBoxLayout;
+class QLabel;
+
 namespace qt_rsync::ui {
 
-// Small statistics strip lifted from the native-hybrid StatsWidget. Entries
-// are text + colour; no icon generation dependency is needed yet.
+// One-line statistics strip for the overview. Labels rather than painted
+// text, so long entries cannot be clipped and each action keeps a tooltip.
 class StatsBar : public QWidget {
   Q_OBJECT
  public:
@@ -18,10 +21,13 @@ class StatsBar : public QWidget {
   void setEntries(const QVector<QPair<QString, QString>>& entries);
   void setActionColours(const QVector<QString>& colours);
 
- protected:
-  void paintEvent(QPaintEvent* event) override;
-
  private:
+  void refreshIcons();
+
+  QHBoxLayout* layout_ = nullptr;
+  QLabel* summary_ = nullptr;
+  QVector<QLabel*> icons_;
+  QVector<QLabel*> values_;
   QVector<QPair<QString, QString>> entries_;
   QVector<QIcon> actionIcons_;
 };

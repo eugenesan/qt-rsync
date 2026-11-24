@@ -64,9 +64,17 @@ add_executable(qt-rsync
     src/main.cpp
     src/app/Application.cpp
     src/app/StartupOptions.cpp
+    resources/resources.qrc
 )
 target_link_libraries(qt-rsync PRIVATE qt_rsync_ui qt_rsync_core Qt6::Widgets)
 set_target_properties(qt-rsync PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+include(GNUInstallDirs)
+install(TARGETS qt-rsync RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(FILES resources/qt-rsync.desktop
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
+install(FILES resources/qt-rsync.svg
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
 
 if(QT_RSYNC_BUILD_TESTS)
     enable_testing()

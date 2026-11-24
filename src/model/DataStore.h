@@ -76,6 +76,7 @@ struct DataStore {
   std::vector<int> visible;
   std::vector<int> row_of_id;
   bool show_excluded = false;
+  bool show_unchanged = false;
   // Folder aggregates and per-visible-row striping owned by native.
   std::vector<long long> dir_items;
   std::vector<long long> dir_size;
@@ -468,6 +469,13 @@ struct DataStore {
   }
 
   bool matches(int id) const {
+    // NoChange files are inventory-only and stay hidden until the user turns
+    // on the Unchanged toggle. Directories remain as navigation rows.
+    if (!show_unchanged && id >= 0 && id < static_cast<int>(actions.size()) &&
+        actions[id] == NoChange &&
+        (id >= static_cast<int>(is_dir.size()) || !is_dir[id])) {
+      return false;
+    }
     if (action_mask == -1) {
       // "Only excluded" mode: only excluded items pass; their ancestor
       // folders are added by rebuild_visible().

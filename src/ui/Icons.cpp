@@ -259,6 +259,10 @@ QIcon toolbarIcon(const QString& name) {
   if (name == QLatin1String("undo")) {
     return themed({"anchor-symbolic", "anchor"}, QStyle::SP_BrowserReload);
   }
+  if (name == QLatin1String("edit-undo")) {
+    return themed({"edit-undo-symbolic", "edit-undo", "undo"},
+                  QStyle::SP_ArrowBack);
+  }
   if (name == QLatin1String("search")) {
     return themed({"edit-find"}, QStyle::SP_FileDialogContentsView);
   }

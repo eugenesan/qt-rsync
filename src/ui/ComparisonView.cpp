@@ -139,8 +139,7 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   }
   QHeaderView* decisionHeader = views_[1]->horizontalHeader();
   decisionHeader->setStretchLastSection(false);
-  decisionHeader->setSectionResizeMode(4, QHeaderView::Fixed);
-  decisionHeader->resizeSection(4, 88);
+  decisionHeader->setSectionResizeMode(4, QHeaderView::Stretch);
   // qpy shows an ascending arrow on the source name column; it tells the
   // user which order the shared tree is in.
   views_[0]->horizontalHeader()->setSortIndicatorShown(true);
@@ -177,6 +176,8 @@ void ComparisonView::setFilterBar(ActionFilterBar* bar) {
   if (filterBar_ != nullptr) {
     connect(filterBar_, &ActionFilterBar::filterChanged,
             this, &ComparisonView::applyFilters);
+    connect(filterBar_, &ActionFilterBar::unchangedToggled, this,
+            &ComparisonView::setShowUnchanged);
   }
 }
 
@@ -197,6 +198,13 @@ void ComparisonView::setRootNames(const QString& source,
                                   const QString& destination) {
   store_.root_source = source.toStdString();
   store_.root_dest = destination.toStdString();
+}
+
+void ComparisonView::setShowUnchanged(bool show) {
+  if (store_.show_unchanged == show) return;
+  store_.show_unchanged = show;
+  store_.rebuild_visible();
+  for (model::TableModel* model : models_) model->reset();
 }
 
 void ComparisonView::setActionColours(const QVector<QString>& colours) {

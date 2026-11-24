@@ -1,24 +1,71 @@
 #include "ui/StatsBar.h"
 
-#include <QPainter>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QPixmap>
 
 #include "ui/Icons.h"
 
 namespace qt_rsync::ui {
+namespace {
+
+const char* const actionLabels[] = {
+    "Create", "Update", "Metadata only", "Delete", "Keep in Destination"};
+
+}  // namespace
 
 StatsBar::StatsBar(QWidget* parent) : QWidget(parent) {
-  setFixedHeight(24);
-  setToolTip(
+  setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  setMinimumHeight(fontMetrics().height() + 10);
+  layout_ = new QHBoxLayout(this);
+  layout_->setContentsMargins(6, 4, 6, 4);
+  layout_->setSpacing(4);
+  summary_ = new QLabel(this);
+  summary_->setObjectName(QStringLiteral("statistics-summary"));
+  const QString summaryTip =
       QStringLiteral(
           "Selected: the items that are checked in the comparison,\n"
           "with their total size and the count of each action. The icons "
-          "below are the same actions."));
+          "below are the same actions.");
+  summary_->setToolTip(summaryTip);
+  setToolTip(summaryTip);
+  layout_->addWidget(summary_);
+  layout_->addSpacing(8);
+  for (int action = 0; action < 5; ++action) {
+    auto* icon = new QLabel(this);
+    icon->setToolTip(QString::fromLatin1(actionLabels[action]));
+    auto* value = new QLabel(QStringLiteral("0"), this);
+    value->setMinimumWidth(26);
+    value->setToolTip(QString::fromLatin1(actionLabels[action]));
+    layout_->addWidget(icon);
+    layout_->addWidget(value);
+    icons_.append(icon);
+    values_.append(value);
+  }
+  layout_->addStretch(1);
 }
 
 void StatsBar::setEntries(const QVector<QPair<QString, QString>>& entries) {
   entries_ = entries;
-  updateGeometry();
-  update();
+  if (!entries_.isEmpty()) {
+    const auto& summary = entries_.at(0);
+    summary_->setText(summary.first);
+    summary_->setStyleSheet(
+        QStringLiteral("color: %1;").arg(summary.second));
+  }
+  for (int index = 1; index < entries_.size(); ++index) {
+    const int action = index - 1;
+    if (action < 0 || action >= values_.size()) continue;
+    values_.at(action)->setText(entries_.at(index).first);
+    values_.at(action)->setStyleSheet(
+        QStringLiteral("color: %1;").arg(entries_.at(index).second));
+  }
+  if (actionIcons_.isEmpty()) {
+    for (int action = 0; action < 5; ++action) {
+      actionIcons_.append(icons::actionIcon(action));
+    }
+  }
+  refreshIcons();
 }
 
 void StatsBar::setActionColours(const QVector<QString>& colours) {
@@ -31,29 +78,13 @@ void StatsBar::setActionColours(const QVector<QString>& colours) {
       actionIcons_.append(icons::actionIcon(action));
     }
   }
-  update();
+  refreshIcons();
 }
 
-void StatsBar::paintEvent(QPaintEvent*) {
-  QPainter painter(this);
-  int x = 4;
-  const int baseline = height() / 2 + fontMetrics().ascent() / 2 - 1;
-  if (actionIcons_.isEmpty()) {
-    for (int action = 0; action < 5; ++action) {
-      actionIcons_.append(icons::actionIcon(action));
-    }
-  }
-  for (int i = 0; i < entries_.size(); ++i) {
-    const auto& entry = entries_.at(i);
-    painter.save();
-    if (i > 0 && i - 1 < actionIcons_.size()) {
-      actionIcons_.at(i - 1).paint(&painter, QRect(x, (height() - 16) / 2, 16, 16));
-      x += 20;
-    }
-    painter.setPen(QColor(entry.second));
-    painter.drawText(x, baseline, entry.first);
-    x += fontMetrics().horizontalAdvance(entry.first) + 14;
-    painter.restore();
+void StatsBar::refreshIcons() {
+  for (int action = 0; action < icons_.size() && action < actionIcons_.size();
+       ++action) {
+    icons_.at(action)->setPixmap(actionIcons_.at(action).pixmap(16, 16));
   }
 }
 

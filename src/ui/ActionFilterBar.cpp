@@ -34,6 +34,9 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
     box->setObjectName(QStringLiteral("filter-box-%1").arg(++boxCounter));
     box->setChecked(checked);
     box->setFixedSize(44, 40);
+    // Breeze underlines a focused icon-only checkbox. A pointer click must not
+    // leave that marker behind; Tab still reaches the control.
+    box->setFocusPolicy(Qt::TabFocus);
     layout->addWidget(box);
     connect(box, &QCheckBox::toggled, this, &ActionFilterBar::filterChanged);
     if (shortcutNumber > 0) {
@@ -125,13 +128,15 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
   undo_ = new QToolButton(this);
   undo_->setObjectName(QStringLiteral("undo-button"));
   undo_->setText(QStringLiteral("Undo"));
-  undo_->setIcon(icons::toolbarIcon(QStringLiteral("undo")));
+  undo_->setIcon(icons::toolbarIcon(QStringLiteral("edit-undo")));
   undo_->setIconSize(QSize(24, 24));
   undo_->setFixedSize(40, 40);
   undo_->setToolTip(QStringLiteral("Undo the last decision (Ctrl+Z)"));
   undo_->setAccessibleName(QStringLiteral("Undo decision"));
   undo_->setEnabled(false);
-  layout->addWidget(undo_);
+  // qpy puts Undo at the start of the decisions bar, after the separator that
+  // follows the Source panel and before the Excluded toggle.
+  layout->insertWidget(0, undo_);
   connect(undo_, &QToolButton::clicked, this, &ActionFilterBar::undoRequested);
 }
 

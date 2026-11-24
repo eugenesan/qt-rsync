@@ -4,7 +4,6 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QStyleOptionViewItem>
-#include <QDebug>
 
 #include "ui/Icons.h"
 
@@ -40,7 +39,6 @@ bool NativeDelegate::editorEvent(QEvent* event, QAbstractItemModel*,
   if (row < 0 || row >= static_cast<int>(store_->visible.size())) return false;
   const int id = store_->visible[row];
 
-  qDebug() << "DELEGATE CLICK" << pane_ << index.column() << mouse->pos() << option.rect;
   if (pane_ == 1 && index.column() == 4) {
     const int start = option.rect.left() +
                       qMax(0, (option.rect.width() - (16 + 8 + 16)) / 2);
@@ -194,14 +192,24 @@ void NativeDelegate::paintCheck(QPainter* painter, const QStyleOptionViewItem& o
   if (!deleteRequest) {
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, true);
-    painter->setPen(Qt::NoPen);
-    painter->setBrush(opt.palette.color(QPalette::Highlight));
-    painter->drawRoundedRect(box, 4, 4);
     if (checked) {
+      painter->setPen(Qt::NoPen);
+      painter->setBrush(opt.palette.color(QPalette::Highlight));
+      painter->drawRoundedRect(box, 4, 4);
       painter->setPen(QPen(opt.palette.color(QPalette::HighlightedText), 2,
                            Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-      painter->drawLine(box.left() + 4, box.center().y(), box.left() + 7, box.bottom() - 4);
-      painter->drawLine(box.left() + 7, box.bottom() - 4, box.right() - 4, box.top() + 4);
+      painter->drawLine(box.left() + 4, box.center().y(),
+                        box.left() + 7, box.bottom() - 4);
+      painter->drawLine(box.left() + 7, box.bottom() - 4,
+                        box.right() - 4, box.top() + 4);
+    } else {
+      // An unchecked decision is an empty outlined box. Filling it with the
+      // highlight colour made on and off states indistinguishable.
+      QColor outline = opt.palette.color(QPalette::Mid);
+      if (!outline.isValid()) outline = opt.palette.color(QPalette::Text);
+      painter->setBrush(Qt::NoBrush);
+      painter->setPen(QPen(outline, 1.4));
+      painter->drawRoundedRect(box.adjusted(0.5, 0.5, -0.5, -0.5), 4, 4);
     }
     painter->restore();
   }

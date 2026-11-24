@@ -95,6 +95,9 @@ class MainWindow::Private {
   QToolButton* settingsButton = nullptr;
   QToolButton* pauseButton = nullptr;
   QToolButton* layoutButton = nullptr;
+  QSplitter* mainSplitter = nullptr;
+  QWidget* logPanel = nullptr;
+  QSplitter* logSplitter = nullptr;
   QAction* undoAction = nullptr;
   QAction* redoAction = nullptr;
   QAction* verifyAction = nullptr;
@@ -478,14 +481,15 @@ MainWindow::MainWindow(QWidget* parent)
       {QStringLiteral("Compare only"), QStringLiteral("focus")},
       {QStringLiteral("Compare with overview"), QStringLiteral("wide")},
   };
+  auto* layoutGroup = new QActionGroup(this);
+  layoutGroup->setExclusive(true);
   for (const auto& mode : layoutModes) {
     auto* action = layoutMenu->addAction(mode.first);
     action->setCheckable(true);
     action->setChecked(mode.second == QStringLiteral("normal"));
-    connect(action, &QAction::triggered, layoutButton, [this, layoutMenu, action]() {
-      for (QAction* other : layoutMenu->actions()) other->setChecked(other == action);
-      d_->overview->setVisible(true);
-    });
+    layoutGroup->addAction(action);
+    connect(action, &QAction::triggered, this,
+            [this, mode]() { applyLayoutMode(mode.second); });
   }
   layoutButton->setMenu(layoutMenu);
   layoutButton->setPopupMode(QToolButton::InstantPopup);
@@ -560,18 +564,13 @@ MainWindow::MainWindow(QWidget* parent)
       {QStringLiteral("Compare only"), QStringLiteral("focus")},
       {QStringLiteral("Compare with overview"), QStringLiteral("wide")},
   };
-  auto* layoutGroup = new QActionGroup(this);
-  layoutGroup->setExclusive(true);
   for (const auto& mode : viewLayoutModes) {
     auto* action = viewMenu->addAction(mode.first);
     action->setCheckable(true);
     action->setChecked(mode.second == QStringLiteral("normal"));
     layoutGroup->addAction(action);
-    connect(action, &QAction::triggered, this, [this, mode]() {
-      d_->overview->setVisible(mode.second != QStringLiteral("focus"));
-      d_->overview->setMinimumWidth(
-          mode.second == QStringLiteral("wide") ? 520 : 0);
-    });
+    connect(action, &QAction::triggered, this,
+            [this, mode]() { applyLayoutMode(mode.second); });
   }
 
   auto* actionsMenu = menuBar()->addMenu(QStringLiteral("Actions"));
@@ -781,15 +780,18 @@ MainWindow::MainWindow(QWidget* parent)
 
   // Row 3: comparison above, journal + overview below.
   auto* splitter = new QSplitter(Qt::Vertical, root);
+  d_->mainSplitter = splitter;
   d_->comparison = new ComparisonView(splitter);
   d_->comparison->setFilterBar(d_->filterBar);
   splitter->addWidget(d_->comparison);
 
   auto* logPanel = new QWidget(splitter);
+  d_->logPanel = logPanel;
   auto* logPanelLayout = new QHBoxLayout(logPanel);
   logPanelLayout->setContentsMargins(0, 0, 0, 0);
   logPanelLayout->setSpacing(4);
   auto* logSplitter = new QSplitter(Qt::Horizontal, logPanel);
+  d_->logSplitter = logSplitter;
   logSplitter->setChildrenCollapsible(false);
   auto* logColumn = new QWidget(logSplitter);
   auto* logColumnLayout = new QVBoxLayout(logColumn);
@@ -994,11 +996,19 @@ MainWindow::MainWindow(QWidget* parent)
                       "that exists on Source and Destination."));
               return;
             }
+            core::storage::Settings settings;
             QString tool = QStringLiteral("meld");
-            const QStringList configured = core::storage::Settings()
-                                               .value(QStringLiteral("tools/commands"))
-                                               .toStringList();
-            if (!configured.isEmpty()) tool = configured.first().section(' ', 0, 0);
+            const QString configuredCommand =
+                settings.value(QStringLiteral("tools/diff-command"))
+                    .toString()
+                    .trimmed();
+            const QStringList commands =
+                settings.value(QStringLiteral("tools/commands")).toStringList();
+            const QString command = configuredCommand.isEmpty()
+                                        ? (commands.isEmpty() ? QString()
+                                                              : commands.first())
+                                        : configuredCommand;
+            if (!command.isEmpty()) tool = command.section(' ', 0, 0);
             if (!QProcess::startDetached(tool, {source, destination})) {
               QMessageBox::information(
                   this, QStringLiteral("Diff tool unavailable"),
@@ -1215,6 +1225,7 @@ void MainWindow::onInventoryFinished(int, QProcess::ExitStatus) {
       core::buildInventorySpec(d_->profile, d_->profile.destination);
   setProcessEnvironment(spec, d_->destinationInventoryProcess);
   d_->destinationInventoryProcess->start(spec.program, spec.arguments);
+  d_->progress->hide();
 }
 
 void MainWindow::onDestinationInventoryFinished(int, QProcess::ExitStatus) {
@@ -1235,6 +1246,7 @@ void MainWindow::onDestinationInventoryFinished(int, QProcess::ExitStatus) {
     d_->comparison->setChanges(merged);
     d_->overview->rebuild(d_->comparison->store());
   }
+  d_->progress->hide();
 }
 
 void MainWindow::refreshPlan() {
@@ -1401,7 +1413,14 @@ void MainWindow::closeSessionLog() {
 
 void MainWindow::openSessionLog(const QString& name) {
   closeSessionLog();
-  d_->logPath = core::paths::appLogPath(name);
+  core::storage::Settings settings;
+  const QString configured =
+      settings.value(QStringLiteral("logging/file")).toString().trimmed();
+  d_->logPath =
+      configured.isEmpty() ? core::paths::appLogPath(name) : configured;
+  if (!settings.value(QStringLiteral("logging/enabled"), true).toBool()) {
+    return;
+  }
   QFileInfo(d_->logPath).absoluteDir().mkpath(QStringLiteral("."));
   d_->logFile = new QFile(d_->logPath, this);
   if (d_->logFile->open(QIODevice::Append | QIODevice::Text)) {
@@ -1613,6 +1632,41 @@ void MainWindow::applyActionColours() {
   if (d_->comparison != nullptr) d_->comparison->setActionColours(colours);
   if (d_->filterBar != nullptr) d_->filterBar->setActionColours(colours);
   if (d_->overview != nullptr) d_->overview->setActionColours(colours);
+}
+
+void MainWindow::applyLayoutMode(const QString& mode) {
+  if (d_->mainSplitter == nullptr || d_->logPanel == nullptr ||
+      d_->logSplitter == nullptr || d_->overview == nullptr) {
+    return;
+  }
+  if (mode == QLatin1String("focus")) {
+    d_->mainSplitter->setOrientation(Qt::Vertical);
+    d_->logPanel->hide();
+    d_->overview->hide();
+    d_->mainSplitter->setSizes({1, 0});
+    return;
+  }
+  if (mode == QLatin1String("wide")) {
+    d_->mainSplitter->setOrientation(Qt::Horizontal);
+    d_->logPanel->hide();
+    d_->mainSplitter->addWidget(d_->overview);
+    d_->overview->setMinimumWidth(180);
+    d_->overview->show();
+    // The hidden log panel still occupies a splitter index, so give it zero.
+    d_->mainSplitter->setSizes({600, 0, 400});
+    return;
+  }
+  d_->mainSplitter->setOrientation(Qt::Vertical);
+  if (d_->overview->parentWidget() != d_->logSplitter) {
+    d_->logSplitter->addWidget(d_->overview);
+  }
+  d_->overview->setMinimumWidth(0);
+  d_->logPanel->show();
+  d_->overview->show();
+  d_->logSplitter->setStretchFactor(0, 1);
+  d_->logSplitter->setStretchFactor(1, 0);
+  d_->logSplitter->setSizes({680, 620});
+  d_->mainSplitter->setSizes({500, 280});
 }
 
 void MainWindow::updateStateIcons() {

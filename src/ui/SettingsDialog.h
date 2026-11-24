@@ -2,7 +2,8 @@
 
 #include <QDialog>
 
-class QListWidget;
+class QLineEdit;
+class QPushButton;
 class QTableWidget;
 
 class QCheckBox;
@@ -24,7 +25,10 @@ class SettingsDialog : public QDialog {
   QCheckBox* verification_ = nullptr;
   QCheckBox* verificationRsync_ = nullptr;
   QCheckBox* sessionLogging_ = nullptr;
-  QListWidget* tools_ = nullptr;
+  QLineEdit* logFile_ = nullptr;
+  QPushButton* logBrowse_ = nullptr;
+  QTableWidget* tools_ = nullptr;
+  QLineEdit* diffCommand_ = nullptr;
   QCheckBox* detectInherited_ = nullptr;
   QCheckBox* rawRsync_ = nullptr;
   QCheckBox* twoPass_ = nullptr;

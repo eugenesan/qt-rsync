@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=qt-rsync
+GenericName=File Synchronization
+Comment=Compare and synchronize two folders with rsync
+Exec=qt-rsync
+Icon=qt-rsync
+Terminal=false
+Categories=Utility;FileTools;
+Keywords=rsync;sync;backup;mirror;compare;
+StartupNotify=true
+StartupWMClass=qt-rsync

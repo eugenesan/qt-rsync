@@ -69,6 +69,7 @@ class MainWindow : public QMainWindow {
   void applyActionColours();
   void updateVerificationVisibility();
   void updateStateIcons();
+  void applyLayoutMode(const QString& mode);
 
  private:
   class Private;

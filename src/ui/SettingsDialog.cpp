@@ -3,23 +3,129 @@
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QDialogButtonBox>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QTableWidget>
-#include <QInputDialog>
-#include <QListWidget>
-#include <QPushButton>
+#include <QFileDialog>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QHeaderView>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QTableWidget>
 #include <QTabWidget>
 #include <QVBoxLayout>
+
+#include <algorithm>
+#include <functional>
 
 #include "core/Paths.h"
 #include "core/Storage.h"
 
 namespace qt_rsync::ui {
+namespace {
+
+struct ExternalTool {
+  QString name;
+  QString command;
+  QString options;
+  bool enabled = true;
+};
+
+QJsonObject toolToJson(const ExternalTool& tool) {
+  QJsonObject object;
+  object.insert(QStringLiteral("name"), tool.name);
+  object.insert(QStringLiteral("command"), tool.command);
+  object.insert(QStringLiteral("options"), tool.options);
+  object.insert(QStringLiteral("enabled"), tool.enabled);
+  return object;
+}
+
+ExternalTool toolFromJson(const QJsonObject& object) {
+  ExternalTool tool;
+  tool.name = object.value(QStringLiteral("name")).toString();
+  tool.command = object.value(QStringLiteral("command")).toString();
+  tool.options = object.value(QStringLiteral("options")).toString();
+  tool.enabled = object.value(QStringLiteral("enabled")).toBool(true);
+  return tool;
+}
+
+class ExternalToolDialog : public QDialog {
+ public:
+  ExternalToolDialog(QWidget* parent, const ExternalTool* tool)
+      : QDialog(parent) {
+    setWindowTitle(QStringLiteral("External tool"));
+    resize(560, 460);
+    auto* layout = new QVBoxLayout(this);
+    auto* form = new QVBoxLayout();
+    const auto addField = [&](const QString& label, const QString& placeholder,
+                              QLineEdit** edit) {
+      form->addWidget(new QLabel(label, this));
+      *edit = new QLineEdit(this);
+      (*edit)->setPlaceholderText(placeholder);
+      form->addWidget(*edit);
+    };
+    addField(QStringLiteral("Name"), QStringLiteral("Kate"), &name_);
+    addField(QStringLiteral("Command"), QStringLiteral("kate %d/%f"),
+             &command_);
+    addField(QStringLiteral("Options"), QStringLiteral("options for the tool"),
+             &options_);
+    layout->addLayout(form);
+    enabled_ = new QCheckBox(
+        QStringLiteral("Offer the tool in the context menu"), this);
+    enabled_->setChecked(true);
+    layout->addWidget(enabled_);
+
+    auto* helpBox = new QGroupBox(QStringLiteral("Placeholders"), this);
+    auto* helpLayout = new QVBoxLayout(helpBox);
+    auto* help = new QLabel(
+        QStringLiteral(
+            "%a  full path in the picked pane\n"
+            "%f  file name in the picked pane\n"
+            "%x  extension of that file name\n"
+            "%b  file name without its extension\n"
+            "%d  directory in the picked pane\n"
+            "%A  full path in the other pane\n"
+            "%F  file name in the other pane\n"
+            "%D  directory in the other pane\n"
+            "%T  name of the tool\n"
+            "%O  options of the tool\n"
+            "%%  a literal %"),
+        helpBox);
+    help->setTextFormat(Qt::PlainText);
+    help->setWordWrap(true);
+    helpLayout->addWidget(help);
+    layout->addWidget(helpBox, 1);
+
+    auto* buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    layout->addWidget(buttons);
+    if (tool != nullptr) {
+      name_->setText(tool->name);
+      command_->setText(tool->command);
+      options_->setText(tool->options);
+      enabled_->setChecked(tool->enabled);
+    }
+  }
+
+  ExternalTool tool() const {
+    return {name_->text().trimmed(), command_->text().trimmed(),
+            options_->text().trimmed(), enabled_->isChecked()};
+  }
+
+ private:
+  QLineEdit* name_ = nullptr;
+  QLineEdit* command_ = nullptr;
+  QLineEdit* options_ = nullptr;
+  QCheckBox* enabled_ = nullptr;
+};
+
+}  // namespace
 
 SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
   setWindowTitle(QStringLiteral("Settings"));
@@ -105,40 +211,165 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
 
   auto* logging = new QWidget(tabs);
   auto* loggingForm = new QFormLayout(logging);
-  sessionLogging_ = new QCheckBox(
-      QStringLiteral("Write a session log to disk"), logging);
+  sessionLogging_ = new QCheckBox(QStringLiteral("Enable logging"), logging);
   sessionLogging_->setChecked(
       settings.value(QStringLiteral("logging/enabled"), true).toBool());
   loggingForm->addRow(QString(), sessionLogging_);
-  loggingForm->addRow(QStringLiteral("Session log:"),
-                      new QLabel(core::paths::appLogPath(QStringLiteral("default")), logging));
+  logFile_ = new QLineEdit(logging);
+  logFile_->setText(
+      settings.value(QStringLiteral("logging/file"),
+                     core::paths::appLogPath(QStringLiteral("default")))
+          .toString());
+  loggingForm->addRow(QStringLiteral("Log file"), logFile_);
+  logBrowse_ = new QPushButton(QStringLiteral("Browse..."), logging);
+  loggingForm->addRow(QString(), logBrowse_);
+  auto* loggingNote = new QLabel(
+      QStringLiteral(
+          "The journal is written to this file. The toolbar button opens it."),
+      logging);
+  loggingNote->setWordWrap(true);
+  loggingForm->addRow(QString(), loggingNote);
+  connect(logBrowse_, &QPushButton::clicked, this, [this]() {
+    const QString chosen = QFileDialog::getSaveFileName(
+        this, QStringLiteral("Choose log file"), logFile_->text());
+    if (!chosen.isEmpty()) logFile_->setText(chosen);
+  });
+  connect(sessionLogging_, &QCheckBox::toggled, this, [this](bool enabled) {
+    logFile_->setEnabled(enabled);
+    logBrowse_->setEnabled(enabled);
+  });
+  logFile_->setEnabled(sessionLogging_->isChecked());
+  logBrowse_->setEnabled(sessionLogging_->isChecked());
   tabs->addTab(logging, QStringLiteral("Logging"));
 
   auto* tools = new QWidget(tabs);
   auto* toolsLayout = new QVBoxLayout(tools);
-  tools_ = new QListWidget(tools);
-  for (const QString& command :
-       settings.value(QStringLiteral("tools/commands")).toStringList()) {
-    tools_->addItem(command);
-  }
-  toolsLayout->addWidget(tools_);
+  auto* toolsCaption = new QLabel(
+      QStringLiteral("Tools that the context menu offers on an item:"), tools);
+  toolsCaption->setWordWrap(true);
+  toolsLayout->addWidget(toolsCaption);
+  tools_ = new QTableWidget(0, 4, tools);
+  tools_->setHorizontalHeaderLabels(
+      {QStringLiteral("Name"), QStringLiteral("Command"),
+       QStringLiteral("Options"), QStringLiteral("Enabled")});
+  tools_->setSelectionBehavior(QAbstractItemView::SelectRows);
+  tools_->verticalHeader()->setVisible(false);
+  tools_->horizontalHeader()->setSectionResizeMode(
+      0, QHeaderView::ResizeToContents);
+  tools_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+  tools_->horizontalHeader()->setSectionResizeMode(
+      2, QHeaderView::ResizeToContents);
+  tools_->horizontalHeader()->setSectionResizeMode(
+      3, QHeaderView::ResizeToContents);
+  toolsLayout->addWidget(tools_, 1);
   auto* toolButtons = new QHBoxLayout();
   auto* addTool = new QPushButton(QStringLiteral("Add..."), tools);
+  auto* editTool = new QPushButton(QStringLiteral("Edit..."), tools);
   auto* removeTool = new QPushButton(QStringLiteral("Remove"), tools);
   toolButtons->addWidget(addTool);
+  toolButtons->addWidget(editTool);
   toolButtons->addWidget(removeTool);
   toolButtons->addStretch(1);
   toolsLayout->addLayout(toolButtons);
-  connect(addTool, &QPushButton::clicked, tools, [this]() {
-    bool ok = false;
-    const QString command = QInputDialog::getText(
-        this, QStringLiteral("External tool"), QStringLiteral("Command:"),
-        QLineEdit::Normal, QString(), &ok);
-    if (ok && !command.trimmed().isEmpty()) tools_->addItem(command.trimmed());
+  auto* diffCaption = new QLabel(
+      QStringLiteral("Diff tool command (empty uses the found tool):"), tools);
+  diffCaption->setWordWrap(true);
+  toolsLayout->addWidget(diffCaption);
+  diffCommand_ = new QLineEdit(tools);
+  diffCommand_->setPlaceholderText(QStringLiteral("meld %a %A"));
+  diffCommand_->setText(
+      settings.value(QStringLiteral("tools/diff-command")).toString());
+  toolsLayout->addWidget(diffCommand_);
+
+  const auto setTools = [this](const QVector<ExternalTool>& tools) {
+    tools_->setRowCount(0);
+    for (const ExternalTool& tool : tools) {
+      const int row = tools_->rowCount();
+      tools_->insertRow(row);
+      tools_->setItem(row, 0, new QTableWidgetItem(tool.name));
+      tools_->setItem(row, 1, new QTableWidgetItem(tool.command));
+      tools_->setItem(row, 2, new QTableWidgetItem(tool.options));
+      auto* enabled = new QTableWidgetItem;
+      enabled->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable |
+                        Qt::ItemIsUserCheckable);
+      enabled->setCheckState(tool.enabled ? Qt::Checked : Qt::Unchecked);
+      tools_->setItem(row, 3, enabled);
+    }
+  };
+  const auto tableTools = [this]() {
+    QVector<ExternalTool> result;
+    for (int row = 0; row < tools_->rowCount(); ++row) {
+      ExternalTool tool;
+      tool.name = tools_->item(row, 0)->text();
+      tool.command = tools_->item(row, 1)->text();
+      tool.options = tools_->item(row, 2)->text();
+      tool.enabled = tools_->item(row, 3) != nullptr &&
+                     tools_->item(row, 3)->checkState() == Qt::Checked;
+      result.append(tool);
+    }
+    return result;
+  };
+
+  QVector<ExternalTool> loadedTools;
+  const QJsonArray storedTools =
+      QJsonDocument::fromJson(
+          settings.value(QStringLiteral("tools/external")).toByteArray())
+          .array();
+  for (const QJsonValue& value : storedTools) {
+    const ExternalTool tool = toolFromJson(value.toObject());
+    if (!tool.name.isEmpty() && !tool.command.isEmpty()) loadedTools.append(tool);
+  }
+  if (loadedTools.isEmpty()) {
+    for (const QString& command :
+         settings.value(QStringLiteral("tools/commands")).toStringList()) {
+      if (command.trimmed().isEmpty()) continue;
+      loadedTools.append({command.section(' ', 0, 0), command, {}, true});
+    }
+  }
+  setTools(loadedTools);
+
+  connect(addTool, &QPushButton::clicked, tools, [this, setTools, tableTools]() {
+    ExternalToolDialog dialog(this, nullptr);
+    if (dialog.exec() != QDialog::Accepted) return;
+    const ExternalTool tool = dialog.tool();
+    if (tool.name.isEmpty() || tool.command.isEmpty()) {
+      QMessageBox::warning(this, QStringLiteral("External tool"),
+                           QStringLiteral("A tool needs a name and a command."));
+      return;
+    }
+    setTools(tableTools() + QVector<ExternalTool>{tool});
   });
-  connect(removeTool, &QPushButton::clicked, tools, [this]() {
-    for (QListWidgetItem* item : tools_->selectedItems()) delete item;
-  });
+  const auto editSelected = [this, setTools, tableTools]() {
+    const int row = tools_->currentRow();
+    QVector<ExternalTool> list = tableTools();
+    if (row < 0 || row >= list.size()) return;
+    ExternalToolDialog dialog(this, &list[row]);
+    if (dialog.exec() != QDialog::Accepted) return;
+    const ExternalTool tool = dialog.tool();
+    if (tool.name.isEmpty() || tool.command.isEmpty()) {
+      QMessageBox::warning(this, QStringLiteral("External tool"),
+                           QStringLiteral("A tool needs a name and a command."));
+      return;
+    }
+    list[row] = tool;
+    setTools(list);
+  };
+  connect(editTool, &QPushButton::clicked, tools, editSelected);
+  connect(tools_, &QTableWidget::cellDoubleClicked, tools,
+          [editSelected](int, int) { editSelected(); });
+  connect(removeTool, &QPushButton::clicked, tools,
+          [this, setTools, tableTools]() {
+            QVector<ExternalTool> list = tableTools();
+            QList<int> rows;
+            for (const QModelIndex& index : tools_->selectionModel()->selectedRows()) {
+              rows.append(index.row());
+            }
+            std::sort(rows.begin(), rows.end(), std::greater<int>());
+            for (int row : rows) {
+              if (row >= 0 && row < list.size()) list.removeAt(row);
+            }
+            setTools(list);
+          });
   tabs->addTab(tools, QStringLiteral("Tools"));
 
   auto* advanced = new QWidget(tabs);
@@ -321,10 +552,23 @@ void SettingsDialog::save() {
                     verification_->isChecked() && verificationRsync_->isChecked());
   settings.setValue(QStringLiteral("logging/enabled"),
                     sessionLogging_->isChecked());
+  settings.setValue(QStringLiteral("logging/file"), logFile_->text().trimmed());
+  QJsonArray tools;
   QStringList commands;
-  for (int row = 0; row < tools_->count(); ++row) {
-    commands << tools_->item(row)->text();
+  for (int row = 0; row < tools_->rowCount(); ++row) {
+    ExternalTool tool;
+    tool.name = tools_->item(row, 0)->text();
+    tool.command = tools_->item(row, 1)->text();
+    tool.options = tools_->item(row, 2)->text();
+    tool.enabled = tools_->item(row, 3) != nullptr &&
+                   tools_->item(row, 3)->checkState() == Qt::Checked;
+    tools.append(toolToJson(tool));
+    commands << tool.command;
   }
+  settings.setValue(QStringLiteral("tools/external"),
+                    QJsonDocument(tools).toJson(QJsonDocument::Compact));
+  settings.setValue(QStringLiteral("tools/diff-command"),
+                    diffCommand_->text().trimmed());
   settings.setValue(QStringLiteral("tools/commands"), commands);
   settings.setValue(QStringLiteral("decisions/detect-inherited"), detectInherited_->isChecked());
   settings.setValue(QStringLiteral("logging/rsync_output"), rawRsync_->isChecked());
