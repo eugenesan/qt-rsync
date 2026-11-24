@@ -39,6 +39,7 @@ class MainWindow : public QMainWindow {
   void refreshPlan();
   void addFilterPattern(const QString& pattern, const QString& path);
   void setStatus(const QString& text);
+  void appendJournalLine(const QString& line);
   void cancelOperation();
   void setProfilePath(const QString& path);
   void openSessionLog(const QString& name);

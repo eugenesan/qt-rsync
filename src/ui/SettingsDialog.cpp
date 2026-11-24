@@ -2,6 +2,9 @@
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
+#include <QInputDialog>
+#include <QListWidget>
+#include <QPushButton>
 #include <QFormLayout>
 #include <QLabel>
 #include <QTabWidget>
@@ -38,12 +41,40 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
   debug_->setChecked(settings.value(QStringLiteral("logging/debug"), false).toBool());
   loggingForm->addRow(QString(), timing_);
   loggingForm->addRow(QString(), debug_);
+  sessionLogging_ = new QCheckBox(
+      QStringLiteral("Write a session log to disk"), logging);
+  sessionLogging_->setChecked(
+      settings.value(QStringLiteral("logging/enabled"), true).toBool());
+  loggingForm->addRow(QString(), sessionLogging_);
   loggingForm->addRow(QStringLiteral("Session log:"),
                       new QLabel(core::paths::appLogPath(QStringLiteral("default")), logging));
   tabs->addTab(logging, QStringLiteral("Logging"));
 
-  auto* tools = new QLabel(
-      QStringLiteral("External tools are configured in the profile file."), tabs);
+  auto* tools = new QWidget(tabs);
+  auto* toolsLayout = new QVBoxLayout(tools);
+  tools_ = new QListWidget(tools);
+  for (const QString& command :
+       settings.value(QStringLiteral("tools/commands")).toStringList()) {
+    tools_->addItem(command);
+  }
+  toolsLayout->addWidget(tools_);
+  auto* toolButtons = new QHBoxLayout();
+  auto* addTool = new QPushButton(QStringLiteral("Add..."), tools);
+  auto* removeTool = new QPushButton(QStringLiteral("Remove"), tools);
+  toolButtons->addWidget(addTool);
+  toolButtons->addWidget(removeTool);
+  toolButtons->addStretch(1);
+  toolsLayout->addLayout(toolButtons);
+  connect(addTool, &QPushButton::clicked, tools, [this]() {
+    bool ok = false;
+    const QString command = QInputDialog::getText(
+        this, QStringLiteral("External tool"), QStringLiteral("Command:"),
+        QLineEdit::Normal, QString(), &ok);
+    if (ok && !command.trimmed().isEmpty()) tools_->addItem(command.trimmed());
+  });
+  connect(removeTool, &QPushButton::clicked, tools, [this]() {
+    for (QListWidgetItem* item : tools_->selectedItems()) delete item;
+  });
   tabs->addTab(tools, QStringLiteral("Tools"));
 
   auto* advanced = new QWidget(tabs);
@@ -82,6 +113,13 @@ void SettingsDialog::save() {
                     verification_->isChecked());
   settings.setValue(QStringLiteral("verification/rsync"),
                     verificationRsync_->isChecked());
+  settings.setValue(QStringLiteral("logging/enabled"),
+                    sessionLogging_->isChecked());
+  QStringList commands;
+  for (int row = 0; row < tools_->count(); ++row) {
+    commands << tools_->item(row)->text();
+  }
+  settings.setValue(QStringLiteral("tools/commands"), commands);
   settings.sync();
 }
 

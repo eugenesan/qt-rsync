@@ -2,6 +2,8 @@
 
 #include <QDialog>
 
+class QListWidget;
+
 class QCheckBox;
 
 namespace qt_rsync::ui {
@@ -21,6 +23,8 @@ class SettingsDialog : public QDialog {
   QCheckBox* preserve_ = nullptr;
   QCheckBox* verification_ = nullptr;
   QCheckBox* verificationRsync_ = nullptr;
+  QCheckBox* sessionLogging_ = nullptr;
+  QListWidget* tools_ = nullptr;
 };
 
 }  // namespace qt_rsync::ui

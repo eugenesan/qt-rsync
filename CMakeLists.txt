@@ -52,6 +52,7 @@ add_library(qt_rsync_ui
     src/ui/SyncDialog.cpp
     src/ui/LockedProfileDialog.cpp
     src/ui/Icons.cpp
+    src/ui/TreeDelegate.cpp
 )
 target_include_directories(qt_rsync_ui PUBLIC src)
 target_link_libraries(qt_rsync_ui PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets qt_rsync_model qt_rsync_core)

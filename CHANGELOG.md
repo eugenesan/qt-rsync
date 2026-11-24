@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — UI parity slices
+
+- Panel details: tree chevrons and indentation in the name columns, alternating
+  rows and 20px row height.
+- Overview: share bars via a dedicated delegate.
+- Journal: severity colours and a live filter field.
+- Settings: session-log toggle and a functional external-tools list.
+
 ## Unreleased — UI parity: toolbar and input row
 
 - Replaced the plain button row with a `QToolBar`: mode combo (Update/Mirror/

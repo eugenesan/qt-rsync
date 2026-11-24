@@ -837,6 +837,16 @@ class TableModel : public QAbstractTableModel {
     if (role == Qt::UserRole) {
       return QString::fromStdString(store_->paths[id]);
     }
+    if (role == Qt::UserRole + 21) {
+      return id < static_cast<int>(store_->depth.size()) ? store_->depth[id] : 0;
+    }
+    if (role == Qt::UserRole + 22) {
+      return id < static_cast<int>(store_->is_dir.size()) &&
+                     store_->is_dir[id] && store_->is_collapsed(id);
+    }
+    if (role == Qt::UserRole + 23) {
+      return id < static_cast<int>(store_->is_dir.size()) && store_->is_dir[id];
+    }
     if (role == Qt::DecorationRole) {
       if (index.column() != 0 && index.column() != 5) return {};
       const int row_action = id < static_cast<int>(store_->actions.size())

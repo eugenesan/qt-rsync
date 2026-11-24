@@ -2,6 +2,7 @@
 
 #include "core/Filter.h"
 #include "ui/Icons.h"
+#include "ui/TreeDelegate.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -50,7 +51,7 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
     view->verticalHeader()->hide();
     view->horizontalHeader()->setHighlightSections(false);
     view->setSelectionBehavior(QAbstractItemView::SelectRows);
-    view->setAlternatingRowColors(false);
+    view->setAlternatingRowColors(true);
     auto* model = new model::TableModel(&store_, pane, this);
     view->setModel(model);
     views_.append(view);
@@ -88,6 +89,9 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
     foldFilter->watch(views_[i], i);
   }
 
+  auto* treeDelegate = new TreeDelegate(this);
+  views_[0]->setItemDelegateForColumn(0, treeDelegate);
+  views_[2]->setItemDelegateForColumn(5, treeDelegate);
   delegate_ = new DecisionDelegate(this);
   views_[1]->setItemDelegateForColumn(4, delegate_);
   keyFilter_ = new DecisionKeyFilter(this);

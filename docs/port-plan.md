@@ -150,5 +150,5 @@ documented manual smoke check.
 - 54 QtTest cases green (`./test.sh`).
 - Side-by-side X11 parity against qpy-rsync verified on local fixtures (6 and
   106 changes) and on the real example SSH profile.
-- Known limitations: full icon/theme polish and the settings-page depth of
-  qpy-rsync.
+- Known limitations: the toolbar icons are drawn in C++ rather than using the
+  Breeze icon theme; remaining spacing/colour differences are cosmetic.

@@ -13,6 +13,7 @@
 #include <QProcessEnvironment>
 #include <QTime>
 #include <QPlainTextEdit>
+#include <QTextEdit>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QShortcut>
@@ -67,7 +68,9 @@ class MainWindow::Private {
   QLineEdit* search = nullptr;
   bool cancelled = false;
   QLabel* status = nullptr;
-  QPlainTextEdit* journal = nullptr;
+  QTextEdit* journal = nullptr;
+  QLineEdit* journalFilter = nullptr;
+  QStringList journalLines;
   QProgressBar* progress = nullptr;
   ComparisonView* comparison = nullptr;
   OverviewPane* overview = nullptr;
@@ -228,7 +231,27 @@ MainWindow::MainWindow(QWidget* parent)
   d_->status = new QLabel(QStringLiteral("Ready"), central);
   d_->status->setObjectName(QStringLiteral("status-label"));
   layout->addWidget(d_->status);
-  d_->journal = new QPlainTextEdit(central);
+
+  auto* journalBar = new QWidget(central);
+  auto* journalBarLayout = new QHBoxLayout(journalBar);
+  journalBarLayout->setContentsMargins(0, 0, 0, 0);
+  journalBarLayout->addWidget(new QLabel(QStringLiteral("Journal filter:"), journalBar));
+  d_->journalFilter = new QLineEdit(journalBar);
+  d_->journalFilter->setPlaceholderText(QStringLiteral("Filter journal lines..."));
+  d_->journalFilter->setClearButtonEnabled(true);
+  journalBarLayout->addWidget(d_->journalFilter, 1);
+  connect(d_->journalFilter, &QLineEdit::textChanged, this, [this]() {
+    d_->journal->clear();
+    for (const QString& line : d_->journalLines) {
+      if (d_->journalFilter->text().isEmpty() ||
+          line.contains(d_->journalFilter->text(), Qt::CaseInsensitive)) {
+        appendJournalLine(line);
+      }
+    }
+  });
+  layout->addWidget(journalBar);
+
+  d_->journal = new QTextEdit(central);
   d_->journal->setReadOnly(true);
   d_->journal->setMaximumHeight(140);
   layout->addWidget(d_->journal);
@@ -264,7 +287,7 @@ MainWindow::MainWindow(QWidget* parent)
       if (match.hasMatch()) {
         d_->progress->setValue(match.captured(1).toInt());
       }
-      d_->journal->appendPlainText(clean);
+      appendJournalLine(clean);
     }
   });
   restoreProfile();
@@ -311,11 +334,29 @@ void MainWindow::applyStartupOptions(const app::StartupOptions& options) {
   }
 }
 
+void MainWindow::appendJournalLine(const QString& line) {
+  QString colour = QStringLiteral("#9CA3AF");
+  if (line.contains(QStringLiteral("fail"), Qt::CaseInsensitive) ||
+      line.contains(QStringLiteral("error"), Qt::CaseInsensitive) ||
+      line.contains(QStringLiteral("cancel"), Qt::CaseInsensitive) ||
+      line.contains(QStringLiteral("mismatch"), Qt::CaseInsensitive)) {
+    colour = QStringLiteral("#DC2626");
+  } else if (line.contains(QStringLiteral("complete"), Qt::CaseInsensitive) ||
+             line.contains(QStringLiteral("matched"), Qt::CaseInsensitive)) {
+    colour = QStringLiteral("#15803D");
+  } else if (line.contains(QStringLiteral("warning"), Qt::CaseInsensitive)) {
+    colour = QStringLiteral("#B45309");
+  }
+  d_->journal->append(QStringLiteral("<span style='color:%1'>%2</span>")
+                          .arg(colour, line.toHtmlEscaped()));
+}
+
 void MainWindow::setStatus(const QString& text) {
   d_->status->setText(text);
   const QString time = QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz"));
   const QString line = time + QStringLiteral(" ") + text;
-  d_->journal->appendPlainText(line);
+  d_->journalLines.append(line);
+  appendJournalLine(line);
   if (d_->logFile != nullptr && d_->logFile->isOpen()) {
     d_->logFile->write((line + '\n').toUtf8());
     d_->logFile->flush();
@@ -521,10 +562,10 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
                   .arg(mismatch.missing.size())
                   .arg(mismatch.unexpected.size()));
     for (const QString& line : mismatch.missing) {
-      d_->journal->appendPlainText(QStringLiteral("missing: ") + line);
+      appendJournalLine(QStringLiteral("missing: ") + line);
     }
     for (const QString& line : mismatch.unexpected) {
-      d_->journal->appendPlainText(QStringLiteral("unexpected: ") + line);
+      appendJournalLine(QStringLiteral("unexpected: ") + line);
     }
   }
 }
