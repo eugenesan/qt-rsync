@@ -41,10 +41,12 @@ class ComparisonView : public QWidget {
   void resetAllDecisions();
   void applyDecision(const QString& path, int decision);
   bool undoDecision();
+  bool redoDecision();
 
  signals:
   void decisionChanged();
   void undoAvailable(bool available);
+  void redoAvailable(bool available);
   void batchStarted();
   void batchFinished();
   void filterRequested(const QString& pattern, const QString& path);
@@ -78,6 +80,7 @@ class ComparisonView : public QWidget {
   QVector<NativeDelegate*> delegates_;
   DecisionKeyFilter* keyFilter_ = nullptr;
   QVector<QHash<QString, core::Decision>> decisionHistory_;
+  QVector<QHash<QString, core::Decision>> redoHistory_;
 };
 
 }  // namespace qt_rsync::ui

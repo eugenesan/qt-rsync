@@ -22,6 +22,8 @@ class ActionFilterBar : public QWidget {
   void setConflictsAvailable(bool available);
   void setActionColours(const QVector<QString>& colours);
   void setExcludedCount(int count);
+  void toggleUnchanged();
+  bool showUnchanged() const;
   void setUndoEnabled(bool enabled);
 
  signals:

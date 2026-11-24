@@ -212,9 +212,15 @@ void UiTest::verifyAndSyncKeepComparisonStale() {
   QTimer::singleShot(100, [&]() {
     for (QWidget* widget : QApplication::topLevelWidgets()) {
       auto* dialog = dynamic_cast<QDialog*>(widget);
-      if (dialog == nullptr || !dialog->isVisible() || dialog->windowTitle() != QLatin1String("Synchronize")) continue;
+      if (dialog == nullptr || !dialog->isVisible() ||
+          !dialog->windowTitle().contains(QStringLiteral("synchronization"))) {
+        continue;
+      }
       for (QAbstractButton* button : dialog->findChildren<QAbstractButton*>()) {
-        if (button->text() == QLatin1String("Synchronize")) button->click();
+        if (button->text().contains(QStringLiteral("Synchronize"))) {
+          button->click();
+          break;
+        }
       }
       return;
     }
@@ -423,7 +429,7 @@ void UiTest::deleteDecisionAppearsInSyncRules() {
     for (QWidget* widget : QApplication::topLevelWidgets()) {
       auto* dialog = dynamic_cast<QDialog*>(widget);
       if (dialog == nullptr ||
-          dialog->windowTitle() != QLatin1String("Synchronize")) {
+          !dialog->windowTitle().contains(QStringLiteral("synchronization"))) {
         continue;
       }
       QString rules;
@@ -520,11 +526,13 @@ void UiTest::realMirrorSyncDeletesDestinationOnlyFiles() {
     for (QWidget* widget : QApplication::topLevelWidgets()) {
       auto* dialog = dynamic_cast<QDialog*>(widget);
       if (dialog == nullptr ||
-          dialog->windowTitle() != QLatin1String("Synchronize")) {
+          !dialog->windowTitle().contains(QStringLiteral("synchronization"))) {
         continue;
       }
       for (QAbstractButton* button : dialog->findChildren<QAbstractButton*>()) {
-        if (button->text() == QLatin1String("Synchronize")) button->click();
+        if (button->text().contains(QStringLiteral("Synchronize"))) {
+          button->click();
+        }
       }
       return;
     }
@@ -588,9 +596,11 @@ void UiTest::excludedFileIsNotTransferredByRealSync() {
     for (QWidget* widget : QApplication::topLevelWidgets()) {
       auto* dialog = dynamic_cast<QDialog*>(widget);
       if (dialog == nullptr ||
-          dialog->windowTitle() != QLatin1String("Synchronize")) continue;
+          !dialog->windowTitle().contains(QStringLiteral("synchronization"))) continue;
       for (QAbstractButton* button : dialog->findChildren<QAbstractButton*>()) {
-        if (button->text() == QLatin1String("Synchronize")) button->click();
+        if (button->text().contains(QStringLiteral("Synchronize"))) {
+          button->click();
+        }
       }
       return;
     }

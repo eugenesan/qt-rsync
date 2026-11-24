@@ -240,6 +240,8 @@ void ComparisonView::resetSubtreeDecisions(const QString& path) {
   syncDecisionsToStore();
   store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
+  redoHistory_.clear();
+  emit redoAvailable(false);
   emit decisionChanged();
   emit undoAvailable(!decisionHistory_.isEmpty());
 }
@@ -249,6 +251,8 @@ void ComparisonView::resetAllDecisions() {
   syncDecisionsToStore();
   store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
+  redoHistory_.clear();
+  emit redoAvailable(false);
   emit decisionChanged();
   emit undoAvailable(!decisionHistory_.isEmpty());
 }
@@ -267,19 +271,38 @@ void ComparisonView::endDecisionBatch() {
   if (decisions_.explicitItemsAsHash() != batchBefore_) {
     decisionHistory_.append(batchBefore_);
     if (decisionHistory_.size() > 100) decisionHistory_.removeFirst();
+    redoHistory_.clear();
     emit undoAvailable(true);
+    emit redoAvailable(false);
   }
   batchBefore_.clear();
 }
 
 bool ComparisonView::undoDecision() {
   if (decisionHistory_.isEmpty()) return false;
+  redoHistory_.append(decisions_.explicitItemsAsHash());
+  if (redoHistory_.size() > 100) redoHistory_.removeFirst();
   decisions_.replace(decisionHistory_.takeLast());
   syncDecisionsToStore();
   store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
   emit decisionChanged();
   emit undoAvailable(!decisionHistory_.isEmpty());
+  emit redoAvailable(true);
+  return true;
+}
+
+bool ComparisonView::redoDecision() {
+  if (redoHistory_.isEmpty()) return false;
+  decisionHistory_.append(decisions_.explicitItemsAsHash());
+  if (decisionHistory_.size() > 100) decisionHistory_.removeFirst();
+  decisions_.replace(redoHistory_.takeLast());
+  syncDecisionsToStore();
+  store_.rebuild_visible();
+  for (model::TableModel* model : models_) model->reset();
+  emit decisionChanged();
+  emit undoAvailable(true);
+  emit redoAvailable(!redoHistory_.isEmpty());
   return true;
 }
 
@@ -294,6 +317,8 @@ void ComparisonView::applyDecision(const QString& path, int decision) {
   syncDecisionsToStore();
   store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
+  redoHistory_.clear();
+  emit redoAvailable(false);
   emit decisionChanged();
   emit undoAvailable(!decisionHistory_.isEmpty());
 }

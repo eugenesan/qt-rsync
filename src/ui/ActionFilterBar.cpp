@@ -180,6 +180,10 @@ void ActionFilterBar::setUndoEnabled(bool enabled) {
   undo_->setEnabled(enabled);
 }
 
+void ActionFilterBar::toggleUnchanged() { unchanged_->click(); }
+
+bool ActionFilterBar::showUnchanged() const { return unchanged_->isChecked(); }
+
 void ActionFilterBar::setConflictsAvailable(bool available) {
   conflicts_->setVisible(available);
 }

@@ -11,8 +11,12 @@
 #include <QFrame>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeyEvent>
+#include <QActionGroup>
 #include <QMenu>
 #include <QMenuBar>
+
+#include <csignal>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -86,6 +90,10 @@ class MainWindow::Private {
   QToolButton* inventoryAfter = nullptr;
   QToolButton* filtersButton = nullptr;
   QToolButton* settingsButton = nullptr;
+  QToolButton* pauseButton = nullptr;
+  QToolButton* layoutButton = nullptr;
+  QAction* undoAction = nullptr;
+  QAction* redoAction = nullptr;
   QComboBox* mode = nullptr;
   QLineEdit* search = nullptr;
   QLabel* searchStatus = nullptr;
@@ -250,23 +258,50 @@ MainWindow::MainWindow(QWidget* parent)
   addTool(d_->cancel, QStringLiteral("Cancel"), QStringLiteral("cancel"),
           QStringLiteral(
               "Cancel the running operation\n\nShortcut: F10"));
-  auto* pauseButton = new QToolButton(toolbarRow);
-  pauseButton->setText(QStringLiteral("Pause"));
-  pauseButton->setAccessibleName(QStringLiteral("Pause the running operation"));
-  pauseButton->setIcon(icons::toolbarIcon(QStringLiteral("pause")));
-  pauseButton->setCheckable(true);
-  pauseButton->setToolTip(
+  d_->pauseButton = new QToolButton(toolbarRow);
+  d_->pauseButton->setText(QStringLiteral("Pause"));
+  d_->pauseButton->setAccessibleName(
+      QStringLiteral("Pause the running operation"));
+  d_->pauseButton->setIcon(icons::toolbarIcon(QStringLiteral("pause")));
+  d_->pauseButton->setCheckable(true);
+  d_->pauseButton->setToolTip(
       QStringLiteral(
           "Pause the running rsync operation.\n"
           "The transfer is suspended and continues with the same button.\n"
           "For a remote endpoint the connection stays open and the transfer "
           "resumes where it stopped.\n\n"
           "Shortcut: F11"));
-  connect(pauseButton, &QToolButton::toggled, this, [this](bool checked) {
-    if (checked) appendJournalLine(QStringLiteral("Paused"));
+  connect(d_->pauseButton, &QToolButton::toggled, this, [this](bool checked) {
+    QProcess* active = nullptr;
+    if (d_->operationProcess != nullptr &&
+        d_->operationProcess->processId() > 0) {
+      active = d_->operationProcess;
+    } else if (d_->compareProcess != nullptr &&
+               d_->compareProcess->processId() > 0) {
+      active = d_->compareProcess;
+    }
+    const qint64 pid = active != nullptr ? active->processId() : 0;
+    if (pid > 0) {
+      ::kill(static_cast<pid_t>(pid), checked ? SIGSTOP : SIGCONT);
+    }
+    d_->pauseButton->setIcon(icons::toolbarIcon(
+        checked ? QStringLiteral("sync") : QStringLiteral("pause")));
+    d_->pauseButton->setToolTip(
+        checked
+            ? QStringLiteral("Continue the paused rsync operation.\n\n"
+                             "Shortcut: F11")
+            : QStringLiteral(
+                  "Pause the running rsync operation.\n"
+                  "The transfer is suspended and continues with the same "
+                  "button.\n"
+                  "For a remote endpoint the connection stays open and the "
+                  "transfer resumes where it stopped.\n\n"
+                  "Shortcut: F11"));
+    appendJournalLine(checked ? QStringLiteral("Paused")
+                              : QStringLiteral("Continuing..."));
   });
-  styleTool(pauseButton);
-  toolbarLayout->addWidget(pauseButton);
+  styleTool(d_->pauseButton);
+  toolbarLayout->addWidget(d_->pauseButton);
 
   toolbarLayout->addWidget(verticalSeparator(toolbarRow));
   addTool(d_->filtersButton, QStringLiteral("Filters"), QStringLiteral("filters"),
@@ -390,7 +425,7 @@ MainWindow::MainWindow(QWidget* parent)
   d_->search->setObjectName(QStringLiteral("search-edit"));
   d_->search->setPlaceholderText(QStringLiteral("Search the list..."));
   d_->search->setClearButtonEnabled(true);
-  d_->search->setMinimumWidth(180);
+  d_->search->setMinimumWidth(120);
   d_->search->setToolTip(
       QStringLiteral(
           "Find items whose name contains the text; use a slash to match "
@@ -410,6 +445,7 @@ MainWindow::MainWindow(QWidget* parent)
   toolbarLayout->addWidget(d_->searchStatus);
 
   auto* layoutButton = new QToolButton(toolbarRow);
+  d_->layoutButton = layoutButton;
   layoutButton->setIcon(icons::toolbarIcon(QStringLiteral("layout")));
   layoutButton->setAccessibleName(QStringLiteral("Compare layout"));
   layoutButton->setToolTip(QStringLiteral("Compare layout"));
@@ -449,29 +485,88 @@ MainWindow::MainWindow(QWidget* parent)
   auto* saveAction = fileMenu->addAction(QStringLiteral("Save Profile"));
   saveAction->setShortcut(QKeySequence(Qt::Key_F2));
   connect(saveAction, &QAction::triggered, this, &MainWindow::saveCurrentProfile);
+  auto* saveAsAction = fileMenu->addAction(QStringLiteral("Save Profile As..."));
+  connect(saveAsAction, &QAction::triggered, this, &MainWindow::saveProfileAs);
   fileMenu->addSeparator();
   auto* quitAction = fileMenu->addAction(QStringLiteral("Quit"));
   quitAction->setShortcut(QKeySequence::Quit);
   connect(quitAction, &QAction::triggered, this, &QWidget::close);
 
   auto* editMenu = menuBar()->addMenu(QStringLiteral("Edit"));
-  auto* undoAction = editMenu->addAction(QStringLiteral("Undo Decision"));
-  undoAction->setShortcut(QKeySequence::Undo);
-  connect(undoAction, &QAction::triggered, this,
+  d_->undoAction = editMenu->addAction(QStringLiteral("Undo Decision"));
+  d_->undoAction->setShortcut(QKeySequence::Undo);
+  d_->undoAction->setEnabled(false);
+  connect(d_->undoAction, &QAction::triggered, this,
           [this]() { d_->comparison->undoDecision(); });
+  d_->redoAction = editMenu->addAction(QStringLiteral("Redo Decision"));
+  d_->redoAction->setShortcut(
+      QKeySequence(QStringLiteral("Ctrl+Shift+Z")));
+  d_->redoAction->setEnabled(false);
+  connect(d_->redoAction, &QAction::triggered, this,
+          [this]() { d_->comparison->redoDecision(); });
   auto* resetAction = editMenu->addAction(QStringLiteral("Reset Decisions"));
   connect(resetAction, &QAction::triggered, this,
           [this]() { d_->comparison->resetAllDecisions(); });
+  editMenu->addSeparator();
+  auto* findAction = editMenu->addAction(QStringLiteral("Find in List"));
+  findAction->setShortcut(QKeySequence::Find);
+  connect(findAction, &QAction::triggered, this, [this]() {
+    d_->search->setFocus(Qt::ShortcutFocusReason);
+    d_->search->selectAll();
+  });
+  auto* findNextAction = editMenu->addAction(QStringLiteral("Find Next"));
+  findNextAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+G")));
+  connect(findNextAction, &QAction::triggered, this, &MainWindow::findNext);
+  auto* findPreviousAction = editMenu->addAction(QStringLiteral("Find Previous"));
+  findPreviousAction->setShortcut(
+      QKeySequence(QStringLiteral("Ctrl+Shift+G")));
+  connect(findPreviousAction, &QAction::triggered, this,
+          &MainWindow::findPrevious);
   editMenu->addSeparator();
   auto* settingsAction = editMenu->addAction(QStringLiteral("Settings"));
   settingsAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+,")));
   connect(settingsAction, &QAction::triggered, d_->settingsButton,
           &QAbstractButton::click);
 
+  auto* viewMenu = menuBar()->addMenu(QStringLiteral("View"));
+  const QVector<QPair<QString, QString>> viewLayoutModes{
+      {QStringLiteral("Normal"), QStringLiteral("normal")},
+      {QStringLiteral("Compare only"), QStringLiteral("focus")},
+      {QStringLiteral("Compare with overview"), QStringLiteral("wide")},
+  };
+  auto* layoutGroup = new QActionGroup(this);
+  layoutGroup->setExclusive(true);
+  for (const auto& mode : viewLayoutModes) {
+    auto* action = viewMenu->addAction(mode.first);
+    action->setCheckable(true);
+    action->setChecked(mode.second == QStringLiteral("normal"));
+    layoutGroup->addAction(action);
+    connect(action, &QAction::triggered, this, [this, mode]() {
+      d_->overview->setVisible(mode.second != QStringLiteral("focus"));
+      d_->overview->setMinimumWidth(
+          mode.second == QStringLiteral("wide") ? 520 : 0);
+    });
+  }
+
   auto* actionsMenu = menuBar()->addMenu(QStringLiteral("Actions"));
+  auto* resetAllAction =
+      actionsMenu->addAction(QStringLiteral("Reset All Decisions"));
+  connect(resetAllAction, &QAction::triggered, this,
+          [this]() { d_->comparison->resetAllDecisions(); });
+  auto* methodAction = actionsMenu->addAction(QStringLiteral("Method"));
+  methodAction->setShortcut(QKeySequence(Qt::Key_F12));
+  connect(methodAction, &QAction::triggered, this, [this]() {
+    d_->mode->setCurrentIndex((d_->mode->currentIndex() + 1) %
+                              d_->mode->count());
+  });
+  actionsMenu->addSeparator();
   auto* compareAction = actionsMenu->addAction(QStringLiteral("Compare"));
   compareAction->setShortcut(QKeySequence(Qt::Key_F5));
   connect(compareAction, &QAction::triggered, this, &MainWindow::startCompare);
+  auto* inventoryAction = actionsMenu->addAction(QStringLiteral("Inventory"));
+  inventoryAction->setShortcut(QKeySequence(Qt::Key_F6));
+  connect(inventoryAction, &QAction::triggered, this,
+          [this]() { d_->filterBar->toggleUnchanged(); });
   auto* filtersAction = actionsMenu->addAction(QStringLiteral("Filters"));
   filtersAction->setShortcut(QKeySequence(Qt::Key_F7));
   connect(filtersAction, &QAction::triggered, d_->filtersButton,
@@ -482,6 +577,13 @@ MainWindow::MainWindow(QWidget* parent)
   auto* syncAction = actionsMenu->addAction(QStringLiteral("Synchronize"));
   syncAction->setShortcut(QKeySequence(Qt::Key_F9));
   connect(syncAction, &QAction::triggered, this, &MainWindow::synchronize);
+  auto* cancelAction = actionsMenu->addAction(QStringLiteral("Cancel"));
+  cancelAction->setShortcut(QKeySequence(Qt::Key_F10));
+  connect(cancelAction, &QAction::triggered, this, &MainWindow::cancelOperation);
+  auto* pauseAction = actionsMenu->addAction(QStringLiteral("Pause"));
+  pauseAction->setShortcut(QKeySequence(Qt::Key_F11));
+  connect(pauseAction, &QAction::triggered, d_->pauseButton,
+          &QAbstractButton::toggle);
   actionsMenu->addSeparator();
   actionsMenu->addAction(QStringLiteral("Collapse All Folders"), this,
                          [this]() { d_->comparison->foldAll(true); });
@@ -510,18 +612,6 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->search, &QLineEdit::textChanged, this, [this](const QString&) {
     refreshSearchMatches();
   });
-  auto* findShortcut = new QShortcut(QKeySequence::Find, this);
-  connect(findShortcut, &QShortcut::activated, this, [this]() {
-    d_->search->setFocus(Qt::ShortcutFocusReason);
-    d_->search->selectAll();
-  });
-  auto* findNextShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+G")), this);
-  connect(findNextShortcut, &QShortcut::activated, this, &MainWindow::findNext);
-  auto* findPreviousShortcut =
-      new QShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+G")), this);
-  connect(findPreviousShortcut, &QShortcut::activated, this,
-          &MainWindow::findPrevious);
-
   // Row 2: source + action filter bar + destination.
   auto* locations = new QHBoxLayout();
   auto* sourcePanel = new QWidget(root);
@@ -715,17 +805,6 @@ MainWindow::MainWindow(QWidget* parent)
                       d_->preserve->isChecked());
     settings.sync();
   });
-  auto* undoShortcut = new QShortcut(QKeySequence::Undo, this);
-  connect(undoShortcut, &QShortcut::activated, this,
-          [this]() { d_->comparison->undoDecision(); });
-  const auto addShortcut = [this](int key, auto slot) {
-    auto* shortcut = new QShortcut(QKeySequence(key), this);
-    connect(shortcut, &QShortcut::activated, this, slot);
-  };
-  addShortcut(Qt::Key_F5, &MainWindow::startCompare);
-  addShortcut(Qt::Key_F8, &MainWindow::verifyPlan);
-  addShortcut(Qt::Key_F9, &MainWindow::synchronize);
-  addShortcut(Qt::Key_F10, &MainWindow::cancelOperation);
   connect(d_->filterBar, &ActionFilterBar::unchangedToggled, this,
           [this](bool enabled) {
             if (enabled) startInventory();
@@ -734,6 +813,10 @@ MainWindow::MainWindow(QWidget* parent)
           [this]() { d_->comparison->undoDecision(); });
   connect(d_->comparison, &ComparisonView::undoAvailable, d_->filterBar,
           &ActionFilterBar::setUndoEnabled);
+  connect(d_->comparison, &ComparisonView::undoAvailable, d_->undoAction,
+          &QAction::setEnabled);
+  connect(d_->comparison, &ComparisonView::redoAvailable, d_->redoAction,
+          &QAction::setEnabled);
   connect(d_->compareProcess, &QProcess::finished, this, &MainWindow::onCompareFinished);
   connect(d_->compareProcess, &QProcess::errorOccurred, this, &MainWindow::onCompareError);
   connect(d_->operationProcess, &QProcess::finished, this, &MainWindow::onOperationFinished);
@@ -753,6 +836,53 @@ MainWindow::MainWindow(QWidget* parent)
       if (match.hasMatch()) d_->progress->setValue(match.captured(1).toInt());
       appendJournalLine(clean);
     }
+  });
+  // QAction shortcuts in the menu bar are not delivered on this KDE setup
+  // (the menu is exported to the global menu). Use window-level QShortcuts
+  // for the same keys so the keyboard works on every desktop.
+  for (QAction* top : menuBar()->actions()) {
+    QMenu* submenu = top->menu();
+    if (!submenu) continue;
+    for (QAction* action : submenu->actions()) {
+      action->setShortcut(QKeySequence());
+    }
+  }
+  const auto addKey = [this](const QKeySequence& sequence, auto slot) {
+    auto* shortcut = new QShortcut(sequence, this);
+    connect(shortcut, &QShortcut::activated, this, slot);
+  };
+  addKey(QKeySequence(Qt::Key_F2), &MainWindow::saveCurrentProfile);
+  addKey(QKeySequence(Qt::Key_F3), &MainWindow::loadProfile);
+  addKey(QKeySequence(Qt::Key_F5), &MainWindow::startCompare);
+  addKey(QKeySequence(Qt::Key_F6), [this]() {
+    d_->filterBar->toggleUnchanged();
+  });
+  addKey(QKeySequence(Qt::Key_F7), [this]() { d_->filtersButton->click(); });
+  addKey(QKeySequence(Qt::Key_F8), &MainWindow::verifyPlan);
+  addKey(QKeySequence(Qt::Key_F9), &MainWindow::synchronize);
+  addKey(QKeySequence(Qt::Key_F10), &MainWindow::cancelOperation);
+  addKey(QKeySequence(Qt::Key_F11), [this]() {
+    d_->pauseButton->toggle();
+  });
+  addKey(QKeySequence(Qt::Key_F12), [this]() {
+    d_->mode->setCurrentIndex((d_->mode->currentIndex() + 1) %
+                              d_->mode->count());
+  });
+  addKey(QKeySequence::Undo, [this]() {
+    d_->comparison->undoDecision();
+  });
+  addKey(QKeySequence(QStringLiteral("Ctrl+Shift+Z")), [this]() {
+    d_->comparison->redoDecision();
+  });
+  addKey(QKeySequence::Find, [this]() {
+    d_->search->setFocus(Qt::ShortcutFocusReason);
+    d_->search->selectAll();
+  });
+  addKey(QKeySequence(QStringLiteral("Ctrl+G")), &MainWindow::findNext);
+  addKey(QKeySequence(QStringLiteral("Ctrl+Shift+G")),
+         &MainWindow::findPrevious);
+  addKey(QKeySequence(QStringLiteral("Ctrl+,")), [this]() {
+    d_->settingsButton->click();
   });
   applyActionColours();
   restoreProfile();
@@ -891,6 +1021,7 @@ void MainWindow::startCompare() {
   d_->compare->setEnabled(false);
   d_->cancel->setEnabled(true);
   setStatus(QStringLiteral("Comparing..."));
+  d_->pauseButton->setChecked(false);
   d_->compareProcess->start(spec.program, spec.arguments);
 }
 
@@ -1061,6 +1192,7 @@ void MainWindow::synchronize() {
 
 void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) {
   d_->cancel->setEnabled(false);
+  d_->pauseButton->setChecked(false);
   if (d_->cancelled) {
     d_->cancelled = false;
     d_->syncing = false;
