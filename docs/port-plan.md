@@ -150,5 +150,5 @@ documented manual smoke check.
 - 54 QtTest cases green (`./test.sh`).
 - Side-by-side X11 parity against qpy-rsync verified on local fixtures (6 and
   106 changes) and on the real example SSH profile.
-- Known limitations: rsync cancellation, mirror-mode end-to-end validation,
-  full icon/theme polish and the settings-page depth of qpy-rsync.
+- Known limitations: full icon/theme polish and the settings-page depth of
+  qpy-rsync.

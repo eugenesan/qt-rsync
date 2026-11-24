@@ -13,6 +13,9 @@
 - Fixed a QSet aliasing bug in plan mismatch computation.
 - Added end-to-end tests for decision-only deletes (the sync dialog shows the
   `-s` rule) and mirror-mode destination-only deletions.
+- Added a real-rsync mirror-mode test on a disposable tree: a changed file is
+  transferred, a destination-only file is deleted, and the comparison ends
+  stale without auto-refreshing.
 
 ## Unreleased — undo and hierarchy fixes
 
