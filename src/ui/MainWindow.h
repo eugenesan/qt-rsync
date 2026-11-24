@@ -59,6 +59,7 @@ class MainWindow : public QMainWindow {
   void loadProfile();
   void resetProfile();
   void updateProfileMenu();
+  void editProfile();
   void findNext();
   void findPrevious();
 

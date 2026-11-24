@@ -43,6 +43,7 @@
 #include "core/Storage.h"
 #include "ui/ComparisonView.h"
 #include "ui/OverviewPane.h"
+#include "ui/ProfileEditorDialog.h"
 #include "ui/SettingsDialog.h"
 #include "ui/SyncDialog.h"
 #include "ui/LockedProfileDialog.h"
@@ -351,10 +352,22 @@ MainWindow::MainWindow(QWidget* parent)
                 }
                 setStatus(QStringLiteral("Log files cleared."));
               } else if (selected == configure) {
-                SettingsDialog dialog(this);
-                if (dialog.exec() == QDialog::Accepted) {
-                  applyActionColours();
-                  updateVerificationVisibility();
+                if (logging) {
+                  SettingsDialog dialog(this);
+                  if (dialog.exec() == QDialog::Accepted) {
+                    applyActionColours();
+                    updateVerificationVisibility();
+                  }
+                } else {
+                  ProfileEditorDialog dialog(
+                      d_->profile, this, QStringLiteral("backup"));
+                  if (dialog.exec() == QDialog::Accepted) {
+                    const core::SyncProfile updated = dialog.profile();
+                    d_->profile.backup = updated.backup;
+                    d_->profile.transfer = updated.transfer;
+                    d_->profile.preservation = updated.preservation;
+                    updateStateIcons();
+                  }
                 }
               }
             });
@@ -531,6 +544,9 @@ MainWindow::MainWindow(QWidget* parent)
   connect(findPreviousAction, &QAction::triggered, this,
           &MainWindow::findPrevious);
   editMenu->addSeparator();
+  auto* profileAction = editMenu->addAction(QStringLiteral("Profile"));
+  profileAction->setShortcut(QKeySequence(Qt::Key_F4));
+  connect(profileAction, &QAction::triggered, this, &MainWindow::editProfile);
   auto* settingsAction = editMenu->addAction(QStringLiteral("Settings"));
   settingsAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+,")));
   connect(settingsAction, &QAction::triggered, d_->settingsButton,
@@ -862,6 +878,7 @@ MainWindow::MainWindow(QWidget* parent)
   };
   addKey(QKeySequence(Qt::Key_F2), &MainWindow::saveCurrentProfile);
   addKey(QKeySequence(Qt::Key_F3), &MainWindow::loadProfile);
+  addKey(QKeySequence(Qt::Key_F4), &MainWindow::editProfile);
   addKey(QKeySequence(Qt::Key_F5), &MainWindow::startCompare);
   addKey(QKeySequence(Qt::Key_F6), [this]() {
     d_->filterBar->toggleUnchanged();
@@ -1627,38 +1644,62 @@ void MainWindow::findPrevious() {
   stepSearch(-1);
 }
 
+void MainWindow::editProfile() {
+  ProfileEditorDialog dialog(d_->profile, this);
+  if (dialog.exec() != QDialog::Accepted) return;
+  const core::SyncProfile updated = dialog.profile();
+  d_->profile.transfer = updated.transfer;
+  d_->profile.preservation = updated.preservation;
+  d_->profile.backup = updated.backup;
+  d_->profile.filterText = updated.filterText;
+  d_->profile.filters = updated.filters;
+  d_->profile.inventoryAfterCompare = updated.inventoryAfterCompare;
+  d_->mode->setCurrentIndex(static_cast<int>(d_->profile.transfer.mode));
+  d_->inventoryAfter->setChecked(d_->profile.inventoryAfterCompare);
+  updateStateIcons();
+  setStatus(QStringLiteral("Profile options updated."));
+}
+
 void MainWindow::updateProfileMenu() {
   auto* menu = d_->profileButton->menu();
   menu->clear();
-  const QString name = d_->profilePath.isEmpty()
-                           ? QStringLiteral("no profile")
-                           : QFileInfo(d_->profilePath).fileName();
-  auto* heading = menu->addAction(name);
-  heading->setEnabled(false);
-  connect(menu->addAction(QStringLiteral("Edit...")), &QAction::triggered,
-          d_->filtersButton, &QAbstractButton::click);
-  menu->addSeparator();
-  connect(menu->addAction(QStringLiteral("Save")), &QAction::triggered,
-          this, &MainWindow::saveCurrentProfile);
-  connect(menu->addAction(QStringLiteral("Save As...")), &QAction::triggered,
-          this, &MainWindow::saveProfileAs);
   connect(menu->addAction(QStringLiteral("Load...")), &QAction::triggered,
           this, &MainWindow::loadProfile);
+  connect(menu->addAction(QStringLiteral("Save")), &QAction::triggered,
+          this, &MainWindow::saveCurrentProfile);
   menu->addSeparator();
-  for (const QString& file : core::storage::listProfiles()) {
-    const QString path = core::paths::profilesDirectory() + '/' + file;
-    connect(menu->addAction(file), &QAction::triggered, this,
-            [this, path]() {
-              d_->profileLock.reset();
-              auto lock = std::make_unique<core::storage::FileLock>(path, 0);
-              if (lock->acquire()) {
-                d_->profileLock = std::move(lock);
-                d_->tempProfile = false;
-                loadProfileFile(path);
-              }
-            });
+  const QStringList profiles = core::storage::listProfiles();
+  if (profiles.isEmpty()) {
+    auto* note = menu->addAction(QStringLiteral("No recent profiles"));
+    note->setEnabled(false);
+  } else {
+    for (const QString& file : profiles) {
+      const QString path = core::paths::profilesDirectory() + '/' + file;
+      auto* action = menu->addAction(file);
+      action->setCheckable(true);
+      action->setChecked(path == d_->profilePath);
+      action->setToolTip(path);
+      connect(action, &QAction::triggered, this, [this, path]() {
+        d_->profileLock.reset();
+        auto lock = std::make_unique<core::storage::FileLock>(path, 0);
+        if (lock->acquire()) {
+          d_->profileLock = std::move(lock);
+          d_->tempProfile = false;
+          loadProfileFile(path);
+        }
+      });
+    }
   }
   menu->addSeparator();
+  connect(menu->addAction(QStringLiteral("Edit...")), &QAction::triggered,
+          this, &MainWindow::editProfile);
+  connect(menu->addAction(QStringLiteral("Save As...")), &QAction::triggered,
+          this, &MainWindow::saveProfileAs);
+  connect(menu->addAction(QStringLiteral("Open profiles directory")),
+          &QAction::triggered, this, [this]() {
+            QDesktopServices::openUrl(
+                QUrl::fromLocalFile(core::paths::profilesDirectory()));
+          });
   connect(menu->addAction(QStringLiteral("Reset")), &QAction::triggered,
           this, &MainWindow::resetProfile);
 }

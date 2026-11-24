@@ -36,8 +36,29 @@
   real X11 case); decision state is now read from a pane-independent role.
 - Right-click menu now matches qpy-rsync's entries and order.
 - Header sorting enabled for the comparison panes and overview.
-- App uses the Fusion widget style like PySide6, and F5/F8/F9/F10 shortcuts
-  were added.
+- App inherits the platform widget style and palette. Under KDE this is Breeze
+  (dark or light), matching qpy-rsync; forcing Fusion caused the wrong
+  colours, separators and button frames.
+- Window-level shortcuts for F2/F3/F5–F12, Ctrl+Z, Ctrl+Shift+Z, Ctrl+F,
+  Ctrl+G and Ctrl+Shift+G.
+
+## Unreleased — KDE dark-theme parity pass
+
+- Replaced the QToolBar with qpy's plain 40x40 QToolButton row so Breeze draws
+  visible button frames instead of auto-raised flat buttons.
+- Matched qpy tooltips for the mode selector, endpoints, toolbar buttons,
+  search, location open/browse and filter checkboxes.
+- Moved the excluded-item count onto the Excluded checkbox.
+- Separators now use theme-coloured `QFrame::VLine` widgets at qpy's positions.
+- The comparison progress bar stays hidden after Compare and only appears for
+  verification and synchronization.
+- Verification defaults to off; the Verify button and menu entry are hidden
+  until Advanced settings enables them.
+- Ported qpy's synchronization confirmation dialog: fingerprint heading,
+  source/destination/backup details, counts grid, destructive warning,
+  command and decision-rule previews.
+- Added state badges to Compare, Preserve, Verify, Profile and Filters, plus
+  action-colour loading and the Defaults button in Settings.
 
 ## Unreleased — UI parity: real qpy layout
 

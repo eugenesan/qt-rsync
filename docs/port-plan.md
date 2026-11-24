@@ -147,8 +147,12 @@ documented manual smoke check.
 
 ## Handoff summary
 
-- 54 QtTest cases green (`./test.sh`).
+- 58 QtTest cases green (`./test.sh`).
 - Side-by-side X11 parity against qpy-rsync verified on local fixtures (6 and
   106 changes) and on the real example SSH profile.
-- Known limitations: the toolbar icons are drawn in C++ rather than using the
-  Breeze icon theme; remaining spacing/colour differences are cosmetic.
+- KDE dark-theme pass: platform Breeze style/palette (no forced Fusion), plain
+  framed toolbar buttons, qpy tooltips, theme separators, excluded count on
+  the checkbox, hidden idle progress bar, Verify hidden until enabled, state
+  badges and the full synchronization confirmation dialog.
+- Known limitations: a few cosmetic spacing differences remain in the
+  overview splitter and the profile editor is still simpler than qpy's.
