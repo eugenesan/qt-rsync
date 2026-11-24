@@ -128,6 +128,7 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
 
   for (QTableView* view : views_) {
     view->installEventFilter(keyFilter_);
+    view->viewport()->installEventFilter(keyFilter_);
     view->setContextMenuPolicy(Qt::CustomContextMenu);
     const int pane = views_.indexOf(view);
     connect(view, &QTableView::customContextMenuRequested, this,

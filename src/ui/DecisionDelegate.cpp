@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QKeyEvent>
 #include <QSet>
+#include <QDebug>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QStyleOptionViewItem>
@@ -11,12 +12,9 @@
 namespace qt_rsync::ui {
 namespace {
 
-int nextDecision(int checkState) {
-  // Qt::CheckState: Unchecked=0, PartiallyChecked=1, Checked=2.
-  // The model decision values are Inherit=0, Include=1, Exclude=2, Delete=3.
-  // A checked box means included, so clicking it excludes; an unchecked box
-  // means excluded, so clicking it restores the inherited decision.
-  return checkState == Qt::Checked ? 2 : 0;
+int nextDecision(int decision) {
+  // Model decisions: Inherit=0, Include=1, Exclude=2, Delete=3.
+  return decision == 2 || decision == 3 ? 0 : 2;
 }
 
 }  // namespace
@@ -114,11 +112,15 @@ DecisionKeyFilter::DecisionKeyFilter(QObject* parent) : QObject(parent) {}
 
 bool DecisionKeyFilter::eventFilter(QObject* watched, QEvent* event) {
   auto* key = dynamic_cast<QKeyEvent*>(event);
-  auto* view = dynamic_cast<QTableView*>(watched);
-  if (key == nullptr || view == nullptr || key->key() != Qt::Key_Space ||
+  if (key == nullptr || key->key() != Qt::Key_Space ||
       key->type() != QEvent::KeyPress) {
     return false;
   }
+  auto* view = dynamic_cast<QTableView*>(watched);
+  if (view == nullptr && watched != nullptr) {
+    view = dynamic_cast<QTableView*>(watched->parent());
+  }
+  if (view == nullptr) return false;
   QSet<QString> paths;
   if (view->selectionModel() != nullptr) {
     for (const QModelIndex& index : view->selectionModel()->selectedRows()) {
@@ -129,7 +131,8 @@ bool DecisionKeyFilter::eventFilter(QObject* watched, QEvent* event) {
   if (!paths.isEmpty()) emit batchStarted();
   for (const QString& path : paths) {
     const int current = view->model()->data(
-        view->model()->index(indexOfPath(view, path), 4), Qt::CheckStateRole).toInt();
+        view->model()->index(indexOfPath(view, path), 0),
+        Qt::UserRole + 24).toInt();
     emit decisionToggled(path, nextDecision(current));
   }
   if (!paths.isEmpty()) emit batchFinished();

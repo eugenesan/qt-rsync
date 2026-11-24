@@ -135,6 +135,7 @@ MainWindow::MainWindow(QWidget* parent)
     button = new QToolButton(toolbar);
     button->setText(text);
     button->setIcon(icons::toolbarIcon(iconName));
+    button->setToolButtonStyle(Qt::ToolButtonIconOnly);
     button->setToolTip(tip);
     toolbar->addWidget(button);
   };
@@ -325,6 +326,14 @@ MainWindow::MainWindow(QWidget* parent)
   auto* undoShortcut = new QShortcut(QKeySequence::Undo, this);
   connect(undoShortcut, &QShortcut::activated, this,
           [this]() { d_->comparison->undoDecision(); });
+  const auto addShortcut = [this](int key, auto slot) {
+    auto* shortcut = new QShortcut(QKeySequence(key), this);
+    connect(shortcut, &QShortcut::activated, this, slot);
+  };
+  addShortcut(Qt::Key_F5, &MainWindow::startCompare);
+  addShortcut(Qt::Key_F8, &MainWindow::verifyPlan);
+  addShortcut(Qt::Key_F9, &MainWindow::synchronize);
+  addShortcut(Qt::Key_F10, &MainWindow::cancelOperation);
   connect(d_->comparison, &ComparisonView::undoAvailable, d_->undo,
           &QAbstractButton::setEnabled);
   connect(d_->compareProcess, &QProcess::finished, this, &MainWindow::onCompareFinished);

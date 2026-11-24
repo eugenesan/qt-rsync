@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — X11 interaction parity
+
+- Fixed Space decisions when the key is delivered to the table viewport (the
+  real X11 case); decision state is now read from a pane-independent role.
+- Right-click menu now matches qpy-rsync's entries and order.
+- Header sorting enabled for the comparison panes and overview.
+- App uses the Fusion widget style like PySide6, and F5/F8/F9/F10 shortcuts
+  were added.
+
 ## Unreleased — UI parity: real qpy layout
 
 - Rebuilt the main layout to match qpy-rsync: icon toolbar, Source/ActionFilterBar/

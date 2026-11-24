@@ -1,6 +1,7 @@
 #include "app/Application.h"
 
 #include <QApplication>
+#include <QStyleFactory>
 #include <QCoreApplication>
 
 #include "app/StartupOptions.h"
@@ -11,6 +12,11 @@ namespace qt_rsync::app {
 
 int run(int argc, char** argv) {
   QApplication application(argc, argv);
+  // qpy-rsync (PySide6) uses the Fusion widget style; match it so layouts and
+  // control metrics are comparable when the two apps run side by side.
+  if (QStyleFactory::keys().contains(QStringLiteral("Fusion"))) {
+    QApplication::setStyle(QStringLiteral("Fusion"));
+  }
   QCoreApplication::setApplicationName(QStringLiteral("qt-rsync"));
   QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
   QCoreApplication::setOrganizationName(QStringLiteral("qt-rsync"));

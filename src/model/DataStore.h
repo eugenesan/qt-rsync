@@ -847,6 +847,10 @@ class TableModel : public QAbstractTableModel {
     if (role == Qt::UserRole + 23) {
       return id < static_cast<int>(store_->is_dir.size()) && store_->is_dir[id];
     }
+    if (role == Qt::UserRole + 24) {
+      return id < static_cast<int>(store_->decisions.size())
+                 ? store_->decisions[id] : Inherit;
+    }
     if (role == Qt::DecorationRole) {
       if (index.column() != 0 && index.column() != 5) return {};
       const int row_action = id < static_cast<int>(store_->actions.size())
