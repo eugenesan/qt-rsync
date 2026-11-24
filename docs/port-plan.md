@@ -147,12 +147,17 @@ documented manual smoke check.
 
 ## Handoff summary
 
-- 58 QtTest cases green (`./test.sh`).
+- 59 QtTest cases green (`./test.sh`).
 - Side-by-side X11 parity against qpy-rsync verified on local fixtures (6 and
   106 changes) and on the real example SSH profile.
 - KDE dark-theme pass: platform Breeze style/palette (no forced Fusion), plain
   framed toolbar buttons, qpy tooltips, theme separators, excluded count on
   the checkbox, hidden idle progress bar, Verify hidden until enabled, state
   badges and the full synchronization confirmation dialog.
-- Known limitations: a few cosmetic spacing differences remain in the
-  overview splitter and the profile editor is still simpler than qpy's.
+- Unchanged items are inventory-only by default and follow the Unchanged
+  toggle; layout modes, stretching columns, statistics labels, profile editor,
+  tools/logging settings, desktop file and window icon are in place.
+- Known limitations: the profile filter editor has the qpy buttons and preview
+  but not its line-number gutter/syntax colouring; unknown-placeholder warnings
+  in the external-tool editor are not ported; remote diff staging is still
+  reported as unsupported.

@@ -12,12 +12,12 @@ start in [CHANGELOG.md](CHANGELOG.md).
 
 ## Status
 
-Functional parity: Compare, decisions (including exclude, delete-on-destination
-and undo), overview, sorting/folding, profiles with multi-instance locks,
-Verify, Synchronize with confirmation, journal and progress all work. Side-by-side
-X11 runs against qpy-rsync matched on a small fixture and a 620-file tree, and
-on the real SSH profile. Not yet ported: rsync cancellation and full mirror-mode
-validation against a disposable tree.
+Functional parity: Compare, decisions (including exclude, delete-on-destination,
+undo and redo), unchanged inventory, overview, sorting/folding, profiles with
+multi-instance locks, Verify, Synchronize with confirmation, cancellation,
+pause/resume, journal and progress all work. Side-by-side X11 runs against
+qpy-rsync matched on small fixtures, a 620-file tree and the real SSH profile;
+mirror-mode sync and filtered transfers are validated against disposable trees.
 
 ## Build
 
@@ -32,6 +32,16 @@ compiler. No Python is required.
 
 `build.sh` accepts extra CMake arguments, for example
 `./build.sh -DQT_RSYNC_BUILD_TESTS=OFF`.
+
+Install the binary, desktop entry and icon with:
+
+```sh
+cmake --install ./build --prefix /usr/local
+```
+
+The repository includes `resources/qt-rsync.desktop` and
+`resources/qt-rsync.svg`; the icon is also embedded as a Qt resource so the
+window icon works without an installed theme.
 
 ## Layout
 

@@ -13,9 +13,11 @@
 #include <QTabWidget>
 #include <QLineEdit>
 #include <QPlainTextEdit>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QTemporaryDir>
 #include <QTableView>
+#include <QTableWidget>
 
 #include "ui/MainWindow.h"
 #include "app/StartupOptions.h"
@@ -44,6 +46,7 @@ class UiTest : public QObject {
   void realMirrorSyncDeletesDestinationOnlyFiles();
   void excludedFileIsNotTransferredByRealSync();
   void excludedCheckboxShowsExcludedRows();
+  void unchangedOnlyShownWhenToggled();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -89,6 +92,9 @@ void UiTest::compareRendersFakeRsyncOutput() {
   const auto tables = window.findChildren<QTableView*>();
   QCOMPARE(tables.size(), 3);
   QVERIFY(tables.at(0)->model()->rowCount() >= 3);
+  auto* progress = window.findChild<QProgressBar*>();
+  QVERIFY(progress != nullptr);
+  QVERIFY(progress->isHidden());
   qputenv("PATH", oldPath);
 }
 
@@ -170,6 +176,22 @@ void UiTest::settingsDialogPersistsDiagnostics() {
   ui::SettingsDialog dialog;
   QCOMPARE(dialog.findChildren<QTabWidget*>().size(), 1);
   QCOMPARE(dialog.findChildren<QCheckBox*>().size(), 10);
+  bool logEditFound = false;
+  for (QLineEdit* edit : dialog.findChildren<QLineEdit*>()) {
+    if (edit->text().endsWith(QStringLiteral("app-default.log"))) {
+      logEditFound = true;
+    }
+  }
+  QVERIFY(logEditFound);
+  bool toolsTableFound = false;
+  for (QTableWidget* table : dialog.findChildren<QTableWidget*>()) {
+    if (table->columnCount() == 4 &&
+        table->horizontalHeaderItem(0) != nullptr &&
+        table->horizontalHeaderItem(0)->text() == QLatin1String("Name")) {
+      toolsTableFound = true;
+    }
+  }
+  QVERIFY(toolsTableFound);
   for (QCheckBox* box : dialog.findChildren<QCheckBox*>()) {
     if (box->text().contains(QStringLiteral("timing"))) box->setChecked(true);
     if (box->text().contains(QStringLiteral("Verify Decisions"))) {
@@ -672,6 +694,32 @@ void UiTest::excludedCheckboxShowsExcludedRows() {
   excludedBox->setChecked(true);
   QVERIFY(tables.at(0)->model()->rowCount() > hidden);
   qputenv("PATH", oldPath);
+}
+
+void UiTest::unchangedOnlyShownWhenToggled() {
+  ui::ComparisonView view;
+  ui::ActionFilterBar bar;
+  view.setFilterBar(&bar);
+  QVector<core::Change> changes;
+  core::Change changed;
+  changed.path = QStringLiteral("new.txt");
+  changed.action = core::Action::Create;
+  changed.kind = core::Kind::File;
+  changed.size = 4;
+  core::Change unchanged;
+  unchanged.path = QStringLiteral("same.txt");
+  unchanged.action = core::Action::NoChange;
+  unchanged.kind = core::Kind::File;
+  unchanged.size = 4;
+  changes << changed << unchanged;
+  view.setChanges(changes);
+  const auto tables = view.findChildren<QTableView*>();
+  QCOMPARE(tables.size(), 3);
+  const int changedRows = tables.at(0)->model()->rowCount();
+  bar.toggleUnchanged();
+  QVERIFY(tables.at(0)->model()->rowCount() > changedRows);
+  bar.toggleUnchanged();
+  QCOMPARE(tables.at(0)->model()->rowCount(), changedRows);
 }
 
 QTEST_MAIN(UiTest)

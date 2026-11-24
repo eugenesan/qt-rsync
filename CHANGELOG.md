@@ -1,264 +1,182 @@
 # Changelog
 
-## Unreleased — native view port
+All notable changes to qt-rsync. Versions group a few related milestones
+rather than every commit; the port started at 0.0.1 and reached 0.1.0 on
+2026-11-24.
 
-- Ported the native hybrid delegate (folder chevrons, indentation, stripes,
-  action colours and the decision checkbox/action-icon group) into C++.
-- Overview now uses the native widget metrics and statistics-bar format.
-- qpy icon drawings are used for action and folder icons.
+## 0.1.0 — 2026-11-24
 
-## Unreleased — final parity items
-
-- Unchanged-items checkbox now runs a source inventory and merges the unchanged
-  records into the comparison.
-- Toolbar icons use the KDE/Breeze theme when available, with drawn fallbacks.
-- Real-rsync test confirms Exclude decisions become merged-filter exclusions.
-
-## Unreleased — UI parity completion
-
-- Added the General-page action colour table and the remaining toolbar buttons
-  (swap, pause, backup/log open).
-- Verified with real rsync that an Exclude decision adds `- /path` to the
-  merged filter and the file is not transferred.
-
-## Unreleased — UI parity follow-ups
-
-- Decision-column checkbox clicks now use the pane-independent decision role.
-- Decision pane and lists scroll together with a single scrollbar on the
-  destination pane; sort indicators are shown and overview sorting is stable.
-- Moved Undo into the decision filter bar, added an excluded-item count, filter
-  editor, profile Edit entry, layout menu, open-location buttons, overview
-  summary icons and the missing Advanced settings options.
-
-## Unreleased — X11 interaction parity
-
-- Fixed Space decisions when the key is delivered to the table viewport (the
-  real X11 case); decision state is now read from a pane-independent role.
-- Right-click menu now matches qpy-rsync's entries and order.
-- Header sorting enabled for the comparison panes and overview.
-- App inherits the platform widget style and palette. Under KDE this is Breeze
-  (dark or light), matching qpy-rsync; forcing Fusion caused the wrong
-  colours, separators and button frames.
-- Window-level shortcuts for F2/F3/F5–F12, Ctrl+Z, Ctrl+Shift+Z, Ctrl+F,
-  Ctrl+G and Ctrl+Shift+G.
-
-## Unreleased — KDE dark-theme parity pass
-
-- Replaced the QToolBar with qpy's plain 40x40 QToolButton row so Breeze draws
-  visible button frames instead of auto-raised flat buttons.
-- Matched qpy tooltips for the mode selector, endpoints, toolbar buttons,
-  search, location open/browse and filter checkboxes.
-- Moved the excluded-item count onto the Excluded checkbox.
-- Separators now use theme-coloured `QFrame::VLine` widgets at qpy's positions.
-- The comparison progress bar stays hidden after Compare and only appears for
-  verification and synchronization.
-- Verification defaults to off; the Verify button and menu entry are hidden
-  until Advanced settings enables them.
-- Ported qpy's synchronization confirmation dialog: fingerprint heading,
-  source/destination/backup details, counts grid, destructive warning,
-  command and decision-rule previews.
-- Added state badges to Compare, Preserve, Verify, Profile and Filters, plus
-  action-colour loading and the Defaults button in Settings.
-
-## Unreleased — UI parity: real qpy layout
-
-- Rebuilt the main layout to match qpy-rsync: icon toolbar, Source/ActionFilterBar/
-  Destination location row, comparison above a command-preview + journal +
-  overview panel, and a State status bar.
-- Added the ActionFilterBar (excluded, directory filter, five action filters,
-  unchanged, conflicts) with Alt+1..8 / Ctrl+1..8 shortcuts.
-- Added the rsync command preview panel.
-
-## Unreleased — UI parity slices
-
-- Panel details: tree chevrons and indentation in the name columns, alternating
-  rows and 20px row height.
-- Overview: share bars via a dedicated delegate.
-- Journal: severity colours and a live filter field.
-- Settings: session-log toggle and a functional external-tools list.
-
-## Unreleased — UI parity: toolbar and input row
-
-- Replaced the plain button row with a `QToolBar`: mode combo (Update/Mirror/
-  New Only), Compare/Verify/Synchronize/Undo/Cancel tool buttons with icons and
-  labels, search field and a settings action.
-- Input row now has browse buttons for Source and Destination and a compact
-  Profile/Settings row.
-
-## Unreleased — correctness pass
-
-- Verify now compares the second dry run's parsed output against the execution
-  plan and reports missing/unexpected items; a mismatch marks verification as
-  failed.
-- Added `verification/enabled` and `verification/rsync` settings. Verification
-  remains optional; Synchronize is still available from Selection Ready, as in
-  qpy-rsync.
-- Added a Cancel button that terminates a running compare, verify or sync
-  process and restores the idle state.
-- Fixed a QSet aliasing bug in plan mismatch computation.
-- Added end-to-end tests for decision-only deletes (the sync dialog shows the
-  `-s` rule) and mirror-mode destination-only deletions.
-- Added a real-rsync mirror-mode test on a disposable tree: a changed file is
-  transferred, a destination-only file is deleted, and the comparison ends
-  stale without auto-refreshing.
-
-## Unreleased — undo and hierarchy fixes
-
-- Undo now clears the mirrored view decisions before reapplying the snapshot,
-  so excluded rows return to the list and the summary updates.
-- Decision changes refresh folder aggregates and the visible tree order, and
-  unchecked decision boxes are drawn as outlines instead of solid blue blocks.
-
-## Unreleased — real-tree feedback fixes
-
-- Startup with no `--dir-pair` no longer clears the endpoints loaded from the
-  cached profile (the SSH source now survives auto-load).
-- Added decision Undo (Ctrl+Z and toolbar button). A multi-row Space exclusion
-  is one undo step, matching qpy-rsync's decision batching.
-
-## Unreleased — layout parity
-
-- Set explicit column widths close to qpy-rsync: wide Item column, narrow Items
-  and Size columns, compact decision pane.
-- Suppressed file/folder icons on rows that have no content on that side (the
-  blank spacer rows), matching the reference view.
-
-## Unreleased — first real-tree run fixes
-
-- Profile-loaded SSH endpoints keep their `ssh` kind when Compare runs; the
-  field now shows the full `user@host:/path` operand. Typed-in SSH operands are
-  still parsed into SSH endpoints.
-- Normalized trailing slashes from rsync directory paths so folder rows keep
-  their names.
-
-## Unreleased — remote-run preparation
-
-- Parse `user@host:/path` endpoints typed into the Source/Destination fields,
-  so an SSH profile can be used without loading a profile file.
-- Added `docs/FIRST-REMOTE-RUN.md`: exact environment, binaries, cwd, launch
-  commands and capture steps for the first side-by-side run on the target
-  machine.
-
-## Unreleased — phase 5: parity fixes from real-tree comparison
-
-- Fixed `--dir-pair` so the second operand is captured; local endpoints now
-  get a trailing slash so rsync compares directories instead of copying the
-  source directory into the destination.
-- Set the pane root names from the endpoint names, excluded synthesized folder
-  rows from overview totals, and added coloured action glyphs to the decision
-  column.
-- Added a destination inventory pass after Compare so destination sizes and
-  folder aggregates match the Python app.
-- Verified side-by-side against qpy-rsync on X11 :50: same 6 changes, same
-  source and destination counts/sizes and the same overview totals.
-- Added C++-drawn file/folder icons and coloured action icons in the decision
-  column (no Python icon generator or cross-language QIcon handoff).
-- Verified a larger tree (620 source / 514 destination files) on X11 :50:
-  both apps report 106 changes, 2.0 KiB and 106 selected items.
-- Added Left/Right keyboard folding and a Collapse/Expand context submenu with
-  the same behaviour as the Python/native view.
-- Row text now uses the action colours (green create, orange update, brown
-  destination-only), matching the reference UI.
-
-## Unreleased — phase 4: profiles and multi-instance
-
-- Added a Profile menu with Save, Save As, Load, recent profiles and Reset.
-- Startup restores the cached profile. If it is locked by another process, a
-  dialog offers a temporary copy with an editable name, retrying inside the
-  same dialog with an orange warning, or quitting without changing settings or
-  profiles.
-- Temporary copies are not cached as the current profile. Saving under a new
-  name promotes them and records the profile.
-- Added UI tests for cache restoration and the quit-without-changes path.
-- Temporary profiles now own a session log; discarding a temporary profile
-  removes its file, lock and logs, while saving under a new name renames the
-  logs to the new profile.
-- XDG paths are now `qt-rsync` names. A one-time migration copies settings,
-  profiles and the cached profile path from the old `qpy-rsync` locations.
-
-## Unreleased — phase 3: verify and sync
-
-- Added Verify (F8): runs the compare dry run with the temporary decision
-  filter file and reports whether the output matches the execution plan.
-- Added Synchronize (F9): confirmation dialog with command preview, decision
-  rules, counts and destructive-operation warning; runs a write-capable rsync
-  with `QProcess`.
-- After a successful sync the comparison is marked stale and is never
-  refreshed automatically; the user must press Compare.
-- Added a fake-rsync UI test covering compare → verify → confirm → sync →
-  stale state.
-- Added a timestamped journal, rsync progress bar and benign Qt-output
-  filtering for captured process output.
-
-## Unreleased — phase 2: first vertical slice
-
-- Lifted the proven native view layer: `DataStore`, `TableModel` and
-  `OverviewModel` now live in `src/model/DataStore.h` (header-only, no Python
-  bindings, no `.so` handoffs).
-- Ported the rsync itemized-output parser with strict record validation and
-  destination-only vs delete semantics.
-- `ComparisonView` now renders three synchronized panes over one DataStore;
-  `OverviewPane` builds the folder tree from the same store.
-- `MainWindow` runs a real Compare with `QProcess` using the ported command
-  spec, parses stdout, populates the views and reports progress/status.
-- Added a QtTest end-to-end check with a fake rsync executable: 2 test targets,
-  43 assertions total.
-- Added row context menus (copy path/name, Exclude via Filter, Delete on
-  Destination with permanent-filter and decision-only options), a column
-  header editor, and the four settings pages wired to the XDG settings split.
-- Ported the decision-column delegate, Space handling for multi-row selection,
-  linked sorting, synchronized selection/scrollbars and the statistics strip.
-  Decisions now live only in `core::Decisions`; the view store mirrors them
-  for painting, and a UI test verifies three selected rows are excluded at
-  once.
-
-## Unreleased — phase 1: core semantics
-
-- Ported the decision model to C++: INCLUDE / EXCLUDE / INHERIT / DELETE,
-  inheritance, defaults, reconcile (including type-aware preservation and
-  opt-in inherited-destination-only detection), summaries and conflict
-  handling. 11 ported cases.
-- Ported filter parsing, context-menu phrase generation (`-s` delete rules),
-  rsync pattern matching and benign Qt-output cleanup.
-- Ported execution plans: item/summary construction, synthetic deletes,
-  fingerprints, freshness checks and decision filter-rule generation.
-- Ported rsync command construction: compare/verify/sync/inventory specs,
-  delete timing, filter merge ordering, nested-backup protection and
-  SSH remote-shell handling.
-- Ported profiles and storage: JSON profile round-trip with legacy migration,
-  XDG settings split, PID-based locks and current-profile caching.
-- QtTest suite: 41 tests passing under `./test.sh`.
-
-## 0.1.0 — phase 0 scaffold (2026-11-23)
-
-Initial commit of the pure Qt/C++ port of qpy-rsync. No sync functionality is
-implemented yet; this release establishes the build, layout, documentation and
-the inherited command-line surface.
+KDE dark-theme and final UI parity pass.
 
 ### Added
 
-- CMake build (C++20, Qt 6 Core/Gui/Widgets/Test, Ninja via `build.sh`) with
-  separate `core`, `model`, `ui` libraries and an executable at `bin/qt-rsync`.
-- `src/app`: single GUI entry point with the qpy-rsync launcher options
-  (`--dir-pair`, `--backup`, `--mode`, `--compare`, `--log-file`,
-  `--no-log-file`, `--version`, `--help`) parsed with `QCommandLineParser`.
-  There is no second CLI binary.
-- `src/core`: C++ type and API skeleton for changes, decisions, filters,
-  profiles, execution plans, rsync command specs and XDG path layout. One
-  decision store is owned here; the UI will not mirror it.
-- `src/model`: `DataStore`, `TableModel` and `OverviewModel` skeletons shaped
-  after the proven native-hybrid implementation (structure-of-arrays store,
-  Qt item models as projections).
-- `src/ui`: empty main window, three-pane comparison widget, overview pane and
-  settings dialog. Widgets are constructed in C++; no QML and no `.ui` files.
-- `tests`: first QtTest smoke case, runnable with `ctest` under the offscreen
-  Qt platform.
-- `docs/port-plan.md` with the phased port and exit criteria, `docs/decisions.md`
-  with the up-front architecture decisions, `docs/cli.md`, and the inherited
-  qpy-rsync specification, performance and experiment reports.
+- File/Edit/View/Actions/Help menus, a mirrored application-menu button and
+  window-level shortcuts for F1–F12, Ctrl+Z, Ctrl+Shift+Z and find actions.
+- Full synchronization confirmation dialog: fingerprint, endpoints, backup
+  state, counts grid, destructive warning, command preview and decision rules.
+- qpy-style profile editor with Transfer, Transfer options, Conflict policy,
+  Comparison, Preservation, Backup and Filters tabs plus rule preview,
+  import/export/help and backup browse/open buttons.
+- Settings Tools tab with the external-tool table (name, command, options,
+  enabled), add/edit/remove dialogs and a diff-tool command field.
+- Settings Logging tab with an editable log file and browse button.
+- Help/How-To and About dialogs.
+- State badges on Compare, Preserve, Verify, Profile and Filters.
+- Desktop integration: `qt-rsync.desktop`, scalable `qt-rsync.svg`, Qt
+  resource embedding, window icon and CMake install rules.
+- Search field with next/previous match, status and keyboard shortcuts.
+- Open-button context menus and local diff launching through the configured
+  tool (meld by default).
+- Profile editor and open-button access to the backup configuration.
 
-### Exit criteria met
+### Changed
 
-- `./build.sh` builds `bin/qt-rsync`.
-- `qt-rsync --help` and `qt-rsync --version` print and exit successfully.
-- `ctest --test-dir /tmp/opencode/qt-rsync-build --output-on-failure` passes.
+- The app inherits the platform style and palette. Under KDE it uses Breeze
+  rather than a forced Fusion style, fixing wrong colours, separators and
+  button frames.
+- Replaced the QToolBar with qpy's plain 40×40 button row so Breeze draws
+  visible button frames.
+- Matched qpy tooltips for the mode selector, endpoints, toolbar, search,
+  location buttons and filter checkboxes.
+- Excluded count moved onto the Excluded checkbox; Undo moved to the start of
+  the decisions bar with `edit-undo-symbolic`.
+- Layout modes now work: Normal, Compare only and Compare with overview.
+- Overview statistics use labels instead of painter text, so entries cannot
+  be clipped and each action keeps its tooltip.
+- Overview and comparison columns stretch the item column and end at the
+  viewport edge.
+- Verification defaults to off; its toolbar button and menu entry are hidden
+  until Advanced settings enables them.
+- Action rows use qpy's default colours; settings changes apply immediately.
+- The synchronization filter file uses the qpy-style `qt-rsync-plan-*.rules`
+  name.
+
+### Fixed
+
+- Unchanged files no longer appear after Compare. They are inventory-only and
+  appear only while the Unchanged toggle is on.
+- Unchecked decision boxes are now empty outlines instead of filled blue
+  boxes indistinguishable from checked ones.
+- Filter checkboxes no longer keep Breeze's focus underline after a pointer
+  click.
+- The progress bar is hidden when Compare, inventory, Verify or Sync
+  completes, instead of remaining at 100 %.
+- Removed the leftover `DELEGATE CLICK` terminal diagnostic.
+- Excluded count resets on a new comparison; profile filter changes mark the
+  comparison stale.
+- Local diff actions report clearly when a remote endpoint or a one-sided
+  file prevents opening the tool.
+
+## 0.0.9 — 2026-11-23
+
+Native-view parity and UI feedback.
+
+### Added
+
+- Ported qpy's drawn action/file icons, exact control sizes and native
+  delegate/overview widgets.
+- Inventory of unchanged items from both endpoints.
+- Theme icon names with drawn fallbacks and the qpy verify default.
+
+### Fixed
+
+- Delegate decision clicks use a pane-independent decision role.
+- Folder aggregates, unchecked checkbox rendering, excluded filter toggles and
+  real-rsync exclusions.
+- X11 keyboard decisions when Space reaches the table viewport.
+
+## 0.0.8 — 2026-11-23
+
+qpy layout parity.
+
+### Added
+
+- Real qpy layout: icon toolbar, Source/ActionFilterBar/Destination row,
+  comparison above command preview, journal and overview, and a State bar.
+- Full row context menu and decision reset actions.
+- Header sorting in comparison lists and the overview.
+- X11 keyboard folding, context-menu shortcuts and F5/F8/F9/F10 shortcuts.
+- Alternating rows, tree chevrons, overview share bars and a journal filter.
+
+## 0.0.7 — 2026-11-23
+
+Correctness and real-sync validation.
+
+### Added
+
+- Real verification comparison, settings handling and process cancellation.
+- Destructive-delete and mirror-mode end-to-end tests.
+- Validation of real mirror sync against a disposable tree.
+
+## 0.0.6 — 2026-11-23
+
+Real-tree and SSH parity.
+
+### Fixed
+
+- Root names, totals, destination sizes and action-coloured rows.
+- SSH profile endpoint preservation and auto-loaded profile endpoints.
+- Column widths and icons on rows absent from one side.
+- Undo visibility and folder aggregates.
+
+### Added
+
+- C++ action/file icons, X11 parity verification, keyboard folding and
+  collapse context menu.
+
+## 0.0.5 — 2026-11-23
+
+Profiles and lifecycle.
+
+### Added
+
+- Profile menu, cached-profile startup and locked-profile dialog with retry,
+  temporary copy and no-changes quit.
+- Temporary-profile cleanup, log promotion and XDG path migration from
+  qpy-rsync.
+
+## 0.0.4 — 2026-11-23
+
+Plan, verification and synchronization.
+
+### Added
+
+- Verify dry run, synchronization confirmation, command preview and
+  decision-rule preview.
+- Stale-after-sync behaviour and a journal with progress reporting and
+  cancellation.
+
+## 0.0.3 — 2026-11-23
+
+First vertical slice.
+
+### Added
+
+- Lifted native `DataStore`, table/overview models, three synchronized panes
+  and the first real Compare through `QProcess`.
+- Decision delegate, Space handling, linked sorting/selection, statistics
+  strip, context menus, header editor and initial settings pages.
+
+## 0.0.2 — 2026-11-23
+
+Core semantics in C++.
+
+### Added
+
+- Decisions, filters, execution plans, fingerprints, rsync command specs,
+  profiles, XDG storage and PID locks.
+- 41 QtTest core cases, with argv construction checked against qpy-rsync.
+
+## 0.0.1 — 2026-11-23
+
+Initial scaffold.
+
+### Added
+
+- CMake/Ninja C++20 build against Qt 6, separate core/model/ui libraries and a
+  single `qt-rsync` GUI executable.
+- Inherited qpy launcher options via `QCommandLineParser`: `--dir-pair`,
+  `--backup`, `--mode`, `--compare`, `--log-file`, `--no-log-file`,
+  `--version` and `--help`.
+- Initial core/model/ui skeletons, C++-constructed widgets, first QtTest case,
+  architecture decisions and the phased port plan.
