@@ -94,6 +94,7 @@ class MainWindow::Private {
   QToolButton* layoutButton = nullptr;
   QAction* undoAction = nullptr;
   QAction* redoAction = nullptr;
+  QAction* verifyAction = nullptr;
   QComboBox* mode = nullptr;
   QLineEdit* search = nullptr;
   QLabel* searchStatus = nullptr;
@@ -351,7 +352,10 @@ MainWindow::MainWindow(QWidget* parent)
                 setStatus(QStringLiteral("Log files cleared."));
               } else if (selected == configure) {
                 SettingsDialog dialog(this);
-                if (dialog.exec() == QDialog::Accepted) applyActionColours();
+                if (dialog.exec() == QDialog::Accepted) {
+                  applyActionColours();
+                  updateVerificationVisibility();
+                }
               }
             });
   };
@@ -370,7 +374,10 @@ MainWindow::MainWindow(QWidget* parent)
           QStringLiteral("settings"), QStringLiteral("Settings"));
   connect(d_->settingsButton, &QAbstractButton::clicked, this, [this]() {
     SettingsDialog dialog(this);
-    if (dialog.exec() == QDialog::Accepted) applyActionColours();
+    if (dialog.exec() == QDialog::Accepted) {
+      applyActionColours();
+      updateVerificationVisibility();
+    }
   });
   connect(d_->filtersButton, &QAbstractButton::clicked, this, [this]() {
     QDialog dialog(this);
@@ -571,9 +578,9 @@ MainWindow::MainWindow(QWidget* parent)
   filtersAction->setShortcut(QKeySequence(Qt::Key_F7));
   connect(filtersAction, &QAction::triggered, d_->filtersButton,
           &QAbstractButton::click);
-  auto* verifyAction = actionsMenu->addAction(QStringLiteral("Verify Decisions"));
-  verifyAction->setShortcut(QKeySequence(Qt::Key_F8));
-  connect(verifyAction, &QAction::triggered, this, &MainWindow::verifyPlan);
+  d_->verifyAction = actionsMenu->addAction(QStringLiteral("Verify Decisions"));
+  d_->verifyAction->setShortcut(QKeySequence(Qt::Key_F8));
+  connect(d_->verifyAction, &QAction::triggered, this, &MainWindow::verifyPlan);
   auto* syncAction = actionsMenu->addAction(QStringLiteral("Synchronize"));
   syncAction->setShortcut(QKeySequence(Qt::Key_F9));
   connect(syncAction, &QAction::triggered, this, &MainWindow::synchronize);
@@ -885,6 +892,7 @@ MainWindow::MainWindow(QWidget* parent)
     d_->settingsButton->click();
   });
   applyActionColours();
+  updateVerificationVisibility();
   restoreProfile();
 
   connect(d_->comparison, &ComparisonView::decisionChanged, this, [this]() {
@@ -1505,6 +1513,17 @@ void MainWindow::applyActionColours() {
   if (d_->comparison != nullptr) d_->comparison->setActionColours(colours);
   if (d_->filterBar != nullptr) d_->filterBar->setActionColours(colours);
   if (d_->overview != nullptr) d_->overview->setActionColours(colours);
+}
+
+void MainWindow::updateVerificationVisibility() {
+  core::storage::Settings settings;
+  const bool enabled =
+      settings.value(QStringLiteral("verification/enabled"), false).toBool();
+  if (d_->verify != nullptr) d_->verify->setVisible(enabled);
+  if (d_->verifyAction != nullptr) {
+    d_->verifyAction->setVisible(enabled);
+    d_->verifyAction->setEnabled(enabled);
+  }
 }
 
 void MainWindow::refreshSearchMatches() {
