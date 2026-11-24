@@ -30,6 +30,7 @@
 #include <QPushButton>
 #include <QShortcut>
 #include <QRegularExpression>
+#include <QSet>
 #include <QSizePolicy>
 #include <QSplitter>
 #include <QStatusBar>
@@ -44,6 +45,7 @@
 #include "core/Paths.h"
 #include "core/Storage.h"
 #include "ui/ComparisonView.h"
+#include "ui/FilterEditorWidget.h"
 #include "ui/OverviewPane.h"
 #include "ui/ProfileEditorDialog.h"
 #include "ui/SettingsDialog.h"
@@ -66,6 +68,26 @@ QFrame* verticalSeparator(QWidget* parent) {
   line->setFixedWidth(1);
   line->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
   return line;
+}
+
+QHash<QString, QPair<qlonglong, QString>> parseListingMetadata(
+    const QString& text) {
+  QHash<QString, QPair<qlonglong, QString>> metadata;
+  static const QRegularExpression line(
+      QStringLiteral("^\\S+\\s+([\\d,]+)\\s+(\\d{4}/\\d{2}/\\d{2})\\s+"
+                     "(\\d{2}:\\d{2}:\\d{2})\\s+(.+)$"));
+  for (const QString& entry : text.split('\n')) {
+    const auto match = line.match(entry.trimmed());
+    if (!match.hasMatch()) continue;
+    QString path = match.captured(4).trimmed();
+    while (path.endsWith('/') && path.size() > 1) path.chop(1);
+    bool ok = false;
+    const qlonglong size = match.captured(1).remove(',').toLongLong(&ok);
+    metadata.insert(path,
+                    {ok ? size : 0,
+                     match.captured(2) + QLatin1Char(' ') + match.captured(3)});
+  }
+  return metadata;
 }
 
 void setProcessEnvironment(const core::ProcessSpec& spec, QProcess* process) {
@@ -135,6 +157,7 @@ class MainWindow::Private {
   bool syncing = false;
   bool verifying = false;
   QString operationOutput;
+  bool destinationInventoryForUnchanged = false;
   bool startupAborted = false;
   bool tempProfile = false;
   QString profilePath;
@@ -400,19 +423,32 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->filtersButton, &QAbstractButton::clicked, this, [this]() {
     QDialog dialog(this);
     dialog.setWindowTitle(QStringLiteral("Filters"));
-    dialog.resize(640, 420);
+    dialog.resize(640, 560);
     auto* layout = new QVBoxLayout(&dialog);
-    auto* editor = new QPlainTextEdit(&dialog);
-    editor->setPlainText(d_->profile.filterText);
-    layout->addWidget(editor);
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    auto* editor = new FilterEditorWidget(&dialog, d_->profile.filterText);
+    layout->addWidget(editor, 1);
+    auto* buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&]() {
+      if (editor->firstError().has_value()) {
+        editor->revealError();
+        QMessageBox::warning(
+            &dialog, QStringLiteral("Invalid filters"),
+            QStringLiteral("Correct the highlighted filter line first."));
+        return;
+      }
+      dialog.accept();
+    });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     layout->addWidget(buttons);
     if (dialog.exec() == QDialog::Accepted) {
-      d_->profile.filterText = editor->toPlainText();
-      d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
+      d_->profile.filterText = editor->text();
+      d_->profile.filters = editor->rules();
+      d_->stale = true;
       updateStateIcons();
+      setStatus(QStringLiteral(
+          "Stale comparison: filter rules changed. Compare again to refresh "
+          "results."));
     }
   });
 
@@ -1189,14 +1225,19 @@ void MainWindow::onCompareError(QProcess::ProcessError error) {
 }
 
 void MainWindow::startDestinationInventory() {
+  // The post-compare listing fills destination sizes and dates only. It must
+  // not be mistaken for the source inventory, and it must not add unchanged
+  // rows until the user asks for them.
+  d_->destinationInventoryForUnchanged = false;
   const core::ProcessSpec spec =
       core::buildInventorySpec(d_->profile, d_->profile.destination);
-  setProcessEnvironment(spec, d_->inventoryProcess);
-  d_->inventoryProcess->start(spec.program, spec.arguments);
+  setProcessEnvironment(spec, d_->destinationInventoryProcess);
+  d_->destinationInventoryProcess->start(spec.program, spec.arguments);
 }
 
 void MainWindow::startInventory() {
   d_->inventoryChanges.clear();
+  d_->destinationInventoryForUnchanged = false;
   const core::ProcessSpec spec =
       core::buildInventorySpec(d_->profile, d_->profile.source);
   setProcessEnvironment(spec, d_->inventoryProcess);
@@ -1205,22 +1246,12 @@ void MainWindow::startInventory() {
 
 void MainWindow::onInventoryFinished(int, QProcess::ExitStatus) {
   if (d_->cancelled) return;
-  const QString text = core::cleanQtNoise(
-      QString::fromLocal8Bit(d_->inventoryProcess->readAllStandardOutput()));
-  QHash<QString, QPair<qlonglong, QString>> metadata;
-  static const QRegularExpression line(
-      QStringLiteral("^\\S+\\s+(\\d+)\\s+(\\d{4}/\\d{2}/\\d{2})\\s+(\\d{2}:\\d{2}:\\d{2})\\s+(.+)$"));
-  for (const QString& entry : text.split('\n')) {
-    const auto match = line.match(entry.trimmed());
-    if (!match.hasMatch()) continue;
-    metadata.insert(match.captured(4),
-                    {match.captured(1).toLongLong(),
-                     match.captured(2) + ' ' + match.captured(3)});
-  }
-  if (!metadata.isEmpty()) d_->comparison->applyDestinationMetadata(metadata);
   const QString sourceText = core::cleanQtNoise(
       QString::fromLocal8Bit(d_->inventoryProcess->readAllStandardOutput()));
   d_->inventoryChanges = core::parseInventory(sourceText);
+  // The source listing only has the unchanged candidates. The destination
+  // listing supplies their metadata and completes the pairing.
+  d_->destinationInventoryForUnchanged = true;
   const core::ProcessSpec spec =
       core::buildInventorySpec(d_->profile, d_->profile.destination);
   setProcessEnvironment(spec, d_->destinationInventoryProcess);
@@ -1232,18 +1263,25 @@ void MainWindow::onDestinationInventoryFinished(int, QProcess::ExitStatus) {
   if (d_->cancelled) return;
   const QString text = core::cleanQtNoise(
       QString::fromLocal8Bit(d_->destinationInventoryProcess->readAllStandardOutput()));
-  d_->inventoryChanges.append(core::parseInventory(text));
-  if (!d_->inventoryChanges.isEmpty()) {
-    QVector<core::Change> merged = d_->changes;
-    for (const core::Change& change : d_->inventoryChanges) {
-      bool present = false;
-      for (const core::Change& existing : merged) {
-        if (existing.path == change.path) { present = true; break; }
+  const auto metadata = parseListingMetadata(text);
+  if (d_->destinationInventoryForUnchanged) {
+    d_->destinationInventoryForUnchanged = false;
+    d_->inventoryChanges.append(core::parseInventory(text));
+    if (!d_->inventoryChanges.isEmpty()) {
+      QVector<core::Change> merged = d_->changes;
+      QSet<QString> present;
+      for (const core::Change& existing : merged) present.insert(existing.path);
+      for (const core::Change& change : d_->inventoryChanges) {
+        if (present.contains(change.path)) continue;
+        present.insert(change.path);
+        merged.append(change);
       }
-      if (!present) merged.append(change);
+      d_->changes = merged;
+      d_->comparison->setChanges(merged);
     }
-    d_->changes = merged;
-    d_->comparison->setChanges(merged);
+  }
+  if (!metadata.isEmpty()) {
+    d_->comparison->applyDestinationMetadata(metadata);
     d_->overview->rebuild(d_->comparison->store());
   }
   d_->progress->hide();

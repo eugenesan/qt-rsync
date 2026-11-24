@@ -53,6 +53,7 @@ add_library(qt_rsync_ui
     src/ui/ProfileEditorDialog.cpp
     src/ui/LockedProfileDialog.cpp
     src/ui/Icons.cpp
+    src/ui/FilterEditorWidget.cpp
     src/ui/TreeDelegate.cpp
     src/ui/ActionFilterBar.cpp
     src/ui/NativeDelegate.cpp

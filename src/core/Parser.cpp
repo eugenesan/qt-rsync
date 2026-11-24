@@ -117,11 +117,12 @@ std::optional<Change> parseRecord(const QString& rawLine, bool deleteEnabled) {
 QVector<Change> parseInventory(const QString& text) {
   QVector<Change> changes;
   static const QRegularExpression line(
-      QStringLiteral("^([-dDL])\\S*\\s+\\d+\\s+\\d{4}/\\d{2}/\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}\\s+(.+)$"));
+      QStringLiteral("^([-dDL])\\S*\\s+([\\d,]+)\\s+(\\d{4}/\\d{2}/\\d{2})\\s+"
+                     "(\\d{2}:\\d{2}:\\d{2})\\s+(.+)$"));
   for (const QString& entry : text.split('\n')) {
     const auto match = line.match(entry.trimmed());
     if (!match.hasMatch()) continue;
-    QString path = match.captured(2).trimmed();
+    QString path = match.captured(5).trimmed();
     if (path.isEmpty() || path == QLatin1String(".") || path == QLatin1String("./")) continue;
     while (path.endsWith('/')) path.chop(1);
     Change change;
@@ -129,6 +130,11 @@ QVector<Change> parseInventory(const QString& text) {
     change.action = Action::NoChange;
     change.kind = match.captured(1) == QLatin1String("d") ? Kind::Directory : Kind::File;
     change.itemizedCode = QStringLiteral("=");
+    bool ok = false;
+    const qlonglong size = match.captured(2).remove(',').toLongLong(&ok);
+    if (ok) change.size = size;
+    change.modifiedTime =
+        match.captured(3) + QLatin1Char('-') + match.captured(4);
     changes.append(change);
   }
   return changes;

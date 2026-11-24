@@ -23,6 +23,7 @@
 #include <functional>
 
 #include "core/Filter.h"
+#include "ui/FilterEditorWidget.h"
 #include "ui/Icons.h"
 
 namespace qt_rsync::ui {
@@ -279,105 +280,33 @@ ProfileEditorDialog::ProfileEditorDialog(const core::SyncProfile& profile,
 
   auto* filters = new QWidget(tabs);
   auto* filtersLayout = new QVBoxLayout(filters);
-  auto* filterEdit = new QPlainTextEdit(profile.filterText, filters);
-  filterEdit->setPlaceholderText(
-      QStringLiteral("One rsync filter rule per line, for example:\n"
-                     "- *.tmp\n"
-                     "+ important/\n"
-                     "- *"));
-  filtersLayout->addWidget(filterEdit, 1);
-  auto* preview = new QPlainTextEdit(filters);
-  preview->setReadOnly(true);
-  preview->setMaximumHeight(preview->fontMetrics().lineSpacing() * 2 + 12);
-  preview->setPlaceholderText(QStringLiteral("Line preview"));
-  filtersLayout->addWidget(preview);
-  auto* filterButtons = new QHBoxLayout();
-  auto* importButton = new QPushButton(QStringLiteral("Import"), filters);
-  auto* exportButton = new QPushButton(QStringLiteral("Export"), filters);
-  auto* helpButton = new QPushButton(QStringLiteral("Help"), filters);
-  filterButtons->addWidget(importButton);
-  filterButtons->addWidget(exportButton);
-  filterButtons->addWidget(helpButton);
-  filterButtons->addStretch(1);
-  filtersLayout->addLayout(filterButtons);
-  connect(filterEdit, &QPlainTextEdit::textChanged, this,
-          [this, filterEdit]() {
-            profile_.filterText = filterEdit->toPlainText();
-            profile_.filters = core::filterTextToRules(profile_.filterText);
+  filtersLayout->setContentsMargins(0, 0, 0, 0);
+  auto* filterWidget = new FilterEditorWidget(filters, profile.filterText);
+  filtersLayout->addWidget(filterWidget, 1);
+  connect(filterWidget->editor(), &QPlainTextEdit::textChanged, this,
+          [this, filterWidget]() {
+            profile_.filterText = filterWidget->text();
+            profile_.filters = filterWidget->rules();
           });
-  connect(importButton, &QPushButton::clicked, this,
-          [this, filterEdit]() {
-            const QString path = QFileDialog::getOpenFileName(
-                this, QStringLiteral("Import filters"));
-            if (path.isEmpty()) return;
-            QFile file(path);
-            if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
-            filterEdit->setPlainText(QString::fromUtf8(file.readAll()));
-          });
-  connect(exportButton, &QPushButton::clicked, this,
-          [this, filterEdit]() {
-            const QString path = QFileDialog::getSaveFileName(
-                this, QStringLiteral("Export filters"));
-            if (path.isEmpty()) return;
-            QFile file(path);
-            if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return;
-            file.write(filterEdit->toPlainText().toUtf8());
-          });
-  connect(helpButton, &QPushButton::clicked, this, [this]() {
-    QMessageBox::information(
-        this, QStringLiteral("rsync filter rules"),
-        QStringLiteral(
-            "Each non-empty, non-comment line is one rule, applied in order; "
-            "rsync stops at the first matching rule.\n\n"
-            "Operators: + include, - exclude, P protect, R risk, H hide, "
-            "S show, . merge, : dir-merge, ! clear. Lines without an operator "
-            "are exclusions. A leading # comments a rule out.\n\n"
-            "Patterns: * matches one path component, ** crosses slashes, ? "
-            "matches one character, [..] is a character class. A trailing / "
-            "matches directories only and a leading / anchors to the root."));
-  });
-  const auto updatePreview = [filterEdit, preview]() {
-    const int number = filterEdit->textCursor().blockNumber() + 1;
-    const QString line = filterEdit->textCursor().block().text().trimmed();
-    QString text;
-    if (line.isEmpty()) {
-      text = QStringLiteral("Line %1: blank, ignored").arg(number);
-    } else if (line.startsWith('#')) {
-      text = QStringLiteral("Line %1: comment, ignored").arg(number);
-    } else if (core::isAdvancedRule(line)) {
-      text = QStringLiteral("Line %1: rsync rule: %2").arg(number).arg(line);
-    } else {
-      text = QStringLiteral("Line %1: exclusion: - %2").arg(number).arg(line);
-    }
-    if (!line.isEmpty() && !line.startsWith('#')) {
-      core::FilterRule rule;
-      rule.rule = line;
-      rule.type = core::RuleType::Advanced;
-      if (!core::validateRule(rule)) {
-        text = QStringLiteral("Line %1: ERROR: invalid rsync rule").arg(number);
-      }
-    }
-    preview->setPlainText(text);
-    preview->setToolTip(text);
-  };
-  connect(filterEdit, &QPlainTextEdit::cursorPositionChanged, this,
-          updatePreview);
-  updatePreview();
   tabs->addTab(filters, QStringLiteral("Filters"));
 
   auto* buttons = new QDialogButtonBox(
       QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-  connect(buttons, &QDialogButtonBox::accepted, this, [this]() {
-    for (const core::FilterRule& rule : profile_.filters) {
-      if (!core::validateRule(rule)) {
-        QMessageBox::warning(
-            this, QStringLiteral("Invalid filters"),
-            QStringLiteral("Correct the invalid line in the Filters tab first."));
-        return;
-      }
-    }
-    accept();
-  });
+  connect(buttons, &QDialogButtonBox::accepted, this,
+          [this, filterWidget, tabs, filters]() {
+            if (filterWidget->firstError().has_value()) {
+              tabs->setCurrentWidget(filters);
+              filterWidget->revealError();
+              QMessageBox::warning(
+                  this, QStringLiteral("Invalid filters"),
+                  QStringLiteral(
+                      "Correct the highlighted line in the Filters tab first."));
+              return;
+            }
+            profile_.filterText = filterWidget->text();
+            profile_.filters = filterWidget->rules();
+            accept();
+          });
   connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
   layout->addWidget(buttons);
 
