@@ -73,7 +73,12 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
     views_[1]->setColumnHidden(column, column != 4);
   }
   for (int column : {0, 1, 2, 3, 4, 8, 9, 10}) views_[2]->setColumnHidden(column, true);
-  views_[1]->setFixedWidth(160);
+  views_[1]->setFixedWidth(92);
+  for (QTableView* view : views_) {
+    view->verticalHeader()->setDefaultSectionSize(22);
+    view->horizontalHeader()->setFixedHeight(
+        qMax(16, view->fontMetrics().height() + 2));
+  }
 
   store_.action_colours = {
       QStringLiteral("#16A34A"),  // create

@@ -130,12 +130,19 @@ MainWindow::MainWindow(QWidget* parent)
                 static_cast<core::SyncMode>(d_->mode->itemData(index).toInt());
           });
   toolbar->addWidget(d_->mode);
+  const auto styleTool = [](QToolButton* button) {
+    button->setIconSize(QSize(24, 24));
+    button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    button->setFixedSize(40, 40);
+  };
   const auto addTool = [&](QToolButton*& button, const QString& text,
                            const QString& iconName, const QString& tip) {
     button = new QToolButton(toolbar);
     button->setText(text);
     button->setIcon(icons::toolbarIcon(iconName));
+    button->setIconSize(QSize(24, 24));
     button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    button->setFixedSize(40, 40);
     button->setToolTip(tip);
     toolbar->addWidget(button);
   };
@@ -148,6 +155,7 @@ MainWindow::MainWindow(QWidget* parent)
     d_->source->setText(d_->destination->text());
     d_->destination->setText(source);
   });
+  styleTool(swapButton);
   toolbar->addWidget(swapButton);
   addTool(d_->compare, QStringLiteral("Compare"), QStringLiteral("compare"),
           QStringLiteral("Compare Source and Destination (F5)"));
@@ -172,6 +180,7 @@ MainWindow::MainWindow(QWidget* parent)
   connect(pauseButton, &QToolButton::toggled, this, [this](bool checked) {
     if (checked) appendJournalLine(QStringLiteral("Paused"));
   });
+  styleTool(pauseButton);
   toolbar->addWidget(pauseButton);
   toolbar->addSeparator();
   addTool(d_->filtersButton, QStringLiteral("Filters"), QStringLiteral("settings"),
@@ -184,6 +193,7 @@ MainWindow::MainWindow(QWidget* parent)
   d_->profileButton->setPopupMode(QToolButton::InstantPopup);
   connect(d_->profileButton->menu(), &QMenu::aboutToShow,
           this, &MainWindow::updateProfileMenu);
+  styleTool(d_->profileButton);
   toolbar->addWidget(d_->profileButton);
   addTool(d_->settingsButton, QStringLiteral("Settings"), QStringLiteral("settings"),
           QStringLiteral("Settings"));
@@ -228,6 +238,7 @@ MainWindow::MainWindow(QWidget* parent)
   }
   layoutButton->setMenu(layoutMenu);
   layoutButton->setPopupMode(QToolButton::InstantPopup);
+  styleTool(layoutButton);
   toolbar->addWidget(layoutButton);
   auto* backupButton = new QToolButton(toolbar);
   backupButton->setText(QStringLiteral("Backup"));
@@ -236,6 +247,7 @@ MainWindow::MainWindow(QWidget* parent)
   connect(backupButton, &QToolButton::clicked, this, [this]() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->profile.backup.directory));
   });
+  styleTool(backupButton);
   toolbar->addWidget(backupButton);
   auto* logButton = new QToolButton(toolbar);
   logButton->setText(QStringLiteral("Log"));
@@ -244,6 +256,7 @@ MainWindow::MainWindow(QWidget* parent)
   connect(logButton, &QToolButton::clicked, this, [this]() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->logPath));
   });
+  styleTool(logButton);
   toolbar->addWidget(logButton);
   toolbar->addSeparator();
   toolbar->addWidget(new QLabel(QStringLiteral("Search"), toolbar));
