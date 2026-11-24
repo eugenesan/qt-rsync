@@ -41,6 +41,7 @@ class UiTest : public QObject {
   void deleteDecisionAppearsInSyncRules();
   void mirrorModeTreatsDestinationOnlyAsDeletion();
   void realMirrorSyncDeletesDestinationOnlyFiles();
+  void excludedFileIsNotTransferredByRealSync();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -528,6 +529,7 @@ void UiTest::realMirrorSyncDeletesDestinationOnlyFiles() {
     }
   });
   sync->click();
+  qDebug() << "EXCL SYNC STATUS" << status->text();
   QTRY_VERIFY_WITH_TIMEOUT(
       status->text().contains(QStringLiteral("Synchronization complete")), 15000);
 
@@ -537,6 +539,71 @@ void UiTest::realMirrorSyncDeletesDestinationOnlyFiles() {
            QByteArray("new content with a different length"));
   QVERIFY(!QFile::exists(destination + QStringLiteral("/old.txt")));
   QVERIFY(status->text().contains(QStringLiteral("click Compare to refresh")));
+}
+
+void UiTest::excludedFileIsNotTransferredByRealSync() {
+  QTemporaryDir dir;
+  const QString source = dir.path() + QStringLiteral("/src");
+  const QString destination = dir.path() + QStringLiteral("/dst");
+  QDir().mkpath(source);
+  QDir().mkpath(destination);
+  QFile a(source + QStringLiteral("/a.txt"));
+  QVERIFY(a.open(QIODevice::WriteOnly | QIODevice::Text));
+  a.write("new a content that is longer\n");
+  a.close();
+  QFile b(source + QStringLiteral("/b.txt"));
+  QVERIFY(b.open(QIODevice::WriteOnly | QIODevice::Text));
+  b.write("new b content that is longer\n");
+  b.close();
+  QFile oldA(destination + QStringLiteral("/a.txt"));
+  QVERIFY(oldA.open(QIODevice::WriteOnly | QIODevice::Text));
+  oldA.write("old a content\n");
+  oldA.close();
+  QFile oldB(destination + QStringLiteral("/b.txt"));
+  QVERIFY(oldB.open(QIODevice::WriteOnly | QIODevice::Text));
+  oldB.write("old b content\n");
+  oldB.close();
+
+  ui::MainWindow window;
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
+  edits.at(0)->setText(source);
+  edits.at(1)->setText(destination);
+  QAbstractButton* compare = nullptr;
+  QAbstractButton* sync = nullptr;
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
+    if (button->text() == QLatin1String("Compare")) compare = button;
+    if (button->text() == QLatin1String("Synchronize")) sync = button;
+  }
+  QVERIFY(compare && sync);
+  compare->click();
+  auto* status = window.findChild<QLineEdit*>("status-label");
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 15000);
+
+  auto* comparison = window.findChild<ui::ComparisonView*>();
+  comparison->applyDecision(QStringLiteral("b.txt"),
+                            static_cast<int>(core::Decision::Exclude));
+  QTimer::singleShot(200, []() {
+    for (QWidget* widget : QApplication::topLevelWidgets()) {
+      auto* dialog = dynamic_cast<QDialog*>(widget);
+      if (dialog == nullptr ||
+          dialog->windowTitle() != QLatin1String("Synchronize")) continue;
+      for (QAbstractButton* button : dialog->findChildren<QAbstractButton*>()) {
+        if (button->text() == QLatin1String("Synchronize")) button->click();
+      }
+      return;
+    }
+  });
+  sync->click();
+  QTRY_VERIFY_WITH_TIMEOUT(
+      status->text().contains(QStringLiteral("Synchronization complete")), 15000);
+
+  QFile updatedA(destination + QStringLiteral("/a.txt"));
+  QVERIFY(updatedA.open(QIODevice::ReadOnly | QIODevice::Text));
+  QCOMPARE(updatedA.readAll().trimmed(), QByteArray("new a content that is longer"));
+  QFile unchanged(destination + QStringLiteral("/b.txt"));
+  QVERIFY(unchanged.open(QIODevice::ReadOnly | QIODevice::Text));
+  QCOMPARE(unchanged.readAll().trimmed(), QByteArray("old b content"));
 }
 
 QTEST_MAIN(UiTest)

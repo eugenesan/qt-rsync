@@ -36,6 +36,7 @@ class ComparisonView : public QWidget {
   void resetDecision(const QString& path);
   void resetSubtreeDecisions(const QString& path);
   void resetAllDecisions();
+  void applyDecision(const QString& path, int decision);
   bool undoDecision();
 
  signals:
@@ -50,7 +51,6 @@ class ComparisonView : public QWidget {
   void openDirectoryRequested(int pane, const QString& path);
 
  private slots:
-  void applyDecision(const QString& path, int decision);
 
  private:
   void syncDecisionsToStore();
