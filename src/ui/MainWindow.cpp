@@ -970,9 +970,44 @@ MainWindow::MainWindow(QWidget* parent)
           });
   connect(d_->comparison, &ComparisonView::deleteRequested, this,
           [this](const QString& path) { d_->comparison->markDelete(path); });
-  connect(d_->comparison, &ComparisonView::diffRequested, this, [this](const QString& path) {
-    appendJournalLine(QStringLiteral("Diff tool requested for ") + path);
-  });
+  connect(d_->comparison, &ComparisonView::diffRequested, this,
+          [this](const QString& path) {
+            if (d_->profile.source.kind != core::EndpointKind::Local ||
+                d_->profile.destination.kind != core::EndpointKind::Local) {
+              QMessageBox::information(
+                  this, QStringLiteral("Diff tool unavailable"),
+                  QStringLiteral(
+                      "Comparing the contents of remote endpoints requires "
+                      "staging the files locally, which this build does not "
+                      "do yet."));
+              return;
+            }
+            const QString source =
+                QDir(d_->profile.source.path).filePath(path);
+            const QString destination =
+                QDir(d_->profile.destination.path).filePath(path);
+            if (!QFileInfo::exists(source) || !QFileInfo::exists(destination)) {
+              QMessageBox::information(
+                  this, QStringLiteral("Diff tool unavailable"),
+                  QStringLiteral(
+                      "Both sides must have the file. Choose a changed item "
+                      "that exists on Source and Destination."));
+              return;
+            }
+            QString tool = QStringLiteral("meld");
+            const QStringList configured = core::storage::Settings()
+                                               .value(QStringLiteral("tools/commands"))
+                                               .toStringList();
+            if (!configured.isEmpty()) tool = configured.first().section(' ', 0, 0);
+            if (!QProcess::startDetached(tool, {source, destination})) {
+              QMessageBox::information(
+                  this, QStringLiteral("Diff tool unavailable"),
+                  QStringLiteral("Could not start %1.").arg(tool));
+              return;
+            }
+            appendJournalLine(QStringLiteral("Opened diff for ") + path);
+            setStatus(QStringLiteral("Opened diff for %1").arg(path));
+          });
   connect(d_->comparison, &ComparisonView::openDirectoryRequested, this,
           [this](int pane, const QString&) {
     const QString root = pane == 2 ? d_->profile.destination.path
