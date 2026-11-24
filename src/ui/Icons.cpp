@@ -156,6 +156,9 @@ QIcon toolbarIcon(const QString& name) {
     return QApplication::style()->standardIcon(fallback);
   };
 
+  if (name == QLatin1String("swap")) {
+    return themed({"swap-panels-symbolic", "swap-panels"}, QStyle::SP_BrowserReload);
+  }
   if (name == QLatin1String("compare")) {
     return themed({"kr_comparedirs", "kr_comparedir", "document-compareright",
                    "document-compareright-symbolic"},

@@ -148,17 +148,6 @@ MainWindow::MainWindow(QWidget* parent)
     button->setToolTip(tip);
     toolbar->addWidget(button);
   };
-  auto* swapButton = new QToolButton(toolbar);
-  swapButton->setText(QStringLiteral("Swap"));
-  swapButton->setIcon(icons::toolbarIcon(QStringLiteral("undo")));
-  swapButton->setToolTip(QStringLiteral("Swap Source and Destination"));
-  connect(swapButton, &QToolButton::clicked, this, [this]() {
-    const QString source = d_->source->text();
-    d_->source->setText(d_->destination->text());
-    d_->destination->setText(source);
-  });
-  styleTool(swapButton);
-  toolbar->addWidget(swapButton);
   addTool(d_->compare, QStringLiteral("Compare"), QStringLiteral("compare"),
           QStringLiteral("Compare Source and Destination (F5)"));
   addTool(d_->preserve, QStringLiteral("Preserve"), QStringLiteral("undo"),
@@ -176,7 +165,7 @@ MainWindow::MainWindow(QWidget* parent)
           QStringLiteral("Cancel the running operation (F10)"));
   auto* pauseButton = new QToolButton(toolbar);
   pauseButton->setText(QStringLiteral("Pause"));
-  pauseButton->setIcon(icons::toolbarIcon(QStringLiteral("cancel")));
+  pauseButton->setIcon(icons::toolbarIcon(QStringLiteral("pause")));
   pauseButton->setCheckable(true);
   pauseButton->setToolTip(QStringLiteral("Pause the running operation (F11)"));
   connect(pauseButton, &QToolButton::toggled, this, [this](bool checked) {
@@ -197,6 +186,24 @@ MainWindow::MainWindow(QWidget* parent)
           this, &MainWindow::updateProfileMenu);
   styleTool(d_->profileButton);
   toolbar->addWidget(d_->profileButton);
+  auto* backupButton = new QToolButton(toolbar);
+  backupButton->setText(QStringLiteral("Backup"));
+  backupButton->setIcon(icons::toolbarIcon(QStringLiteral("backup")));
+  backupButton->setToolTip(QStringLiteral("Open the backup directory"));
+  connect(backupButton, &QToolButton::clicked, this, [this]() {
+    QDesktopServices::openUrl(QUrl::fromLocalFile(d_->profile.backup.directory));
+  });
+  styleTool(backupButton);
+  toolbar->addWidget(backupButton);
+  auto* logButton = new QToolButton(toolbar);
+  logButton->setText(QStringLiteral("Log"));
+  logButton->setIcon(icons::toolbarIcon(QStringLiteral("log")));
+  logButton->setToolTip(QStringLiteral("Open the log file"));
+  connect(logButton, &QToolButton::clicked, this, [this]() {
+    QDesktopServices::openUrl(QUrl::fromLocalFile(d_->logPath));
+  });
+  styleTool(logButton);
+  toolbar->addWidget(logButton);
   addTool(d_->settingsButton, QStringLiteral("Settings"), QStringLiteral("settings"),
           QStringLiteral("Settings"));
   connect(d_->settingsButton, &QAbstractButton::clicked, this, [this]() {
@@ -242,24 +249,6 @@ MainWindow::MainWindow(QWidget* parent)
   layoutButton->setPopupMode(QToolButton::InstantPopup);
   styleTool(layoutButton);
   toolbar->addWidget(layoutButton);
-  auto* backupButton = new QToolButton(toolbar);
-  backupButton->setText(QStringLiteral("Backup"));
-  backupButton->setIcon(icons::toolbarIcon(QStringLiteral("backup")));
-  backupButton->setToolTip(QStringLiteral("Open the backup directory"));
-  connect(backupButton, &QToolButton::clicked, this, [this]() {
-    QDesktopServices::openUrl(QUrl::fromLocalFile(d_->profile.backup.directory));
-  });
-  styleTool(backupButton);
-  toolbar->addWidget(backupButton);
-  auto* logButton = new QToolButton(toolbar);
-  logButton->setText(QStringLiteral("Log"));
-  logButton->setIcon(icons::toolbarIcon(QStringLiteral("log")));
-  logButton->setToolTip(QStringLiteral("Open the log file"));
-  connect(logButton, &QToolButton::clicked, this, [this]() {
-    QDesktopServices::openUrl(QUrl::fromLocalFile(d_->logPath));
-  });
-  styleTool(logButton);
-  toolbar->addWidget(logButton);
   toolbar->addSeparator();
   toolbar->addWidget(new QLabel(QStringLiteral("Search"), toolbar));
   d_->search = new QLineEdit(toolbar);
@@ -275,6 +264,17 @@ MainWindow::MainWindow(QWidget* parent)
   auto* sourceLayout = new QHBoxLayout(sourcePanel);
   sourceLayout->setContentsMargins(0, 0, 0, 0);
   sourceLayout->setSpacing(3);
+  auto* swapButton = new QToolButton(sourcePanel);
+  swapButton->setText(QStringLiteral("Swap"));
+  swapButton->setIcon(icons::toolbarIcon(QStringLiteral("swap")));
+  swapButton->setToolTip(QStringLiteral("Swap Source and Destination"));
+  styleTool(swapButton);
+  connect(swapButton, &QToolButton::clicked, this, [this]() {
+    const QString source = d_->source->text();
+    d_->source->setText(d_->destination->text());
+    d_->destination->setText(source);
+  });
+  sourceLayout->addWidget(swapButton);
   d_->source = new QLineEdit(sourcePanel);
   d_->source->setObjectName(QStringLiteral("source-edit"));
   d_->source->setPlaceholderText(QStringLiteral("Local: /path or ~/path    SSH: [user@]host:/absolute/path"));
