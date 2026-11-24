@@ -6,6 +6,7 @@
 #include "core/Change.h"
 #include "core/Decision.h"
 #include "model/DataStore.h"
+#include "ui/ActionFilterBar.h"
 #include "ui/DecisionDelegate.h"
 
 class QTableView;
@@ -20,6 +21,9 @@ class ComparisonView : public QWidget {
   explicit ComparisonView(QWidget* parent = nullptr);
 
   [[nodiscard]] model::DataStore& store() { return store_; }
+  [[nodiscard]] ActionFilterBar* filterBar() { return filterBar_; }
+  void applyFilters();
+  void setFilterBar(ActionFilterBar* bar);
   [[nodiscard]] core::Decisions& decisions() { return decisions_; }
   void setChanges(const QVector<core::Change>& changes);
   void setRootNames(const QString& source, const QString& destination);
@@ -59,6 +63,7 @@ class ComparisonView : public QWidget {
   bool selecting_ = false;
 
   model::DataStore store_;
+  ActionFilterBar* filterBar_ = nullptr;
   core::Decisions decisions_;
   QVector<QTableView*> views_;
   QVector<model::TableModel*> models_;

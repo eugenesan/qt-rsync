@@ -1,12 +1,15 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QPlainTextEdit>
 #include <QProcess>
 
 #include "app/StartupOptions.h"
 #include "core/Change.h"
+#include "core/Command.h"
 #include "core/Plan.h"
 #include "core/Storage.h"
+#include "ui/ActionFilterBar.h"
 
 #include <memory>
 
@@ -40,6 +43,7 @@ class MainWindow : public QMainWindow {
   void addFilterPattern(const QString& pattern, const QString& path);
   void setStatus(const QString& text);
   void appendJournalLine(const QString& line);
+  void setCommandPreview(const core::ProcessSpec& spec);
   void cancelOperation();
   void setProfilePath(const QString& path);
   void openSessionLog(const QString& name);

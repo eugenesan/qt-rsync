@@ -73,7 +73,7 @@ void UiTest::compareRendersFakeRsyncOutput() {
   }
   QVERIFY(compare != nullptr);
   compare->click();
-  QLabel* status = window.findChild<QLabel*>("status-label");
+  QLineEdit* status = window.findChild<QLineEdit*>("status-label");
   QVERIFY(status != nullptr);
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
   QVERIFY(status->text().contains(QStringLiteral("3 item(s)")));
@@ -109,7 +109,7 @@ void UiTest::spaceExcludesEverySelectedItem() {
   for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) button->click();
   }
-  auto* status = window.findChild<QLabel*>("status-label");
+  auto* status = window.findChild<QLineEdit*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
 
   auto* comparison = window.findChild<ui::ComparisonView*>();
@@ -198,7 +198,7 @@ void UiTest::verifyAndSyncKeepComparisonStale() {
   }
   QVERIFY(compare && verify && sync);
   compare->click();
-  auto* status = window.findChild<QLabel*>("status-label");
+  auto* status = window.findChild<QLineEdit*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
   QVERIFY(verify->isEnabled());
   QVERIFY(sync->isEnabled());
@@ -298,7 +298,7 @@ void UiTest::arrowKeysFoldAndExpandFolders() {
   for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) button->click();
   }
-  auto* status = window.findChild<QLabel*>("status-label");
+  auto* status = window.findChild<QLineEdit*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
   const auto tables = window.findChildren<QTableView*>();
   auto* table = tables.at(0);
@@ -376,7 +376,7 @@ void UiTest::cancelStopsARunningCompare() {
   compare->click();
   QVERIFY(cancel->isEnabled());
   cancel->click();
-  auto* status = window.findChild<QLabel*>("status-label");
+  auto* status = window.findChild<QLineEdit*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QStringLiteral("cancel")), 5000);
   QVERIFY(compare->isEnabled());
   QVERIFY(!cancel->isEnabled());
@@ -404,7 +404,7 @@ void UiTest::deleteDecisionAppearsInSyncRules() {
   for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) button->click();
   }
-  auto* status = window.findChild<QLabel*>("status-label");
+  auto* status = window.findChild<QLineEdit*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
 
   auto* comparison = window.findChild<ui::ComparisonView*>();
@@ -466,7 +466,7 @@ void UiTest::mirrorModeTreatsDestinationOnlyAsDeletion() {
   for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) button->click();
   }
-  auto* status = window.findChild<QLabel*>("status-label");
+  auto* status = window.findChild<QLineEdit*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
   auto* comparison = window.findChild<ui::ComparisonView*>();
   auto it = comparison->store().path_to_id.find("old.txt");
@@ -511,7 +511,7 @@ void UiTest::realMirrorSyncDeletesDestinationOnlyFiles() {
   }
   QVERIFY(compare && sync);
   compare->click();
-  auto* status = window.findChild<QLabel*>("status-label");
+  auto* status = window.findChild<QLineEdit*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 15000);
 
   QTimer::singleShot(200, []() {

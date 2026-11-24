@@ -42,9 +42,12 @@ class FoldKeyFilter : public QObject {
 }  // namespace
 
 ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
-  auto* layout = new QHBoxLayout(this);
+  auto* layout = new QVBoxLayout(this);
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(0);
+  auto* tableLayout = new QHBoxLayout();
+  tableLayout->setContentsMargins(0, 0, 0, 0);
+  tableLayout->setSpacing(0);
 
   for (int pane = 0; pane < 3; ++pane) {
     auto* view = new QTableView(this);
@@ -56,8 +59,9 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
     view->setModel(model);
     views_.append(view);
     models_.append(model);
-    layout->addWidget(view);
+    tableLayout->addWidget(view, pane == 1 ? 0 : 1);
   }
+  layout->addLayout(tableLayout, 1);
 
   // Same visible columns as the proven hybrid view: source columns on the
   // left, the decision column in the middle, destination columns on the right.
@@ -145,6 +149,27 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
               onSortIndicatorChanged(i, section, order);
             });
   }
+}
+
+void ComparisonView::setFilterBar(ActionFilterBar* bar) {
+  filterBar_ = bar;
+  if (filterBar_ != nullptr) {
+    connect(filterBar_, &ActionFilterBar::filterChanged,
+            this, &ComparisonView::applyFilters);
+  }
+}
+
+void ComparisonView::applyFilters() {
+  if (filterBar_ == nullptr) return;
+  int mask = 0;
+  for (int action = 0; action < 5; ++action) {
+    if (filterBar_->actionVisible(action)) mask |= (1 << action);
+  }
+  store_.action_mask = (mask == 0x1F) ? 0 : mask;
+  store_.show_excluded = filterBar_->showExcluded();
+  store_.dirs_only = filterBar_->filterDirectories();
+  store_.rebuild_visible();
+  for (model::TableModel* model : models_) model->reset();
 }
 
 void ComparisonView::setRootNames(const QString& source,

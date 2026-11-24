@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — UI parity: real qpy layout
+
+- Rebuilt the main layout to match qpy-rsync: icon toolbar, Source/ActionFilterBar/
+  Destination location row, comparison above a command-preview + journal +
+  overview panel, and a State status bar.
+- Added the ActionFilterBar (excluded, directory filter, five action filters,
+  unchanged, conflicts) with Alt+1..8 / Ctrl+1..8 shortcuts.
+- Added the rsync command preview panel.
+
 ## Unreleased — UI parity slices
 
 - Panel details: tree chevrons and indentation in the name columns, alternating
