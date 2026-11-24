@@ -77,9 +77,9 @@ void arrowHead(QPainter& p, const QPointF& tip, const QString& direction,
 QIcon actionIcon(int action) {
   const QVector<QColor> colours{
       QColor("#208020"), QColor("#eab308"), QColor("#7c3aed"),
-      QColor("#ef4444"), QColor("#a05020"), QColor("#64748b"),
-      QColor("#64748b")};
-  return actionIcon(action, colours.value(action, QColor("#64748b")));
+      QColor("#ef4444"), QColor("#a05020"), QColor("#94a3b8"),
+      QColor("#94a3b8")};
+  return actionIcon(action, colours.value(action, QColor("#94a3b8")));
 }
 
 QIcon actionIcon(int action, const QColor& colour) {
@@ -188,7 +188,7 @@ QIcon toolbarIcon(const QString& name) {
   }
   if (name == QLatin1String("unchanged")) {
     return makeGrid([](QPainter& p) {
-      p.setPen(gridPen(QColor("#64748b"), 2.0));
+      p.setPen(gridPen(QColor("#94a3b8"), 2.0));
       p.drawLine(QPointF(4.0, 8.6), QPointF(6.9, 11.4));
       p.drawLine(QPointF(6.9, 11.4), QPointF(12.0, 4.8));
     });

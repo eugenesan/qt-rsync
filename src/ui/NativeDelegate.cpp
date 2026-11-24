@@ -243,7 +243,7 @@ QColor NativeDelegate::textColor(const QStyleOptionViewItem& option, int id) con
     static const QVector<QString> defaults{
         QStringLiteral("#208020"), QStringLiteral("#eab308"),
         QStringLiteral("#7c3aed"), QStringLiteral("#ef4444"),
-        QStringLiteral("#a05020"), QStringLiteral("#64748b")};
+        QStringLiteral("#a05020"), QStringLiteral("#94a3b8")};
     if (action < static_cast<int>(store_->action_colours.size())) {
       const QString& chosen = store_->action_colours.at(action);
       // An empty entry means the user switched the marking off.

@@ -3,6 +3,7 @@
 #include <QDialogButtonBox>
 #include <QDebug>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QDesktopServices>
 #include <QFileDialog>
@@ -25,16 +26,19 @@
 #include <QProcessEnvironment>
 #include <QTime>
 #include <QPlainTextEdit>
+#include <QTextCursor>
 #include <QTextEdit>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QShortcut>
 #include <QRegularExpression>
+#include <QScrollBar>
 #include <QSet>
 #include <QSizePolicy>
 #include <QSplitter>
 #include <QStatusBar>
 #include <QTemporaryFile>
+#include <QTimer>
 #include <QComboBox>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -157,6 +161,8 @@ class MainWindow::Private {
   bool syncing = false;
   bool verifying = false;
   QString operationOutput;
+  QElapsedTimer compareClock;
+  QElapsedTimer viewClock;
   bool destinationInventoryForUnchanged = false;
   bool startupAborted = false;
   bool tempProfile = false;
@@ -193,7 +199,6 @@ MainWindow::MainWindow(QWidget* parent)
     button->setFixedSize(40, 40);
   };
 
-  toolbarLayout->addWidget(verticalSeparator(toolbarRow));
   d_->mode = new QComboBox(toolbarRow);
   d_->mode->addItem(QStringLiteral("Update"), static_cast<int>(core::SyncMode::Update));
   d_->mode->addItem(QStringLiteral("Mirror"), static_cast<int>(core::SyncMode::Mirror));
@@ -264,6 +269,7 @@ MainWindow::MainWindow(QWidget* parent)
           "changed ones. The unchanged button then reuses this result "
           "instead of running the inventory a second time."));
   d_->inventoryAfter->setCheckable(true);
+  toolbarLayout->addWidget(verticalSeparator(toolbarRow));
   addTool(
       d_->verify, QStringLiteral("Verify"), QStringLiteral("verify"),
       QStringLiteral(
@@ -991,6 +997,9 @@ MainWindow::MainWindow(QWidget* parent)
   updateStateIcons();
   restoreProfile();
 
+  connect(d_->comparison, &ComparisonView::viewChanged, this, [this]() {
+    d_->overview->rebuild(d_->comparison->store());
+  });
   connect(d_->comparison, &ComparisonView::decisionChanged, this, [this]() {
     d_->verified = false;
     refreshPlan();
@@ -1102,6 +1111,12 @@ void MainWindow::appendJournalLine(const QString& line) {
   }
   d_->journal->append(QStringLiteral("<span style='color:%1'>%2</span>")
                           .arg(colour, line.toHtmlEscaped()));
+  d_->journal->moveCursor(QTextCursor::End);
+  d_->journal->ensureCursorVisible();
+  QTimer::singleShot(0, d_->journal, [journal = d_->journal]() {
+    auto* bar = journal->verticalScrollBar();
+    if (bar != nullptr) bar->setValue(bar->maximum());
+  });
 }
 
 void MainWindow::setCommandPreview(const core::ProcessSpec& spec) {
@@ -1165,6 +1180,10 @@ void MainWindow::startCompare() {
   const core::ProcessSpec spec = core::buildCompareSpec(d_->profile);
   setProcessEnvironment(spec, d_->compareProcess);
   setCommandPreview(spec);
+  appendJournalLine(QStringLiteral("$ ") + spec.argv().join(' '));
+  appendJournalLine(QStringLiteral("rsync dry run start clock set."));
+  appendJournalLine(QStringLiteral("STATE comparing"));
+  d_->compareClock.start();
   d_->compare->setEnabled(false);
   d_->cancel->setEnabled(true);
   setStatus(QStringLiteral("Comparing..."));
@@ -1189,6 +1208,18 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
                                      : stderr.trimmed()));
     return;
   }
+  const double compareSeconds = d_->compareClock.isValid()
+                                    ? d_->compareClock.elapsed() / 1000.0 : 0.0;
+  appendJournalLine(
+      QStringLiteral("Compare parse: %1 line(s), parsing 0.00 s, journal "
+                     "writes 0.00 s.")
+          .arg(output.count('\n')));
+  appendJournalLine(
+      QStringLiteral("rsync dry run finished in %1 s (wall %1 s).")
+          .arg(compareSeconds, 0, 'f', 2));
+  appendJournalLine(d_->preserve->isChecked()
+                        ? QStringLiteral("Decisions preserved for this comparison.")
+                        : QStringLiteral("Decisions reset for this comparison."));
   const core::ParseResult parsed = core::parseOutput(
       QString::fromUtf8(output), d_->profile.transfer.mirrorEnabled());
   d_->changes = parsed.changes;
@@ -1200,11 +1231,34 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   };
   d_->comparison->setRootNames(baseName(d_->profile.source.path),
                                baseName(d_->profile.destination.path));
+  d_->viewClock.start();
   d_->comparison->setChanges(parsed.changes);
   d_->filterBar->setExcludedCount(0);
   d_->overview->rebuild(d_->comparison->store());
+  appendJournalLine(
+      QStringLiteral("Comparison view built in %1 s.")
+          .arg(d_->viewClock.elapsed() / 1000.0, 0, 'f', 2));
   refreshPlan();
   d_->stale = false;
+  const auto& summary = d_->plan.summary;
+  appendJournalLine(
+      QStringLiteral(
+          "Selected: %1 items, %2; new %3, updated %4, metadata %5, deleted "
+          "%6; kept %7, unchecked %8, modified %9, destructive %10; backup %11")
+          .arg(summary.included)
+          .arg(model::qpy_format_size(summary.includedSize))
+          .arg(summary.creates)
+          .arg(summary.updates)
+          .arg(summary.metadata)
+          .arg(summary.deletions)
+          .arg(summary.retainedDestinationOnly)
+          .arg(summary.excluded)
+          .arg(summary.modified)
+          .arg(summary.destructive)
+          .arg(summary.backupEnabled ? QStringLiteral("on")
+                                     : QStringLiteral("off")));
+  appendJournalLine(QStringLiteral("STATE comparison-complete changes=%1")
+                        .arg(parsed.changes.size()));
   updateStateIcons();
   // qpy keeps the progress bar hidden for a comparison; it is only shown
   // while verifying or synchronizing. Leaving a bright 100% bar on screen
@@ -1214,6 +1268,11 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   startDestinationInventory();
   setStatus(QStringLiteral("Comparison complete: %1 changed item(s)")
                           .arg(parsed.changes.size()));
+  appendJournalLine(
+      QStringLiteral("Comparison ready in %1 s.")
+          .arg(d_->compareClock.isValid()
+                   ? d_->compareClock.elapsed() / 1000.0 : 0.0,
+               0, 'f', 2));
 }
 
 void MainWindow::onCompareError(QProcess::ProcessError error) {
@@ -1231,6 +1290,7 @@ void MainWindow::startDestinationInventory() {
   d_->destinationInventoryForUnchanged = false;
   const core::ProcessSpec spec =
       core::buildInventorySpec(d_->profile, d_->profile.destination);
+  appendJournalLine(QStringLiteral("$ ") + spec.argv().join(' '));
   setProcessEnvironment(spec, d_->destinationInventoryProcess);
   d_->destinationInventoryProcess->start(spec.program, spec.arguments);
 }
@@ -1240,6 +1300,7 @@ void MainWindow::startInventory() {
   d_->destinationInventoryForUnchanged = false;
   const core::ProcessSpec spec =
       core::buildInventorySpec(d_->profile, d_->profile.source);
+  appendJournalLine(QStringLiteral("$ ") + spec.argv().join(' '));
   setProcessEnvironment(spec, d_->inventoryProcess);
   d_->inventoryProcess->start(spec.program, spec.arguments);
 }
@@ -1264,6 +1325,10 @@ void MainWindow::onDestinationInventoryFinished(int, QProcess::ExitStatus) {
   const QString text = core::cleanQtNoise(
       QString::fromLocal8Bit(d_->destinationInventoryProcess->readAllStandardOutput()));
   const auto metadata = parseListingMetadata(text);
+  if (!metadata.isEmpty()) {
+    appendJournalLine(QStringLiteral("Destination metadata: %1 object(s).")
+                          .arg(metadata.size()));
+  }
   if (d_->destinationInventoryForUnchanged) {
     d_->destinationInventoryForUnchanged = false;
     d_->inventoryChanges.append(core::parseInventory(text));
@@ -1527,6 +1592,9 @@ void MainWindow::restoreProfile() {
   if (lock->acquire()) {
     d_->profileLock = std::move(lock);
     loadProfileFile(current);
+    appendJournalLine(
+        QStringLiteral("Profile loaded automatically: %1")
+            .arg(QFileInfo(current).completeBaseName()));
     return;
   }
   const QString suggested = QFileInfo(current).completeBaseName() +

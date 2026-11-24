@@ -46,6 +46,7 @@ class ComparisonView : public QWidget {
 
  signals:
   void decisionChanged();
+  void viewChanged();
   void undoAvailable(bool available);
   void redoAvailable(bool available);
   void batchStarted();

@@ -103,7 +103,9 @@ void OverviewPane::rebuild(const model::DataStore& store) {
     walk(QModelIndex());
   }
 
-  model_->build(store, false);
+  // The overview must describe the rows the compare view is showing, after
+  // action filters, unchanged gating and exclusions.
+  model_->build(store, true);
 
   if (firstBuild_) {
     tree_->expandToDepth(1);
@@ -117,10 +119,15 @@ void OverviewPane::rebuild(const model::DataStore& store) {
 
   int count = 0, creates = 0, updates = 0, metadata = 0, deletes = 0, kept = 0;
   long long size = 0, deletedSize = 0;
-  for (std::size_t id = 0; id < store.paths.size(); ++id) {
-    if (id < store.is_dir.size() && store.is_dir[id]) continue;
-    int action = id < store.actions.size() ? store.actions[id] : model::NoChange;
-    if (id < store.decisions.size() && store.decisions[id] == model::Exclude) continue;
+  for (int id : store.visible) {
+    if (id < 0 || id >= static_cast<int>(store.paths.size())) continue;
+    if (id < static_cast<int>(store.is_dir.size()) && store.is_dir[id]) continue;
+    int action = id < static_cast<int>(store.actions.size())
+                     ? store.actions[id] : model::NoChange;
+    if (id < static_cast<int>(store.decisions.size()) &&
+        store.decisions[id] == model::Exclude) {
+      continue;
+    }
     ++count;
     if (id < store.sizes.size()) size += store.sizes[id];
     if (id < store.decisions.size() && store.decisions[id] == model::DeleteRequest) {

@@ -89,7 +89,7 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
       QStringLiteral("#0891B2"),  // metadata
       QStringLiteral("#DC2626"),  // delete
       QStringLiteral("#B45309"),  // destination only
-      QStringLiteral("#64748B"),  // unchanged
+      QStringLiteral("#94A3B8"),  // unchanged
   };
   store_.folder_icon = icons::folderIcon();
   store_.root_icon = icons::rootFolderIcon();
@@ -137,6 +137,11 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
     header->resizeSection(itemsColumn, 60);
     header->resizeSection(sizeColumn, 85);
   }
+  views_[1]->setObjectName(QStringLiteral("decision-pane"));
+  views_[1]->setStyleSheet(
+      QStringLiteral("QTableView#decision-pane {"
+                     " border-left: 1px solid palette(mid);"
+                     " border-right: 1px solid palette(mid); }"));
   QHeaderView* decisionHeader = views_[1]->horizontalHeader();
   decisionHeader->setStretchLastSection(false);
   decisionHeader->setSectionResizeMode(4, QHeaderView::Stretch);
@@ -192,6 +197,7 @@ void ComparisonView::applyFilters() {
   store_.dirs_only = filterBar_->filterDirectories();
   store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
+  emit viewChanged();
 }
 
 void ComparisonView::setRootNames(const QString& source,
@@ -205,6 +211,7 @@ void ComparisonView::setShowUnchanged(bool show) {
   store_.show_unchanged = show;
   store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
+  emit viewChanged();
 }
 
 void ComparisonView::setActionColours(const QVector<QString>& colours) {
