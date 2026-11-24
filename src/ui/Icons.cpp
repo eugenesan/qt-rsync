@@ -1,7 +1,9 @@
 #include "ui/Icons.h"
 
 #include <QColor>
+#include <QApplication>
 #include <QIcon>
+#include <QStyle>
 #include <QPainter>
 #include <QPainterPath>
 
@@ -145,59 +147,69 @@ QIcon rootFolderIcon() {
 }
 
 QIcon toolbarIcon(const QString& name) {
+  auto themed = [](std::initializer_list<const char*> names,
+                   QStyle::StandardPixmap fallback) {
+    for (const char* candidate : names) {
+      const QIcon icon = QIcon::fromTheme(QString::fromLatin1(candidate));
+      if (!icon.isNull()) return icon;
+    }
+    return QApplication::style()->standardIcon(fallback);
+  };
+
   if (name == QLatin1String("compare")) {
-    return make([](QPainter& p) {
-      p.setPen(QPen(QColor("#0891B2"), 1.6, Qt::SolidLine, Qt::RoundCap));
-      p.drawLine(3, 8, 12, 8);
-      p.drawLine(9, 4, 13, 8);
-      p.drawLine(9, 12, 13, 8);
-    });
-  }
-  if (name == QLatin1String("sync")) {
-    return make([](QPainter& p) {
-      p.setBrush(QColor("#15803D"));
-      p.setPen(Qt::NoPen);
-      QPolygonF triangle;
-      triangle << QPointF(4, 3) << QPointF(13, 8) << QPointF(4, 13);
-      p.drawPolygon(triangle);
-    });
+    return themed({"kr_comparedirs", "kr_comparedir", "document-compareright",
+                   "document-compareright-symbolic"},
+                  QStyle::SP_FileDialogContentsView);
   }
   if (name == QLatin1String("verify")) {
-    return make([](QPainter& p) {
-      p.setPen(QPen(QColor("#15803D"), 2, Qt::SolidLine, Qt::RoundCap));
-      p.drawLine(3, 8, 7, 12);
-      p.drawLine(7, 12, 13, 4);
-    });
+    return themed({"answer-symbolic", "answer", "answer-correct", "Answer"},
+                  QStyle::SP_DialogApplyButton);
+  }
+  if (name == QLatin1String("sync")) {
+    return themed({"media-playback-start-symbolic", "media-playback-start"},
+                  QStyle::SP_MediaPlay);
   }
   if (name == QLatin1String("cancel")) {
-    return make([](QPainter& p) {
-      p.setPen(QPen(QColor("#B91C1C"), 2, Qt::SolidLine, Qt::RoundCap));
-      p.drawLine(4, 4, 12, 12);
-      p.drawLine(12, 4, 4, 12);
-    });
+    return themed({"process-stop", "dialog-cancel"}, QStyle::SP_DialogCancelButton);
+  }
+  if (name == QLatin1String("pause")) {
+    return themed({"media-playback-pause"}, QStyle::SP_MediaPause);
   }
   if (name == QLatin1String("undo")) {
-    return make([](QPainter& p) {
-      p.setPen(QPen(QColor("#6B7280"), 1.6, Qt::SolidLine, Qt::RoundCap));
-      p.drawLine(3, 8, 13, 8);
-      p.drawLine(7, 4, 3, 8);
-      p.drawLine(7, 12, 3, 8);
-    });
+    return themed({"anchor-symbolic", "anchor"}, QStyle::SP_BrowserReload);
+  }
+  if (name == QLatin1String("search")) {
+    return themed({"edit-find"}, QStyle::SP_FileDialogContentsView);
   }
   if (name == QLatin1String("settings")) {
-    return make([](QPainter& p) {
-      p.setPen(QPen(QColor("#6B7280"), 1.4));
-      p.drawEllipse(QPointF(8, 8), 5, 5);
-      p.drawEllipse(QPointF(8, 8), 2, 2);
-    });
+    const QIcon gear = QIcon::fromTheme(QStringLiteral("settings-configure-symbolic"));
+    if (!gear.isNull()) return gear;
+    return themed({"configure"}, QStyle::SP_FileDialogDetailedView);
   }
-  if (name == QLatin1String("folder")) return folderIcon();
-  if (name == QLatin1String("search")) {
-    return make([](QPainter& p) {
-      p.setPen(QPen(QColor("#6B7280"), 1.6));
-      p.drawEllipse(QPointF(6, 6), 4, 4);
-      p.drawLine(9, 9, 13, 13);
-    });
+  if (name == QLatin1String("folder")) {
+    return themed({"inode-directory-symbolic", "inode-directory",
+                   "folder-open-symbolic", "folder-open", "folder"},
+                  QStyle::SP_DirOpenIcon);
+  }
+  if (name == QLatin1String("filters")) {
+    return themed({"view-filter", "view-list-details"},
+                  QStyle::SP_FileDialogDetailedView);
+  }
+  if (name == QLatin1String("inventory")) {
+    return themed({"view-list-details", "view-list-tree"},
+                  QStyle::SP_FileDialogListView);
+  }
+  if (name == QLatin1String("backup")) {
+    return themed({"backup-symbolic", "folder-backup-symbolic",
+                   "document-save-symbolic", "drive-harddisk"},
+                  QStyle::SP_DriveHDIcon);
+  }
+  if (name == QLatin1String("log")) {
+    return themed({"folder-log-symbolic", "folder-log", "text-x-generic-symbolic",
+                   "text-x-generic", "text-plain"}, QStyle::SP_FileIcon);
+  }
+  if (name == QLatin1String("open")) {
+    return themed({"document-open", "folder-open"}, QStyle::SP_DialogOpenButton);
   }
   return QIcon();
 }

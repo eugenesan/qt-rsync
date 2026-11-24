@@ -165,7 +165,7 @@ MainWindow::MainWindow(QWidget* parent)
           QStringLiteral("Preserve decisions"));
   d_->preserve->setCheckable(true);
   d_->preserve->setChecked(true);
-  addTool(d_->inventoryAfter, QStringLiteral("Inventory"), QStringLiteral("folder"),
+  addTool(d_->inventoryAfter, QStringLiteral("Inventory"), QStringLiteral("inventory"),
           QStringLiteral("Inventory after comparison"));
   d_->inventoryAfter->setCheckable(true);
   addTool(d_->verify, QStringLiteral("Verify"), QStringLiteral("verify"),
@@ -185,12 +185,12 @@ MainWindow::MainWindow(QWidget* parent)
   styleTool(pauseButton);
   toolbar->addWidget(pauseButton);
   toolbar->addSeparator();
-  addTool(d_->filtersButton, QStringLiteral("Filters"), QStringLiteral("settings"),
+  addTool(d_->filtersButton, QStringLiteral("Filters"), QStringLiteral("filters"),
           QStringLiteral("Edit the persistent filter rules (F7)"));
 
   d_->profileButton = new QToolButton(toolbar);
   d_->profileButton->setText(QStringLiteral("Profile"));
-  d_->profileButton->setIcon(icons::toolbarIcon(QStringLiteral("settings")));
+  d_->profileButton->setIcon(icons::toolbarIcon(QStringLiteral("open")));
   d_->profileButton->setMenu(new QMenu(d_->profileButton));
   d_->profileButton->setPopupMode(QToolButton::InstantPopup);
   connect(d_->profileButton->menu(), &QMenu::aboutToShow,
@@ -244,7 +244,7 @@ MainWindow::MainWindow(QWidget* parent)
   toolbar->addWidget(layoutButton);
   auto* backupButton = new QToolButton(toolbar);
   backupButton->setText(QStringLiteral("Backup"));
-  backupButton->setIcon(icons::folderIcon());
+  backupButton->setIcon(icons::toolbarIcon(QStringLiteral("backup")));
   backupButton->setToolTip(QStringLiteral("Open the backup directory"));
   connect(backupButton, &QToolButton::clicked, this, [this]() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->profile.backup.directory));
@@ -253,7 +253,7 @@ MainWindow::MainWindow(QWidget* parent)
   toolbar->addWidget(backupButton);
   auto* logButton = new QToolButton(toolbar);
   logButton->setText(QStringLiteral("Log"));
-  logButton->setIcon(icons::toolbarIcon(QStringLiteral("verify")));
+  logButton->setIcon(icons::toolbarIcon(QStringLiteral("log")));
   logButton->setToolTip(QStringLiteral("Open the log file"));
   connect(logButton, &QToolButton::clicked, this, [this]() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->logPath));
@@ -281,7 +281,7 @@ MainWindow::MainWindow(QWidget* parent)
   sourceLayout->addWidget(d_->source, 1);
   auto* sourceOpen = new QToolButton(sourcePanel);
   sourceOpen->setText(QStringLiteral("Open"));
-  sourceOpen->setIcon(icons::toolbarIcon(QStringLiteral("compare")));
+  sourceOpen->setIcon(icons::toolbarIcon(QStringLiteral("open")));
   sourceOpen->setToolTip(QStringLiteral("Open the Source directory"));
   connect(sourceOpen, &QToolButton::clicked, this, [this]() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->source->text()));
@@ -313,7 +313,7 @@ MainWindow::MainWindow(QWidget* parent)
   destinationLayout->addWidget(d_->destination, 1);
   auto* destinationOpen = new QToolButton(destinationPanel);
   destinationOpen->setText(QStringLiteral("Open"));
-  destinationOpen->setIcon(icons::toolbarIcon(QStringLiteral("compare")));
+  destinationOpen->setIcon(icons::toolbarIcon(QStringLiteral("open")));
   destinationOpen->setToolTip(QStringLiteral("Open the Destination directory"));
   connect(destinationOpen, &QToolButton::clicked, this, [this]() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->destination->text()));
