@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QIcon>
 #include <QVector>
 #include <QWidget>
 
@@ -15,12 +16,14 @@ class StatsBar : public QWidget {
   explicit StatsBar(QWidget* parent = nullptr);
 
   void setEntries(const QVector<QPair<QString, QString>>& entries);
+  void setActionColours(const QVector<QString>& colours);
 
  protected:
   void paintEvent(QPaintEvent* event) override;
 
  private:
   QVector<QPair<QString, QString>> entries_;
+  QVector<QIcon> actionIcons_;
 };
 
 }  // namespace qt_rsync::ui

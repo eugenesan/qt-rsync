@@ -232,11 +232,16 @@ QColor NativeDelegate::textColor(const QStyleOptionViewItem& option, int id) con
   const int action = id < static_cast<int>(store_->actions.size())
                          ? store_->actions[id] : NoChange;
   if (action >= 0 && action < 6) {
-    static const QVector<QString> colours{
+    static const QVector<QString> defaults{
         QStringLiteral("#208020"), QStringLiteral("#eab308"),
         QStringLiteral("#7c3aed"), QStringLiteral("#ef4444"),
         QStringLiteral("#a05020"), QStringLiteral("#64748b")};
-    return QColor(colours.at(action));
+    if (action < static_cast<int>(store_->action_colours.size())) {
+      const QString& chosen = store_->action_colours.at(action);
+      // An empty entry means the user switched the marking off.
+      return chosen.isEmpty() ? QColor() : QColor(chosen);
+    }
+    return QColor(defaults.at(action));
   }
   if (store_->decisions[id] == Exclude) return QColor("#9CA3AF");
   return {};

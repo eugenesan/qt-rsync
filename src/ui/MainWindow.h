@@ -65,6 +65,7 @@ class MainWindow : public QMainWindow {
  private:
   void refreshSearchMatches();
   void stepSearch(int direction);
+  void applyActionColours();
 
  private:
   class Private;

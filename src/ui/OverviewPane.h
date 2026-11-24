@@ -17,6 +17,7 @@ class OverviewPane : public QWidget {
   explicit OverviewPane(QWidget* parent = nullptr);
 
   void rebuild(const model::DataStore& store);
+  void setActionColours(const QVector<QString>& colours);
 
  private:
   QTreeView* tree_;

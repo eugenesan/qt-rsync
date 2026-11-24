@@ -267,12 +267,36 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
   verificationRsync_->setEnabled(verification_->isChecked());
   tabs->addTab(advanced, QStringLiteral("Advanced"));
 
+  auto* buttonRow = new QHBoxLayout();
+  auto* defaults = new QPushButton(QStringLiteral("Defaults"), this);
+  buttonRow->addWidget(defaults);
+  buttonRow->addStretch(1);
   auto* buttons = new QDialogButtonBox(
       QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
   connect(buttons, &QDialogButtonBox::accepted, this, &SettingsDialog::save);
   connect(buttons, &QDialogButtonBox::accepted, this, &SettingsDialog::accept);
   connect(buttons, &QDialogButtonBox::rejected, this, &SettingsDialog::reject);
-  layout->addWidget(buttons);
+  buttonRow->addWidget(buttons);
+  layout->addLayout(buttonRow);
+  connect(defaults, &QPushButton::clicked, this,
+          [this, defaultColours]() {
+            sound_->setChecked(true);
+            sessionLogging_->setChecked(true);
+            verification_->setChecked(false);
+            verificationRsync_->setChecked(false);
+            detectInherited_->setChecked(false);
+            rawRsync_->setChecked(false);
+            twoPass_->setChecked(false);
+            inventoryPreload_->setChecked(false);
+            timing_->setChecked(false);
+            debug_->setChecked(false);
+            for (int row = 0; row < defaultColours.size(); ++row) {
+              const QString colour = defaultColours.at(row).second;
+              colours_->item(row, 1)->setText(colour);
+              colours_->item(row, 1)->setBackground(QColor(colour));
+              colours_->item(row, 2)->setCheckState(Qt::Checked);
+            }
+          });
 }
 
 void SettingsDialog::save() {
@@ -280,7 +304,12 @@ void SettingsDialog::save() {
   settings.setValue(QStringLiteral("sound/enabled"), sound_->isChecked());
   QJsonObject colours;
   for (int row = 0; row < colours_->rowCount(); ++row) {
-    colours.insert(colours_->item(row, 0)->text(), colours_->item(row, 1)->text());
+    const bool marked =
+        colours_->item(row, 2) != nullptr &&
+        colours_->item(row, 2)->checkState() == Qt::Checked;
+    colours.insert(colours_->item(row, 0)->text(),
+                   marked ? QJsonValue(colours_->item(row, 1)->text())
+                          : QJsonValue(QJsonValue::Null));
   }
   settings.setValue(QStringLiteral("colours/actions"),
                     QJsonDocument(colours).toJson(QJsonDocument::Compact));

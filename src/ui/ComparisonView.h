@@ -27,6 +27,7 @@ class ComparisonView : public QWidget {
   void setFilterBar(ActionFilterBar* bar);
   [[nodiscard]] core::Decisions& decisions() { return decisions_; }
   void setChanges(const QVector<core::Change>& changes);
+  void setActionColours(const QVector<QString>& colours);
   void setRootNames(const QString& source, const QString& destination);
   void selectPath(const QString& path);
   [[nodiscard]] QStringList searchMatches(const QString& text) const;

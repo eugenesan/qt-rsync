@@ -145,6 +145,17 @@ bool ActionFilterBar::actionVisible(int action) const {
 }
 bool ActionFilterBar::showConflicts() const { return conflicts_->isChecked(); }
 
+void ActionFilterBar::setActionColours(const QVector<QString>& colours) {
+  for (int index = 0; index < actions_.size(); ++index) {
+    if (index < colours.size() && !colours.at(index).isEmpty()) {
+      actions_.at(index)->setIcon(
+          icons::actionIcon(index, QColor(colours.at(index))));
+    } else {
+      actions_.at(index)->setIcon(icons::actionIcon(index));
+    }
+  }
+}
+
 void ActionFilterBar::setExcludedCount(int count) {
   // qpy puts the count on the Excluded checkbox itself, not in a separate
   // label next to the undo button.

@@ -79,7 +79,10 @@ QIcon actionIcon(int action) {
       QColor("#208020"), QColor("#eab308"), QColor("#7c3aed"),
       QColor("#ef4444"), QColor("#a05020"), QColor("#64748b"),
       QColor("#64748b")};
-  const QColor colour = colours.value(action, QColor("#64748b"));
+  return actionIcon(action, colours.value(action, QColor("#64748b")));
+}
+
+QIcon actionIcon(int action, const QColor& colour) {
   switch (action) {
     case 0:  // create
       return makeGrid([colour](QPainter& p) {

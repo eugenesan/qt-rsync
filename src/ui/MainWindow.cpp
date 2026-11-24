@@ -9,6 +9,8 @@
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QFrame>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMenu>
 #include <QMenuBar>
 #include <QHBoxLayout>
@@ -73,6 +75,8 @@ class MainWindow::Private {
  public:
   QLineEdit* source = nullptr;
   QLineEdit* destination = nullptr;
+  QToolButton* sourceOpen = nullptr;
+  QToolButton* destinationOpen = nullptr;
   QToolButton* compare = nullptr;
   QToolButton* verify = nullptr;
   QToolButton* sync = nullptr;
@@ -289,6 +293,34 @@ MainWindow::MainWindow(QWidget* parent)
   });
   styleTool(backupButton);
   toolbarLayout->addWidget(backupButton);
+  const auto configureOpenMenu = [this](QToolButton* button, bool logging) {
+    button->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(button, &QToolButton::customContextMenuRequested, this,
+            [this, button, logging](const QPoint& point) {
+              QMenu menu(button);
+              QAction* open = menu.addAction(button->toolTip());
+              QAction* clear = logging ? menu.addAction(QStringLiteral("Clear Log"))
+                                       : nullptr;
+              QAction* configure =
+                  menu.addAction(QStringLiteral("Configure..."));
+              QAction* selected = menu.exec(button->mapToGlobal(point));
+              if (selected == open) {
+                button->click();
+              } else if (selected == clear) {
+                if (d_->logFile != nullptr) {
+                  d_->logFile->close();
+                  d_->logFile->open(QIODevice::WriteOnly | QIODevice::Truncate);
+                  d_->logFile->close();
+                  d_->logFile->open(QIODevice::WriteOnly | QIODevice::Append);
+                }
+                setStatus(QStringLiteral("Log files cleared."));
+              } else if (selected == configure) {
+                SettingsDialog dialog(this);
+                if (dialog.exec() == QDialog::Accepted) applyActionColours();
+              }
+            });
+  };
+  configureOpenMenu(backupButton, false);
   auto* logButton = new QToolButton(toolbarRow);
   logButton->setIcon(icons::toolbarIcon(QStringLiteral("log")));
   logButton->setAccessibleName(QStringLiteral("Open the log file"));
@@ -298,11 +330,12 @@ MainWindow::MainWindow(QWidget* parent)
   });
   styleTool(logButton);
   toolbarLayout->addWidget(logButton);
+  configureOpenMenu(logButton, true);
   addTool(d_->settingsButton, QStringLiteral("Settings"),
           QStringLiteral("settings"), QStringLiteral("Settings"));
   connect(d_->settingsButton, &QAbstractButton::clicked, this, [this]() {
     SettingsDialog dialog(this);
-    dialog.exec();
+    if (dialog.exec() == QDialog::Accepted) applyActionColours();
   });
   connect(d_->filtersButton, &QAbstractButton::clicked, this, [this]() {
     QDialog dialog(this);
@@ -497,6 +530,7 @@ MainWindow::MainWindow(QWidget* parent)
   sourceLayout->setSpacing(4);
   sourceLayout->addWidget(swapButton);
   auto* sourceOpen = new QToolButton(sourcePanel);
+  d_->sourceOpen = sourceOpen;
   sourceOpen->setIcon(icons::toolbarIcon(QStringLiteral("cloud-upload")));
   sourceOpen->setAccessibleName(QStringLiteral("Open the Source directory"));
   sourceOpen->setToolTip(QStringLiteral("Open the Source directory"));
@@ -544,6 +578,7 @@ MainWindow::MainWindow(QWidget* parent)
   destinationLayout->setContentsMargins(0, 0, 0, 0);
   destinationLayout->setSpacing(4);
   auto* destinationOpen = new QToolButton(destinationPanel);
+  d_->destinationOpen = destinationOpen;
   destinationOpen->setIcon(icons::toolbarIcon(QStringLiteral("cloud-download")));
   destinationOpen->setAccessibleName(
       QStringLiteral("Open the Destination directory"));
@@ -575,6 +610,23 @@ MainWindow::MainWindow(QWidget* parent)
   locations->addWidget(filterColumn, 0, Qt::AlignBottom);
   locations->addWidget(destinationPanel, 40);
   rootLayout->addLayout(locations);
+  // External open buttons only work for local endpoints; qpy disables them
+  // for SSH operands instead of opening a bogus local path.
+  const auto updateOpenStates = [this]() {
+    const auto local = [](const QString& text) {
+      if (text.trimmed().isEmpty()) return false;
+      return core::parseEndpoint(text).kind == core::EndpointKind::Local;
+    };
+    d_->sourceOpen->setEnabled(local(d_->source->text()));
+    d_->destinationOpen->setEnabled(local(d_->destination->text()));
+  };
+  connect(d_->source, &QLineEdit::textChanged, this,
+          [updateOpenStates](const QString&) { updateOpenStates(); });
+  connect(d_->destination, &QLineEdit::textChanged, this,
+          [updateOpenStates](const QString&) { updateOpenStates(); });
+  connect(d_->destination, &QLineEdit::returnPressed, this,
+          [this]() { startCompare(); });
+  updateOpenStates();
 
   // Row 3: comparison above, journal + overview below.
   auto* splitter = new QSplitter(Qt::Vertical, root);
@@ -702,6 +754,7 @@ MainWindow::MainWindow(QWidget* parent)
       appendJournalLine(clean);
     }
   });
+  applyActionColours();
   restoreProfile();
 
   connect(d_->comparison, &ComparisonView::decisionChanged, this, [this]() {
@@ -1293,6 +1346,33 @@ void MainWindow::resetProfile() {
   d_->destination->clear();
   d_->profile = core::SyncProfile{};
   setStatus(QStringLiteral("Profile reset"));
+}
+
+void MainWindow::applyActionColours() {
+  static const QStringList keys{
+      QStringLiteral("Create"), QStringLiteral("Update"),
+      QStringLiteral("Metadata only"), QStringLiteral("Delete"),
+      QStringLiteral("Keep in Destination")};
+  static const QStringList defaults{
+      QStringLiteral("#208020"), QStringLiteral("#eab308"),
+      QStringLiteral("#7c3aed"), QStringLiteral("#ef4444"),
+      QStringLiteral("#a05020")};
+  core::storage::Settings settings;
+  const QJsonObject stored = QJsonDocument::fromJson(
+      settings.value(QStringLiteral("colours/actions")).toByteArray()).object();
+  QVector<QString> colours;
+  for (int index = 0; index < keys.size(); ++index) {
+    if (!stored.contains(keys.at(index))) {
+      colours.append(defaults.at(index));
+      continue;
+    }
+    const QJsonValue value = stored.value(keys.at(index));
+    // A JSON null is the user's "do not mark this action" choice.
+    colours.append(value.isNull() ? QString() : value.toString());
+  }
+  if (d_->comparison != nullptr) d_->comparison->setActionColours(colours);
+  if (d_->filterBar != nullptr) d_->filterBar->setActionColours(colours);
+  if (d_->overview != nullptr) d_->overview->setActionColours(colours);
 }
 
 void MainWindow::refreshSearchMatches() {

@@ -199,6 +199,11 @@ void ComparisonView::setRootNames(const QString& source,
   store_.root_dest = destination.toStdString();
 }
 
+void ComparisonView::setActionColours(const QVector<QString>& colours) {
+  store_.action_colours.assign(colours.begin(), colours.end());
+  for (QTableView* view : views_) view->viewport()->update();
+}
+
 void ComparisonView::setChanges(const QVector<core::Change>& changes) {
   decisions_.reconcile(changes, true);
   loadChanges(store_, changes);

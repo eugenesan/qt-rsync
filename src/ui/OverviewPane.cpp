@@ -75,6 +75,10 @@ OverviewPane::OverviewPane(QWidget* parent)
   layout->addWidget(stats_);
 }
 
+void OverviewPane::setActionColours(const QVector<QString>& colours) {
+  stats_->setActionColours(colours);
+}
+
 void OverviewPane::rebuild(const model::DataStore& store) {
   // Remember which folders were open; a reset of the model collapses them.
   if (!firstBuild_) {

@@ -20,6 +20,7 @@ class ActionFilterBar : public QWidget {
   [[nodiscard]] bool showConflicts() const;
 
   void setConflictsAvailable(bool available);
+  void setActionColours(const QVector<QString>& colours);
   void setExcludedCount(int count);
   void setUndoEnabled(bool enabled);
 
