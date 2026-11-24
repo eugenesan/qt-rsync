@@ -16,6 +16,7 @@
 #include <QTableView>
 
 #include "ui/MainWindow.h"
+#include "app/StartupOptions.h"
 #include "ui/ComparisonView.h"
 #include "ui/SettingsDialog.h"
 #include "core/Storage.h"
@@ -126,6 +127,16 @@ void UiTest::spaceExcludesEverySelectedItem() {
     if (item.second == core::Decision::Exclude) ++excluded;
   }
   QVERIFY(excluded >= 3);
+
+  QPushButton* undo = nullptr;
+  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+    if (button->text().startsWith(QLatin1String("Undo"))) undo = button;
+  }
+  QVERIFY(undo != nullptr);
+  QVERIFY(undo->isEnabled());
+  undo->click();
+  QVERIFY(comparison->decisions().explicitItems().isEmpty());
+  QVERIFY(!undo->isEnabled());
   qputenv("PATH", oldPath);
 }
 
@@ -316,6 +327,8 @@ void UiTest::sshProfileKeepsItsEndpointKind() {
   core::storage::setCurrentProfilePath(path);
 
   ui::MainWindow window;
+  app::StartupOptions emptyOptions;
+  window.applyStartupOptions(emptyOptions);
   const auto edits = window.findChildren<QLineEdit*>();
   QCOMPARE(edits.at(0)->text(),
            QStringLiteral("example.test:/home/user/Develop/src"));

@@ -95,6 +95,10 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
           this, &ComparisonView::applyDecision);
   connect(keyFilter_, &DecisionKeyFilter::decisionToggled,
           this, &ComparisonView::applyDecision);
+  connect(keyFilter_, &DecisionKeyFilter::batchStarted,
+          this, &ComparisonView::startDecisionBatch);
+  connect(keyFilter_, &DecisionKeyFilter::batchFinished,
+          this, &ComparisonView::endDecisionBatch);
   // Column widths in the ballpark of qpy-rsync: a wide name column, narrow
   // Items and Size columns, and a compact decision pane.
   for (int pane : {0, 2}) {
@@ -170,12 +174,43 @@ void ComparisonView::markDelete(const QString& path) {
   applyDecision(path, static_cast<int>(core::Decision::Delete));
 }
 
+void ComparisonView::startDecisionBatch() {
+  batching_ = true;
+  batchBefore_ = decisions_.explicitItemsAsHash();
+}
+
+void ComparisonView::endDecisionBatch() {
+  batching_ = false;
+  if (decisions_.explicitItemsAsHash() != batchBefore_) {
+    decisionHistory_.append(batchBefore_);
+    if (decisionHistory_.size() > 100) decisionHistory_.removeFirst();
+    emit undoAvailable(true);
+  }
+  batchBefore_.clear();
+}
+
+bool ComparisonView::undoDecision() {
+  if (decisionHistory_.isEmpty()) return false;
+  decisions_.replace(decisionHistory_.takeLast());
+  syncDecisionsToStore();
+  for (model::TableModel* model : models_) model->reset();
+  emit decisionChanged();
+  emit undoAvailable(!decisionHistory_.isEmpty());
+  return true;
+}
+
 void ComparisonView::applyDecision(const QString& path, int decision) {
   const core::Decision value = static_cast<core::Decision>(decision);
+  if (decisions_.explicitDecision(path) == value) return;
+  if (!batching_) {
+    decisionHistory_.append(decisions_.explicitItemsAsHash());
+    if (decisionHistory_.size() > 100) decisionHistory_.removeFirst();
+  }
   decisions_.set(path, value);
   syncDecisionsToStore();
   for (model::TableModel* model : models_) model->reset();
   emit decisionChanged();
+  emit undoAvailable(!decisionHistory_.isEmpty());
 }
 
 void ComparisonView::syncDecisionsToStore() {

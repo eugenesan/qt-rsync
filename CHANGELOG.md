@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — real-tree feedback fixes
+
+- Startup with no `--dir-pair` no longer clears the endpoints loaded from the
+  cached profile (the SSH source now survives auto-load).
+- Added decision Undo (Ctrl+Z and toolbar button). A multi-row Space exclusion
+  is one undo step, matching qpy-rsync's decision batching.
+
 ## Unreleased — layout parity
 
 - Set explicit column widths close to qpy-rsync: wide Item column, narrow Items

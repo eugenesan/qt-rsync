@@ -43,6 +43,7 @@ class Decisions {
 
   // Deterministic (path-sorted) snapshots used for fingerprints.
   [[nodiscard]] QVector<QPair<QString, Decision>> explicitItems() const;
+  [[nodiscard]] QHash<QString, Decision> explicitItemsAsHash() const;
   [[nodiscard]] QSet<QString> excludedPaths() const;
   [[nodiscard]] QSet<QString> overridePaths(const QVector<Change>& changes) const;
   [[nodiscard]] int modifiedCount(const QVector<Change>& changes) const;

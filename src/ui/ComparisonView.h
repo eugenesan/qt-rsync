@@ -29,9 +29,13 @@ class ComparisonView : public QWidget {
   void applyDestinationMetadata(
       const QHash<QString, QPair<qlonglong, QString>>& metadata);
   void markDelete(const QString& path);
+  bool undoDecision();
 
  signals:
   void decisionChanged();
+  void undoAvailable(bool available);
+  void batchStarted();
+  void batchFinished();
   void filterRequested(const QString& pattern, const QString& path);
   void deleteFilterRequested(const QString& pattern, const QString& path);
   void deleteRequested(const QString& path);
@@ -46,6 +50,11 @@ class ComparisonView : public QWidget {
   void showContextMenu(int pane, const QPoint& position);
   void showHeaderMenu(int pane, const QPoint& position);
 
+  void startDecisionBatch();
+  void endDecisionBatch();
+
+  bool batching_ = false;
+  QHash<QString, core::Decision> batchBefore_;
   bool sorting_ = false;
   bool selecting_ = false;
 
@@ -55,6 +64,7 @@ class ComparisonView : public QWidget {
   QVector<model::TableModel*> models_;
   DecisionDelegate* delegate_ = nullptr;
   DecisionKeyFilter* keyFilter_ = nullptr;
+  QVector<QHash<QString, core::Decision>> decisionHistory_;
 };
 
 }  // namespace qt_rsync::ui

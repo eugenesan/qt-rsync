@@ -114,6 +114,10 @@ QVector<QPair<QString, Decision>> Decisions::explicitItems() const {
   return items;
 }
 
+QHash<QString, Decision> Decisions::explicitItemsAsHash() const {
+  return explicit_;
+}
+
 QSet<QString> Decisions::excludedPaths() const {
   QSet<QString> paths;
   for (auto it = explicit_.cbegin(); it != explicit_.cend(); ++it) {

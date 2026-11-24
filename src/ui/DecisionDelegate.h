@@ -31,6 +31,8 @@ class DecisionKeyFilter : public QObject {
 
  signals:
   void decisionToggled(const QString& path, int decision);
+  void batchStarted();
+  void batchFinished();
 
  private:
   static int indexOfPath(QTableView* view, const QString& path);

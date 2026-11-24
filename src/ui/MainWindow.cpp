@@ -15,6 +15,7 @@
 #include <QPlainTextEdit>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QShortcut>
 #include <QRegularExpression>
 #include <QSplitter>
 #include <QTemporaryFile>
@@ -56,6 +57,7 @@ class MainWindow::Private {
   QPushButton* compare = nullptr;
   QPushButton* verify = nullptr;
   QPushButton* sync = nullptr;
+  QPushButton* undo = nullptr;
   QLabel* status = nullptr;
   QPlainTextEdit* journal = nullptr;
   QProgressBar* progress = nullptr;
@@ -104,11 +106,14 @@ MainWindow::MainWindow(QWidget* parent)
   d_->compare = new QPushButton(QStringLiteral("Compare"), actions);
   d_->verify = new QPushButton(QStringLiteral("Verify (F8)"), actions);
   d_->sync = new QPushButton(QStringLiteral("Synchronize (F9)"), actions);
+  d_->undo = new QPushButton(QStringLiteral("Undo (Ctrl+Z)"), actions);
+  d_->undo->setEnabled(false);
   d_->verify->setEnabled(false);
   d_->sync->setEnabled(false);
   actionLayout->addWidget(d_->compare);
   actionLayout->addWidget(d_->verify);
   actionLayout->addWidget(d_->sync);
+  actionLayout->addWidget(d_->undo);
   form->addRow(QString(), actions);
 
   d_->profileButton = new QPushButton(QStringLiteral("Profile"), paths);
@@ -152,6 +157,13 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->compare, &QPushButton::clicked, this, &MainWindow::startCompare);
   connect(d_->verify, &QPushButton::clicked, this, &MainWindow::verifyPlan);
   connect(d_->sync, &QPushButton::clicked, this, &MainWindow::synchronize);
+  connect(d_->undo, &QPushButton::clicked, this,
+          [this]() { d_->comparison->undoDecision(); });
+  auto* undoShortcut = new QShortcut(QKeySequence::Undo, this);
+  connect(undoShortcut, &QShortcut::activated, this,
+          [this]() { d_->comparison->undoDecision(); });
+  connect(d_->comparison, &ComparisonView::undoAvailable, d_->undo,
+          &QPushButton::setEnabled);
   connect(d_->compareProcess, &QProcess::finished, this, &MainWindow::onCompareFinished);
   connect(d_->compareProcess, &QProcess::errorOccurred, this, &MainWindow::onCompareError);
   connect(d_->operationProcess, &QProcess::finished, this, &MainWindow::onOperationFinished);
@@ -197,8 +209,13 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::applyStartupOptions(const app::StartupOptions& options) {
-  d_->source->setText(withTrailingSlash(options.source));
-  d_->destination->setText(withTrailingSlash(options.destination));
+  // Empty options mean no --dir-pair was given; keep the profile's endpoints.
+  if (!options.source.isEmpty()) {
+    d_->source->setText(withTrailingSlash(options.source));
+  }
+  if (!options.destination.isEmpty()) {
+    d_->destination->setText(withTrailingSlash(options.destination));
+  }
   d_->profile.backup.directory = options.backup;
   if (options.mode == QLatin1String("mirror")) {
     d_->profile.transfer.mode = core::SyncMode::Mirror;

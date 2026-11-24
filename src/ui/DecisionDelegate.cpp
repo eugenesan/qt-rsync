@@ -122,11 +122,13 @@ bool DecisionKeyFilter::eventFilter(QObject* watched, QEvent* event) {
       if (!path.isEmpty()) paths.insert(path);
     }
   }
+  if (!paths.isEmpty()) emit batchStarted();
   for (const QString& path : paths) {
     const int current = view->model()->data(
         view->model()->index(indexOfPath(view, path), 4), Qt::CheckStateRole).toInt();
     emit decisionToggled(path, nextDecision(current));
   }
+  if (!paths.isEmpty()) emit batchFinished();
   return true;
 }
 
