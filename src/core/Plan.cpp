@@ -278,6 +278,42 @@ QString decisionFilterText(const ExecutionPlan& plan) {
   return decisionFilterLines(plan).join('\n');
 }
 
+PlanMismatch comparePlanToChanges(const ExecutionPlan& plan,
+                                  const QVector<Change>& changes,
+                                  const Decisions* decisions) {
+  QSet<QString> expected;
+  for (const PlanItem& item : plan.items) {
+    if (!item.included) continue;
+    expected.insert(item.path + QChar('\x1f') + actionName(item.action) +
+                    QChar('\x1f') + kindName(item.kind));
+  }
+  QSet<QString> actual;
+  for (const Change& change : changes) {
+    if (change.action == Action::NoChange || change.action == Action::Message ||
+        change.action == Action::DestinationOnly) {
+      continue;
+    }
+    if (decisions != nullptr &&
+        decisions->inherited(change.path) == Decision::Exclude) {
+      continue;
+    }
+    actual.insert(normalized(change.path) + QChar('\x1f') +
+                  actionName(change.action) + QChar('\x1f') +
+                  kindName(change.kind));
+  }
+  PlanMismatch result;
+  // QSet::subtract mutates its receiver, so compare two independent copies.
+  QSet<QString> missing = expected;
+  missing.subtract(actual);
+  QSet<QString> unexpected = actual;
+  unexpected.subtract(expected);
+  for (const QString& key : missing) result.missing << key;
+  for (const QString& key : unexpected) result.unexpected << key;
+  result.missing.sort();
+  result.unexpected.sort();
+  return result;
+}
+
 PlanFreshness checkPlanFreshness(const ExecutionPlan& plan,
                                  const SyncProfile& profile,
                                  const QVector<Change>& changes,

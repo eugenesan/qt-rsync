@@ -36,6 +36,7 @@ class UiTest : public QObject {
   void lockedProfileCanQuitWithoutChanges();
   void arrowKeysFoldAndExpandFolders();
   void sshProfileKeepsItsEndpointKind();
+  void cancelStopsARunningCompare();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -148,7 +149,7 @@ void UiTest::settingsDialogPersistsDiagnostics() {
   qputenv("XDG_STATE_HOME", dir.path().toUtf8());
   ui::SettingsDialog dialog;
   QCOMPARE(dialog.findChildren<QTabWidget*>().size(), 1);
-  QCOMPARE(dialog.findChildren<QCheckBox*>().size(), 4);
+  QCOMPARE(dialog.findChildren<QCheckBox*>().size(), 6);
   for (QCheckBox* box : dialog.findChildren<QCheckBox*>()) {
     if (box->text().contains(QStringLiteral("timing"))) box->setChecked(true);
   }
@@ -336,6 +337,40 @@ void UiTest::sshProfileKeepsItsEndpointKind() {
            QStringLiteral("example.test:/home/user/Develop/src"));
   QCOMPARE(edits.at(1)->text(),
            QStringLiteral("/home/alice/Develop/src-example/"));
+}
+
+void UiTest::cancelStopsARunningCompare() {
+  QTemporaryDir dir;
+  const QString script = dir.path() + QStringLiteral("/rsync");
+  QFile file(script);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write("#!/bin/sh\nsleep 10\n"
+             "printf '%s\\n' '>f+++++++++|qpy-rsync|1|qpy-rsync||qpy-rsync|a.txt'\n");
+  file.close();
+  file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner |
+                      QFileDevice::ExeOwner);
+  const QByteArray oldPath = qgetenv("PATH");
+  qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
+
+  ui::MainWindow window;
+  const auto edits = window.findChildren<QLineEdit*>();
+  edits.at(0)->setText(QStringLiteral("/src"));
+  edits.at(1)->setText(QStringLiteral("/dst"));
+  QPushButton* compare = nullptr;
+  QPushButton* cancel = nullptr;
+  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+    if (button->text() == QLatin1String("Compare")) compare = button;
+    if (button->text() == QLatin1String("Cancel")) cancel = button;
+  }
+  QVERIFY(compare && cancel);
+  compare->click();
+  QVERIFY(cancel->isEnabled());
+  cancel->click();
+  auto* status = window.findChild<QLabel*>();
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QStringLiteral("cancel")), 5000);
+  QVERIFY(compare->isEnabled());
+  QVERIFY(!cancel->isEnabled());
+  qputenv("PATH", oldPath);
 }
 
 QTEST_MAIN(UiTest)

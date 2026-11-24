@@ -19,6 +19,8 @@ class SettingsDialog : public QDialog {
   QCheckBox* timing_ = nullptr;
   QCheckBox* debug_ = nullptr;
   QCheckBox* preserve_ = nullptr;
+  QCheckBox* verification_ = nullptr;
+  QCheckBox* verificationRsync_ = nullptr;
 };
 
 }  // namespace qt_rsync::ui

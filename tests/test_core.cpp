@@ -84,6 +84,7 @@ class CoreTest : public QObject {
   void pidLocksDetectLiveOwnersAndTakeOverStaleOnes();
   void legacyPathsAreMigrated();
   void sshEndpointTextIsParsed();
+  void planMismatchReportsMissingAndUnexpected();
 
   // Existing smoke checks
   void endpointOperandKeepsSshSyntax();
@@ -712,6 +713,30 @@ void CoreTest::sshEndpointTextIsParsed() {
   const Endpoint local = parseEndpoint(QStringLiteral("/tmp/source"));
   QCOMPARE(local.kind, EndpointKind::Local);
   QCOMPARE(local.path, QStringLiteral("/tmp/source"));
+}
+
+void CoreTest::planMismatchReportsMissingAndUnexpected() {
+  const QVector<Change> changes{
+      makeChange("a.txt", Action::Create, Kind::File, 10),
+      makeChange("b.txt", Action::UpdateContent),
+  };
+  Decisions decisions;
+  decisions.reconcile(changes, false);
+  const auto plan = buildExecutionPlan(testProfile(), changes, decisions);
+
+  QVector<Change> verified = changes;
+  const auto match = comparePlanToChanges(plan, verified, &decisions);
+  QVERIFY(match.valid());
+
+  verified.removeLast();
+  verified.append(makeChange("extra.txt", Action::Create));
+  const auto mismatch = comparePlanToChanges(plan, verified, &decisions);
+  QVERIFY(!mismatch.valid());
+  QVERIFY(mismatch.missing.contains([&] {
+    return QStringLiteral("b.txt") + QChar('\x1f') +
+           actionName(Action::UpdateContent) + QChar('\x1f') + kindName(Kind::File);
+  }()));
+  QCOMPARE(mismatch.unexpected.size(), 1);
 }
 
 QTEST_MAIN(CoreTest)

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — correctness pass
+
+- Verify now compares the second dry run's parsed output against the execution
+  plan and reports missing/unexpected items; a mismatch marks verification as
+  failed.
+- Added `verification/enabled` and `verification/rsync` settings. Verification
+  remains optional; Synchronize is still available from Selection Ready, as in
+  qpy-rsync.
+- Added a Cancel button that terminates a running compare, verify or sync
+  process and restores the idle state.
+- Fixed a QSet aliasing bug in plan mismatch computation.
+
 ## Unreleased — undo and hierarchy fixes
 
 - Undo now clears the mirrored view decisions before reapplying the snapshot,

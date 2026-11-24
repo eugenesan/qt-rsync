@@ -56,6 +56,15 @@ struct ExecutionPlan {
   [[nodiscard]] QVector<PlanItem> includedItems() const;
 };
 
+struct PlanMismatch {
+  QStringList missing;
+  QStringList unexpected;
+
+  [[nodiscard]] bool valid() const {
+    return missing.isEmpty() && unexpected.isEmpty();
+  }
+};
+
 struct PlanFreshness {
   bool fresh = false;
   QStringList reasons;
@@ -77,6 +86,9 @@ ExecutionPlan buildExecutionPlan(const SyncProfile& profile,
                                  const DestinationMetadata& metadata = {});
 QStringList decisionFilterLines(const ExecutionPlan& plan);
 QString decisionFilterText(const ExecutionPlan& plan);
+PlanMismatch comparePlanToChanges(const ExecutionPlan& plan,
+                                  const QVector<Change>& changes,
+                                  const Decisions* decisions = nullptr);
 PlanFreshness checkPlanFreshness(const ExecutionPlan& plan,
                                  const SyncProfile& profile,
                                  const QVector<Change>& changes,

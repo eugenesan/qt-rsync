@@ -52,6 +52,16 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
   preserve_->setChecked(
       settings.value(QStringLiteral("decisions/preserve"), true).toBool());
   advancedForm->addRow(QString(), preserve_);
+  verification_ = new QCheckBox(
+      QStringLiteral("Enable Verify Decisions (F8)"), advanced);
+  verificationRsync_ = new QCheckBox(
+      QStringLiteral("Use an rsync dry run when verifying"), advanced);
+  verification_->setChecked(
+      settings.value(QStringLiteral("verification/enabled"), true).toBool());
+  verificationRsync_->setChecked(
+      settings.value(QStringLiteral("verification/rsync"), true).toBool());
+  advancedForm->addRow(QString(), verification_);
+  advancedForm->addRow(QString(), verificationRsync_);
   tabs->addTab(advanced, QStringLiteral("Advanced"));
 
   auto* buttons = new QDialogButtonBox(
@@ -68,6 +78,10 @@ void SettingsDialog::save() {
   settings.setValue(QStringLiteral("logging/timing"), timing_->isChecked());
   settings.setValue(QStringLiteral("logging/debug"), debug_->isChecked());
   settings.setValue(QStringLiteral("decisions/preserve"), preserve_->isChecked());
+  settings.setValue(QStringLiteral("verification/enabled"),
+                    verification_->isChecked());
+  settings.setValue(QStringLiteral("verification/rsync"),
+                    verificationRsync_->isChecked());
   settings.sync();
 }
 

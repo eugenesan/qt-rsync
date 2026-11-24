@@ -58,6 +58,8 @@ class MainWindow::Private {
   QPushButton* verify = nullptr;
   QPushButton* sync = nullptr;
   QPushButton* undo = nullptr;
+  QPushButton* cancel = nullptr;
+  bool cancelled = false;
   QLabel* status = nullptr;
   QPlainTextEdit* journal = nullptr;
   QProgressBar* progress = nullptr;
@@ -73,6 +75,8 @@ class MainWindow::Private {
   bool verified = false;
   bool stale = false;
   bool syncing = false;
+  bool verifying = false;
+  QString operationOutput;
   bool startupAborted = false;
   bool tempProfile = false;
   QString profilePath;
@@ -108,12 +112,18 @@ MainWindow::MainWindow(QWidget* parent)
   d_->sync = new QPushButton(QStringLiteral("Synchronize (F9)"), actions);
   d_->undo = new QPushButton(QStringLiteral("Undo (Ctrl+Z)"), actions);
   d_->undo->setEnabled(false);
+  d_->cancel = new QPushButton(QStringLiteral("Cancel"), actions);
+  d_->cancel->setEnabled(false);
   d_->verify->setEnabled(false);
   d_->sync->setEnabled(false);
+  core::storage::Settings settings;
+  d_->verify->setVisible(
+      settings.value(QStringLiteral("verification/enabled"), true).toBool());
   actionLayout->addWidget(d_->compare);
   actionLayout->addWidget(d_->verify);
   actionLayout->addWidget(d_->sync);
   actionLayout->addWidget(d_->undo);
+  actionLayout->addWidget(d_->cancel);
   form->addRow(QString(), actions);
 
   d_->profileButton = new QPushButton(QStringLiteral("Profile"), paths);
@@ -159,6 +169,7 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->sync, &QPushButton::clicked, this, &MainWindow::synchronize);
   connect(d_->undo, &QPushButton::clicked, this,
           [this]() { d_->comparison->undoDecision(); });
+  connect(d_->cancel, &QPushButton::clicked, this, &MainWindow::cancelOperation);
   auto* undoShortcut = new QShortcut(QKeySequence::Undo, this);
   connect(undoShortcut, &QShortcut::activated, this,
           [this]() { d_->comparison->undoDecision(); });
@@ -172,6 +183,7 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->operationProcess, &QProcess::readyReadStandardOutput, this, [this]() {
     const QString text = core::cleanQtNoise(
         QString::fromLocal8Bit(d_->operationProcess->readAllStandardOutput()));
+    d_->operationOutput += text;
     for (const QString& line : text.split('\r')) {
       const QString clean = line.trimmed();
       if (clean.isEmpty()) continue;
@@ -263,12 +275,19 @@ void MainWindow::startCompare() {
   const core::ProcessSpec spec = core::buildCompareSpec(d_->profile);
   setProcessEnvironment(spec, d_->compareProcess);
   d_->compare->setEnabled(false);
+  d_->cancel->setEnabled(true);
   setStatus(QStringLiteral("Comparing..."));
   d_->compareProcess->start(spec.program, spec.arguments);
 }
 
 void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   d_->compare->setEnabled(true);
+  d_->cancel->setEnabled(false);
+  if (d_->cancelled) {
+    d_->cancelled = false;
+    setStatus(QStringLiteral("Comparison cancelled"));
+    return;
+  }
   const QByteArray output = d_->compareProcess->readAllStandardOutput();
   const QString stderr = QString::fromLocal8Bit(d_->compareProcess->readAllStandardError());
   if (status != QProcess::NormalExit || exitCode != 0) {
@@ -301,6 +320,7 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
 void MainWindow::onCompareError(QProcess::ProcessError error) {
   Q_UNUSED(error)
   d_->compare->setEnabled(true);
+  d_->cancel->setEnabled(false);
   setStatus(QStringLiteral("Could not start rsync: %1")
                           .arg(d_->compareProcess->errorString()));
 }
@@ -313,6 +333,7 @@ void MainWindow::startDestinationInventory() {
 }
 
 void MainWindow::onInventoryFinished(int, QProcess::ExitStatus) {
+  if (d_->cancelled) return;
   const QString text = core::cleanQtNoise(
       QString::fromLocal8Bit(d_->inventoryProcess->readAllStandardOutput()));
   QHash<QString, QPair<qlonglong, QString>> metadata;
@@ -349,6 +370,9 @@ void MainWindow::verifyPlan() {
       core::buildVerifySpec(d_->profile, d_->filterFile->fileName());
   setProcessEnvironment(spec, d_->operationProcess);
   d_->syncing = false;
+  d_->verifying = true;
+  d_->operationOutput.clear();
+  d_->cancel->setEnabled(true);
   setStatus(QStringLiteral("Verifying..."));
   d_->operationProcess->start(spec.program, spec.arguments);
 }
@@ -370,6 +394,9 @@ void MainWindow::synchronize() {
       core::buildSyncSpec(d_->profile, d_->filterFile->fileName());
   setProcessEnvironment(spec, d_->operationProcess);
   d_->syncing = true;
+  d_->verifying = false;
+  d_->operationOutput.clear();
+  d_->cancel->setEnabled(true);
   d_->progress->show();
   d_->progress->setValue(0);
   setStatus(QStringLiteral("Synchronizing..."));
@@ -377,6 +404,15 @@ void MainWindow::synchronize() {
 }
 
 void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) {
+  d_->cancel->setEnabled(false);
+  if (d_->cancelled) {
+    d_->cancelled = false;
+    d_->syncing = false;
+    d_->verifying = false;
+    d_->progress->hide();
+    setStatus(QStringLiteral("Operation cancelled"));
+    return;
+  }
   d_->progress->hide();
   const QString stderr = QString::fromLocal8Bit(d_->operationProcess->readAllStandardError());
   const bool ok = status == QProcess::NormalExit && exitCode == 0;
@@ -395,16 +431,53 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
         "Synchronization complete — click Compare to refresh the comparison."));
     return;
   }
-  d_->verified = ok;
-  setStatus(ok ? QStringLiteral("Verification matched the plan.")
-                         : QStringLiteral("Verification failed: %1")
-                               .arg(stderr.trimmed()));
+  d_->verifying = false;
+  if (!ok) {
+    d_->verified = false;
+    setStatus(QStringLiteral("Verification failed: %1").arg(stderr.trimmed()));
+    return;
+  }
+  const core::ParseResult parsed = core::parseOutput(
+      d_->operationOutput, d_->profile.transfer.mirrorEnabled());
+  const core::PlanMismatch mismatch = core::comparePlanToChanges(
+      d_->plan, parsed.changes, &d_->comparison->decisions());
+  d_->verified = mismatch.valid();
+  if (d_->verified) {
+    setStatus(QStringLiteral("Verification matched the plan."));
+  } else {
+    setStatus(QStringLiteral("Verification mismatch: %1 missing, %2 unexpected")
+                  .arg(mismatch.missing.size())
+                  .arg(mismatch.unexpected.size()));
+    for (const QString& line : mismatch.missing) {
+      d_->journal->appendPlainText(QStringLiteral("missing: ") + line);
+    }
+    for (const QString& line : mismatch.unexpected) {
+      d_->journal->appendPlainText(QStringLiteral("unexpected: ") + line);
+    }
+  }
 }
 
 void MainWindow::onOperationError(QProcess::ProcessError error) {
   Q_UNUSED(error)
+  d_->cancel->setEnabled(false);
   setStatus(QStringLiteral("Operation failed: %1")
                           .arg(d_->operationProcess->errorString()));
+}
+
+void MainWindow::cancelOperation() {
+  QProcess* target = nullptr;
+  if (d_->compareProcess->state() != QProcess::NotRunning) {
+    target = d_->compareProcess;
+  } else if (d_->operationProcess->state() != QProcess::NotRunning) {
+    target = d_->operationProcess;
+  } else if (d_->inventoryProcess->state() != QProcess::NotRunning) {
+    target = d_->inventoryProcess;
+  }
+  if (target == nullptr) return;
+  d_->cancelled = true;
+  d_->cancel->setEnabled(false);
+  setStatus(QStringLiteral("Cancelling..."));
+  target->kill();
 }
 
 void MainWindow::addFilterPattern(const QString& pattern, const QString& path) {
