@@ -1113,7 +1113,7 @@ void MainWindow::appendJournalLine(const QString& line) {
                           .arg(colour, line.toHtmlEscaped()));
   d_->journal->moveCursor(QTextCursor::End);
   d_->journal->ensureCursorVisible();
-  QTimer::singleShot(0, d_->journal, [journal = d_->journal]() {
+  QTimer::singleShot(50, d_->journal, [journal = d_->journal]() {
     auto* bar = journal->verticalScrollBar();
     if (bar != nullptr) bar->setValue(bar->maximum());
   });

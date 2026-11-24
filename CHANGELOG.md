@@ -44,6 +44,13 @@ KDE dark-theme and final UI parity pass.
   location buttons and filter checkboxes.
 - Excluded count moved onto the Excluded checkbox; Undo moved to the start of
   the decisions bar with `edit-undo-symbolic`.
+- The toolbar separator now sits between Inventory and Synchronize instead of
+  before the mode selector, matching qpy-rsync.
+- The overview now summarises only the rows currently displayed after action
+  filters, unchanged gating and exclusions.
+- The journal records the compare command, parse/run timing, preserved
+  decisions, selected summary, inventory command, metadata count, completion
+  state and total ready time, and scrolls to the newest line.
 - Layout modes now work: Normal, Compare only and Compare with overview.
 - Overview statistics use labels instead of painter text, so entries cannot
   be clipped and each action keeps its tooltip.
@@ -63,6 +70,10 @@ KDE dark-theme and final UI parity pass.
   each unchanged path once.
 - Unchecked decision boxes are now empty outlines instead of filled blue
   boxes indistinguishable from checked ones.
+- The decision-column borders continue to the bottom of the view.
+- File rows leave the Items column blank instead of showing `0`.
+- Root, directory and unchanged-item text uses a lighter slate colour suitable
+  for dark themes.
 - Filter checkboxes no longer keep Breeze's focus underline after a pointer
   click.
 - The progress bar is hidden when Compare, inventory, Verify or Sync
