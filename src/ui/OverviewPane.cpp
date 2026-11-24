@@ -57,8 +57,12 @@ OverviewPane::OverviewPane(QWidget* parent)
   auto* layout = new QVBoxLayout(this);
   layout->setContentsMargins(0, 0, 0, 0);
   tree_->setModel(model_);
+  tree_->setSortingEnabled(true);
+  tree_->sortByColumn(3, Qt::DescendingOrder);
   tree_->setItemDelegateForColumn(1, new ShareDelegate(tree_));
-  tree_->header()->setStretchLastSection(true);
+  tree_->header()->setStretchLastSection(false);
+  tree_->header()->setSectionsClickable(true);
+  tree_->header()->setSortIndicatorShown(true);
   layout->addWidget(tree_);
   layout->addWidget(stats_);
 }

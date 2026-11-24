@@ -1197,6 +1197,48 @@ class OverviewModel : public QAbstractItemModel {
     endResetModel();
   }
 
+  void sort(int column, Qt::SortOrder order = Qt::AscendingOrder) override {
+    const bool descending = order == Qt::DescendingOrder;
+    std::function<void(OverviewNode*)> sortChildren = [&](OverviewNode* node) {
+      std::stable_sort(node->children.begin(), node->children.end(),
+                       [column, descending](OverviewNode* a, OverviewNode* b) {
+                         int comparison = 0;
+                         switch (column) {
+                           case 0:
+                             comparison = QString::fromStdString(a->name).localeAwareCompare(
+                                 QString::fromStdString(b->name));
+                             break;
+                           case 2:
+                             comparison = (a->total_count > b->total_count) -
+                                          (a->total_count < b->total_count);
+                             break;
+                           case 3:
+                             comparison = (a->total_size > b->total_size) -
+                                          (a->total_size < b->total_size);
+                             break;
+                           default: break;
+                         }
+                         if (comparison == 0) {
+                           comparison = QString::fromStdString(a->name).compare(
+                               QString::fromStdString(b->name));
+                         }
+                         return descending ? comparison > 0 : comparison < 0;
+                       });
+      for (OverviewNode* child : node->children) sortChildren(child);
+    };
+    layoutAboutToBeChanged();
+    if (!root_->children.empty()) {
+      // The Total row always stays first.
+      std::vector<OverviewNode*> rest(root_->children.begin() + 1,
+                                      root_->children.end());
+      sortChildren(root_);
+      root_->children.resize(1);
+      root_->children.insert(root_->children.end(), rest.begin(), rest.end());
+      for (OverviewNode* child : root_->children) sortChildren(child);
+    }
+    layoutChanged();
+  }
+
   QModelIndex index_for_path(const std::string& path) const {
     for (OverviewNode* node : nodes_) {
       if (node->path != path || node == root_) continue;
