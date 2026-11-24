@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QAbstractButton>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDialog>
 #include <QTimer>
 #include <QDialogButtonBox>
@@ -74,6 +75,10 @@ void UiTest::compareRendersFakeRsyncOutput() {
     if (button->text() == QLatin1String("Compare")) compare = button;
   }
   QVERIFY(compare != nullptr);
+  QVERIFY(compare->toolTip().contains(QStringLiteral("rsync dry run")));
+  auto* mode = window.findChild<QComboBox*>();
+  QVERIFY(mode != nullptr);
+  QVERIFY(mode->toolTip().contains(QStringLiteral("Mirror:")));
   compare->click();
   QLineEdit* status = window.findChild<QLineEdit*>("status-label");
   QVERIFY(status != nullptr);
@@ -135,6 +140,14 @@ void UiTest::spaceExcludesEverySelectedItem() {
     if (item.second == core::Decision::Exclude) ++excluded;
   }
   QVERIFY(excluded >= 3);
+  QCheckBox* excludedToggle = nullptr;
+  for (QCheckBox* box : window.findChildren<QCheckBox*>()) {
+    if (box->accessibleName() == QLatin1String("Show excluded items")) {
+      excludedToggle = box;
+    }
+  }
+  QVERIFY(excludedToggle != nullptr);
+  QVERIFY(!excludedToggle->text().isEmpty());
   const int hiddenRows = decisionTable->model()->rowCount();
 
   QAbstractButton* undo = nullptr;
@@ -159,6 +172,9 @@ void UiTest::settingsDialogPersistsDiagnostics() {
   QCOMPARE(dialog.findChildren<QCheckBox*>().size(), 10);
   for (QCheckBox* box : dialog.findChildren<QCheckBox*>()) {
     if (box->text().contains(QStringLiteral("timing"))) box->setChecked(true);
+    if (box->text().contains(QStringLiteral("Verify Decisions"))) {
+      QVERIFY2(!box->isChecked(), "verification must default to off");
+    }
   }
   for (QDialogButtonBox* buttons : dialog.findChildren<QDialogButtonBox*>()) {
     for (QAbstractButton* button : buttons->buttons()) {
