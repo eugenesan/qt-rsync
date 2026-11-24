@@ -615,6 +615,9 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   d_->overview->rebuild(d_->comparison->store());
   refreshPlan();
   d_->stale = false;
+  d_->progress->show();
+  d_->progress->setValue(100);
+  d_->progressLabel->setText(QStringLiteral("Comparison completed"));
   startDestinationInventory();
   setStatus(QStringLiteral("Comparison complete: %1 item(s)")
                           .arg(parsed.changes.size()));
