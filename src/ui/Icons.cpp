@@ -191,6 +191,7 @@ QIcon toolbarIcon(const QString& name) {
       p.drawEllipse(QPointF(8, 8), 2, 2);
     });
   }
+  if (name == QLatin1String("folder")) return folderIcon();
   if (name == QLatin1String("search")) {
     return make([](QPainter& p) {
       p.setPen(QPen(QColor("#6B7280"), 1.6));

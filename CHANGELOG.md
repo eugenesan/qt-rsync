@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — native view port
+
+- Ported the native hybrid delegate (folder chevrons, indentation, stripes,
+  action colours and the decision checkbox/action-icon group) into C++.
+- Overview now uses the native widget metrics and statistics-bar format.
+- qpy icon drawings are used for action and folder icons.
+
 ## Unreleased — final parity items
 
 - Unchanged-items checkbox now runs a source inventory and merges the unchanged

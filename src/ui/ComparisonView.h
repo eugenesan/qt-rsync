@@ -8,6 +8,7 @@
 #include "model/DataStore.h"
 #include "ui/ActionFilterBar.h"
 #include "ui/DecisionDelegate.h"
+#include "ui/NativeDelegate.h"
 
 class QTableView;
 
@@ -72,7 +73,7 @@ class ComparisonView : public QWidget {
   core::Decisions decisions_;
   QVector<QTableView*> views_;
   QVector<model::TableModel*> models_;
-  DecisionDelegate* delegate_ = nullptr;
+  QVector<NativeDelegate*> delegates_;
   DecisionKeyFilter* keyFilter_ = nullptr;
   QVector<QHash<QString, core::Decision>> decisionHistory_;
 };

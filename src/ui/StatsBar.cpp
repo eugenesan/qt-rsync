@@ -7,7 +7,7 @@
 namespace qt_rsync::ui {
 
 StatsBar::StatsBar(QWidget* parent) : QWidget(parent) {
-  setMinimumHeight(24);
+  setFixedHeight(24);
 }
 
 void StatsBar::setEntries(const QVector<QPair<QString, QString>>& entries) {
@@ -26,8 +26,8 @@ void StatsBar::paintEvent(QPaintEvent*) {
   for (int i = 0; i < entries_.size(); ++i) {
     const auto& entry = entries_.at(i);
     painter.save();
-    if (i < actionIcons.size()) {
-      actionIcons.at(i).paint(&painter, QRect(x, (height() - 16) / 2, 16, 16));
+    if (i > 0 && i - 1 < actionIcons.size()) {
+      actionIcons.at(i - 1).paint(&painter, QRect(x, (height() - 16) / 2, 16, 16));
       x += 20;
     }
     painter.setPen(QColor(entry.second));

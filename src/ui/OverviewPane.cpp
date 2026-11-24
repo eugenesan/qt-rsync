@@ -57,12 +57,20 @@ OverviewPane::OverviewPane(QWidget* parent)
   auto* layout = new QVBoxLayout(this);
   layout->setContentsMargins(0, 0, 0, 0);
   tree_->setModel(model_);
+  tree_->setUniformRowHeights(true);
+  tree_->setAlternatingRowColors(true);
+  tree_->setRootIsDecorated(true);
   tree_->setSortingEnabled(true);
   tree_->sortByColumn(3, Qt::DescendingOrder);
   tree_->setItemDelegateForColumn(1, new ShareDelegate(tree_));
   tree_->header()->setStretchLastSection(false);
   tree_->header()->setSectionsClickable(true);
   tree_->header()->setSortIndicatorShown(true);
+  tree_->header()->setDefaultAlignment(Qt::AlignHCenter);
+  tree_->header()->setFixedHeight(qMax(16, tree_->fontMetrics().height() + 2));
+  tree_->header()->resizeSection(1, 56);
+  tree_->header()->resizeSection(2, 64);
+  tree_->header()->resizeSection(3, 84);
   layout->addWidget(tree_);
   layout->addWidget(stats_);
 }
@@ -96,26 +104,38 @@ void OverviewPane::rebuild(const model::DataStore& store) {
     }
   }
 
-  int included = 0;
-  int excluded = 0;
-  int deletions = 0;
-  for (std::size_t id = 0; id < store.paths.size() && id < store.is_dir.size(); ++id) {
-    if (store.is_dir[id]) continue;
-    const int decision = id < store.decisions.size() ? store.decisions[id] : model::Inherit;
-    if (decision == model::Exclude) {
-      ++excluded;
-    } else {
-      ++included;
+  int count = 0, creates = 0, updates = 0, metadata = 0, deletes = 0, kept = 0;
+  long long size = 0, deletedSize = 0;
+  for (std::size_t id = 0; id < store.paths.size(); ++id) {
+    if (id < store.is_dir.size() && store.is_dir[id]) continue;
+    int action = id < store.actions.size() ? store.actions[id] : model::NoChange;
+    if (id < store.decisions.size() && store.decisions[id] == model::Exclude) continue;
+    ++count;
+    if (id < store.sizes.size()) size += store.sizes[id];
+    if (id < store.decisions.size() && store.decisions[id] == model::DeleteRequest) {
+      action = model::Delete;
     }
-    if ((id < store.actions.size() && store.actions[id] == model::Delete) ||
-        decision == model::DeleteRequest) {
-      ++deletions;
-    }
+    if (action == model::Create) ++creates;
+    else if (action == model::Update) ++updates;
+    else if (action == model::Metadata) ++metadata;
+    else if (action == model::Delete) {
+      ++deletes;
+      if (id < store.dest_sizes.size()) deletedSize += store.dest_sizes[id];
+    } else if (action == model::DestOnly) ++kept;
   }
+  const auto formatSize = [](long long bytes) {
+    if (bytes < 1024) return QString::number(bytes) + QStringLiteral(" B");
+    return QString::number(bytes / 1024.0, 'f', 1) + QStringLiteral(" KiB");
+  };
   stats_->setEntries({
-      {QStringLiteral("Selected: %1").arg(included), QStringLiteral("#15803D")},
-      {QStringLiteral("Excluded: %1").arg(excluded), QStringLiteral("#6B7280")},
-      {QStringLiteral("Deletions: %1").arg(deletions), QStringLiteral("#EF4444")},
+      {QStringLiteral("%1 item(s), %2").arg(count).arg(formatSize(size)),
+       QStringLiteral("#9CA3AF")},
+      {QString::number(creates), QStringLiteral("#208020")},
+      {QString::number(updates), QStringLiteral("#eab308")},
+      {QString::number(metadata), QStringLiteral("#7c3aed")},
+      {QStringLiteral("%1 (%2)").arg(deletes).arg(formatSize(deletedSize)),
+       QStringLiteral("#ef4444")},
+      {QString::number(kept), QStringLiteral("#a05020")},
   });
 }
 

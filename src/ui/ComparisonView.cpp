@@ -101,14 +101,19 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
     foldFilter->watch(views_[i], i);
   }
 
-  auto* treeDelegate = new TreeDelegate(this);
-  views_[0]->setItemDelegateForColumn(0, treeDelegate);
-  views_[2]->setItemDelegateForColumn(5, treeDelegate);
-  delegate_ = new DecisionDelegate(this);
-  views_[1]->setItemDelegateForColumn(4, delegate_);
+  for (int pane = 0; pane < 3; ++pane) {
+    auto* delegate = new NativeDelegate(&store_, pane, this);
+    delegate->setDecisionCallback(
+        [this](const QString& path, int decision) { applyDecision(path, decision); });
+    delegate->setCollapseCallback([this](int id, bool collapsed) {
+      store_.set_collapsed(id, collapsed);
+      store_.rebuild_visible();
+      for (model::TableModel* model : models_) model->reset();
+    });
+    views_[pane]->setItemDelegate(delegate);
+    delegates_.append(delegate);
+  }
   keyFilter_ = new DecisionKeyFilter(this);
-  connect(delegate_, &DecisionDelegate::decisionToggled,
-          this, &ComparisonView::applyDecision);
   connect(keyFilter_, &DecisionKeyFilter::decisionToggled,
           this, &ComparisonView::applyDecision);
   connect(keyFilter_, &DecisionKeyFilter::batchStarted,
