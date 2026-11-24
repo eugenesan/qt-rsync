@@ -594,6 +594,24 @@ struct DataStore {
     row_of_id.assign(paths.size(), -1);
     std::vector<int> order = tree_order();
     std::vector<char> matched(paths.size(), 0);
+    // Keep the ancestor directories of every row that passes the action
+    // filters, even when the directory's own action is filtered out. This is
+    // what makes a single visible file stay reachable in the tree.
+    std::vector<char> keep_ancestor(paths.size(), 0);
+    for (int i = 0; i < static_cast<int>(paths.size()); ++i) {
+      if (!matches(i)) continue;
+      if (!show_unchanged && i < static_cast<int>(is_dir.size()) &&
+          is_dir[i] && i < static_cast<int>(actions.size()) &&
+          actions[i] == NoChange) {
+        continue;
+      }
+      int parent = i < static_cast<int>(parents.size()) ? parents[i] : -1;
+      while (parent >= 0) {
+        if (keep_ancestor[parent]) break;
+        keep_ancestor[parent] = 1;
+        parent = parent < static_cast<int>(parents.size()) ? parents[parent] : -1;
+      }
+    }
     if (include_contents) {
       for (int i = 0; i < static_cast<int>(paths.size()); ++i) {
         if (is_dir[i] && matches(i)) matched[i] = 1;
@@ -642,12 +660,20 @@ struct DataStore {
       }
       if (!show_excluded && decisions[i] == Exclude) continue;
       bool path_ok = matches(i);
+      if (!show_unchanged && i < static_cast<int>(is_dir.size()) && is_dir[i] &&
+          i < static_cast<int>(actions.size()) && actions[i] == NoChange) {
+        path_ok = false;
+      }
       if (!path_ok && include_contents) {
         int parent = parents[i];
         while (parent >= 0) {
           if (matched[parent]) { path_ok = true; break; }
           parent = parents[parent];
         }
+      }
+      if (!path_ok && i < static_cast<int>(keep_ancestor.size()) &&
+          keep_ancestor[i]) {
+        path_ok = true;
       }
       if (!path_ok) continue;
       if (folded_out(i)) continue;

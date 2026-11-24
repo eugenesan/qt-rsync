@@ -147,7 +147,8 @@ documented manual smoke check.
 
 ## Handoff summary
 
-- 59 QtTest cases green (`./test.sh`).
+- 66 QtTest cases green (`./test.sh`) plus an install/package test. The
+  qpy-to-QtTest conversion tracker is in `docs/test-port-plan.md`.
 - Side-by-side X11 parity against qpy-rsync verified on local fixtures (6 and
   106 changes) and on the real example SSH profile.
 - KDE dark-theme pass: platform Breeze style/palette (no forced Fusion), plain
@@ -157,7 +158,6 @@ documented manual smoke check.
 - Unchanged items are inventory-only by default and follow the Unchanged
   toggle; layout modes, stretching columns, statistics labels, profile editor,
   tools/logging settings, desktop file and window icon are in place.
-- Known limitations: the profile filter editor has the qpy buttons and preview
-  but not its line-number gutter/syntax colouring; unknown-placeholder warnings
-  in the external-tool editor are not ported; remote diff staging is still
-  reported as unsupported.
+- Known limitations: unknown-placeholder warnings in the external-tool editor
+  are not ported; remote diff staging is still reported as unsupported; the
+  remaining qpy tests are tracked in `docs/test-port-plan.md`.

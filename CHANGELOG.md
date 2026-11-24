@@ -15,8 +15,9 @@ KDE dark-theme and final UI parity pass.
 - Full synchronization confirmation dialog: fingerprint, endpoints, backup
   state, counts grid, destructive warning, command preview and decision rules.
 - qpy-style profile editor with Transfer, Transfer options, Conflict policy,
-  Comparison, Preservation, Backup and Filters tabs plus rule preview,
-  import/export/help and backup browse/open buttons.
+  Comparison, Preservation, Backup and Filters tabs plus a numbered filter
+  editor with rsync syntax highlighting, line preview, import/export/help and
+  backup browse/open buttons.
 - Settings Tools tab with the external-tool table (name, command, options,
   enabled), add/edit/remove dialogs and a diff-tool command field.
 - Settings Logging tab with an editable log file and browse button.
@@ -24,6 +25,9 @@ KDE dark-theme and final UI parity pass.
 - State badges on Compare, Preserve, Verify, Profile and Filters.
 - Desktop integration: `qt-rsync.desktop`, scalable `qt-rsync.svg`, Qt
   resource embedding, window icon and CMake install rules.
+- Debian packaging (`debian/`) derived from qpy-rsync with a 0.1.0 changelog,
+  architecture-any binary package, desktop/icon install and build-only CMake
+  configuration.
 - Search field with next/previous match, status and keyboard shortcuts.
 - Open-button context menus and local diff launching through the configured
   tool (meld by default).
@@ -54,7 +58,9 @@ KDE dark-theme and final UI parity pass.
 ### Fixed
 
 - Unchanged files no longer appear after Compare. They are inventory-only and
-  appear only while the Unchanged toggle is on.
+  appear only while the Unchanged toggle is on; inventory now reads the source
+  and destination listings separately, preserves source sizes/times and merges
+  each unchanged path once.
 - Unchecked decision boxes are now empty outlines instead of filled blue
   boxes indistinguishable from checked ones.
 - Filter checkboxes no longer keep Breeze's focus underline after a pointer

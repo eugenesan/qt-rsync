@@ -1,0 +1,9 @@
+qt-rsync (0.1.0-0) resolute; urgency=medium
+
+  * 0.1.0: first pure Qt 6/C++ release. Complete port of qpy-rsync's
+    comparison, decision, plan, verification, synchronization, profile,
+    settings and filter workflows, with KDE/Breeze dark-theme parity,
+    unchanged-item inventory, three compare layouts, a full synchronization
+    confirmation dialog and the qpy-style profile/filter editors.
+
+ -- Eugene San (eugenesan) <eugenesan@gmail.com>  Tue, 24 Nov 2026 12:00:00 -0700

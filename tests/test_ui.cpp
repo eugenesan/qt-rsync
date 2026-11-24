@@ -1,9 +1,16 @@
 #include <QtTest>
 
+#include <QAction>
 #include <QFile>
+#include <QFrame>
+#include <QIcon>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QAbstractButton>
+#include <QPainter>
+#include <QPixmap>
+#include <QSplitter>
+#include <QStyleOptionViewItem>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
@@ -21,8 +28,13 @@
 
 #include "ui/MainWindow.h"
 #include "app/StartupOptions.h"
+#include "model/DataStore.h"
 #include "ui/ComparisonView.h"
+#include "ui/FilterEditorWidget.h"
+#include "ui/NativeDelegate.h"
+#include "ui/OverviewPane.h"
 #include "ui/SettingsDialog.h"
+#include "core/Parser.h"
 #include "core/Storage.h"
 #include "core/Paths.h"
 
@@ -47,6 +59,14 @@ class UiTest : public QObject {
   void excludedFileIsNotTransferredByRealSync();
   void excludedCheckboxShowsExcludedRows();
   void unchangedOnlyShownWhenToggled();
+  void layoutModesRearrangeWidgets();
+  void packagingResourcesArePresent();
+  void decisionCheckboxStatesAreDistinct();
+  void inventoryParserKeepsSizesAndTimes();
+  void filterEditorValidatesAndListsRules();
+  void actionFiltersHideAndKeepAncestors();
+  void filterCheckboxesOnlyTakeKeyboardFocus();
+  void actionFilterBarSeparatesEveryPair();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -720,6 +740,159 @@ void UiTest::unchangedOnlyShownWhenToggled() {
   QVERIFY(tables.at(0)->model()->rowCount() > changedRows);
   bar.toggleUnchanged();
   QCOMPARE(tables.at(0)->model()->rowCount(), changedRows);
+}
+
+void UiTest::layoutModesRearrangeWidgets() {
+  ui::MainWindow window;
+  window.show();
+  QTest::qWait(20);
+  auto* overview = window.findChild<ui::OverviewPane*>();
+  auto* comparison = window.findChild<ui::ComparisonView*>();
+  QVERIFY(overview != nullptr);
+  QVERIFY(comparison != nullptr);
+  auto* mainSplitter = qobject_cast<QSplitter*>(comparison->parentWidget());
+  QVERIFY(mainSplitter != nullptr);
+  const auto action = [&window](const QString& text) -> QAction* {
+    for (QAction* candidate : window.findChildren<QAction*>()) {
+      if (candidate->text() == text) return candidate;
+    }
+    return nullptr;
+  };
+  QAction* focus = action(QStringLiteral("Compare only"));
+  QAction* wide = action(QStringLiteral("Compare with overview"));
+  QAction* normal = action(QStringLiteral("Normal"));
+  QVERIFY(focus && wide && normal);
+
+  focus->trigger();
+  QTest::qWait(10);
+  QVERIFY(overview->isHidden());
+  QCOMPARE(mainSplitter->orientation(), Qt::Vertical);
+
+  wide->trigger();
+  QTest::qWait(10);
+  QVERIFY(!overview->isHidden());
+  QCOMPARE(overview->parentWidget(), static_cast<QWidget*>(mainSplitter));
+  QCOMPARE(mainSplitter->orientation(), Qt::Horizontal);
+
+  normal->trigger();
+  QTest::qWait(10);
+  QVERIFY(!overview->isHidden());
+  QCOMPARE(mainSplitter->orientation(), Qt::Vertical);
+}
+
+void UiTest::packagingResourcesArePresent() {
+  const QString root = QStringLiteral(QT_RSYNC_SOURCE_DIR);
+  QFile desktop(root + QStringLiteral("/resources/qt-rsync.desktop"));
+  QVERIFY(desktop.open(QIODevice::ReadOnly | QIODevice::Text));
+  const QString contents = QString::fromUtf8(desktop.readAll());
+  QVERIFY(contents.contains(QStringLiteral("Name=qt-rsync")));
+  QVERIFY(contents.contains(QStringLiteral("Exec=qt-rsync")));
+  QVERIFY(contents.contains(QStringLiteral("Icon=qt-rsync")));
+  QVERIFY(QFile::exists(root + QStringLiteral("/resources/qt-rsync.svg")));
+  QVERIFY(!QIcon(QStringLiteral(":/qt-rsync.svg")).isNull());
+}
+
+void UiTest::decisionCheckboxStatesAreDistinct() {
+  model::DataStore store;
+  store.generate(2);
+  store.decisions[0] = model::Inherit;
+  store.decisions[1] = model::Exclude;
+  model::TableModel model(&store, 1);
+  ui::NativeDelegate delegate(&store, 1);
+  QStyleOptionViewItem option;
+  option.rect = QRect(0, 0, 92, 22);
+  option.state = QStyle::State_Enabled;
+  const auto sample = [&](int row) {
+    QPixmap pixmap(92, 22);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    delegate.paint(&painter, option, model.index(row, 4));
+    painter.end();
+    return pixmap.toImage().pixelColor(28, 5);
+  };
+  const QColor checked = sample(0);
+  const QColor unchecked = sample(1);
+  QVERIFY(checked != unchecked);
+  QVERIFY(checked.blue() > checked.red());
+}
+
+void UiTest::inventoryParserKeepsSizesAndTimes() {
+  const QString listing =
+      QStringLiteral(
+          "-rw-r--r--  1,234 2026/11/24 10:00:00 a.txt\n"
+          "drwxr-xr-x  4,096 2026/11/24 10:01:00 docs\n");
+  const QVector<core::Change> changes = core::parseInventory(listing);
+  QCOMPARE(changes.size(), 2);
+  QCOMPARE(changes.at(0).path, QStringLiteral("a.txt"));
+  QCOMPARE(changes.at(0).kind, core::Kind::File);
+  QCOMPARE(changes.at(0).size.value_or(-1), 1234LL);
+  QCOMPARE(changes.at(0).modifiedTime,
+           QStringLiteral("2026/11/24-10:00:00"));
+  QCOMPARE(changes.at(1).kind, core::Kind::Directory);
+  QCOMPARE(changes.at(1).size.value_or(-1), 4096LL);
+}
+
+void UiTest::filterEditorValidatesAndListsRules() {
+  ui::FilterEditorWidget editor;
+  editor.setText(QStringLiteral(
+      "# comment\n"
+      "*.tmp\n"
+      "+ keep.txt\n"
+      "P cache/***\n"));
+  QCOMPARE(editor.rules().size(), 3);
+  QVERIFY(!editor.firstError().has_value());
+  editor.setText(QStringLiteral("plain-name\n"));
+  QCOMPARE(editor.rules().size(), 1);
+  QCOMPARE(editor.rules().first().rule, QStringLiteral("- plain-name"));
+  QVERIFY(!editor.firstError().has_value());
+}
+
+void UiTest::actionFiltersHideAndKeepAncestors() {
+  ui::ComparisonView view;
+  ui::ActionFilterBar bar;
+  view.setFilterBar(&bar);
+  QVector<core::Change> changes;
+  core::Change created;
+  created.path = QStringLiteral("docs/new.txt");
+  created.action = core::Action::Create;
+  core::Change updated;
+  updated.path = QStringLiteral("old.txt");
+  updated.action = core::Action::UpdateContent;
+  changes << created << updated;
+  view.setChanges(changes);
+  const auto tables = view.findChildren<QTableView*>();
+  QCOMPARE(tables.size(), 3);
+  // filter-box-3 is Create; switch the other four action filters off.
+  for (int box = 4; box <= 7; ++box) {
+    auto* check = bar.findChild<QCheckBox*>(
+        QStringLiteral("filter-box-%1").arg(box));
+    if (check != nullptr) check->setChecked(false);
+  }
+  QSet<QString> names;
+  for (int row = 0; row < tables.at(0)->model()->rowCount(); ++row) {
+    names.insert(tables.at(0)->model()->index(row, 0).data().toString());
+  }
+  QVERIFY(names.contains(QStringLiteral("docs")));
+  QVERIFY(names.contains(QStringLiteral("new.txt")));
+  QVERIFY(!names.contains(QStringLiteral("old.txt")));
+}
+
+void UiTest::filterCheckboxesOnlyTakeKeyboardFocus() {
+  ui::ActionFilterBar bar;
+  const auto boxes = bar.findChildren<QCheckBox*>();
+  QVERIFY(!boxes.isEmpty());
+  for (QCheckBox* box : boxes) {
+    QCOMPARE(box->focusPolicy(), Qt::TabFocus);
+  }
+}
+
+void UiTest::actionFilterBarSeparatesEveryPair() {
+  ui::ActionFilterBar bar;
+  int separators = 0;
+  for (QFrame* frame : bar.findChildren<QFrame*>()) {
+    if (frame->frameShape() == QFrame::VLine) ++separators;
+  }
+  QCOMPARE(separators, 8);
 }
 
 QTEST_MAIN(UiTest)

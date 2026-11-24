@@ -1,0 +1,3 @@
+usr/bin/qt-rsync usr/bin/
+usr/share/applications/qt-rsync.desktop usr/share/applications/
+usr/share/icons/hicolor/scalable/apps/qt-rsync.svg usr/share/icons/hicolor/scalable/apps/

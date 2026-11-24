@@ -1,0 +1,36 @@
+Source: qt-rsync
+Section: utils
+Priority: optional
+Maintainer: Eugene San (eugenesan) <eugenesan@gmail.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ qt6-base-dev,
+ cmake,
+ ninja-build,
+Rules-Requires-Root: no
+Standards-Version: 4.6.2
+Homepage: https://github.com/eugenesan/qt-rsync
+
+Package: qt-rsync
+Architecture: any
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ rsync,
+Recommends:
+ openssh-client,
+ kde-style-breeze,
+Suggests:
+ ksshaskpass,
+ kdiff3 | meld | diffuse,
+Description: preview-driven Qt frontend for rsync
+ qt-rsync compares a Source and a Destination with an rsync dry run and
+ shows the differences in three synchronized comparison panes plus an
+ overview. Files are written only after the selected decisions have been
+ reviewed in the synchronization confirmation dialog.
+ .
+ The application is a pure Qt 6 / C++ port of qpy-rsync. Decisions,
+ execution plans, filters and the comparison data live in one C++ core;
+ there is no Python runtime. The journal records every command before it
+ runs, transfers can be cancelled or paused, and profiles can be stored for
+ recurring jobs.
