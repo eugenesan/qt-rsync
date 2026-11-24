@@ -34,6 +34,7 @@ class UiTest : public QObject {
   void restoresCachedProfileOnStartup();
   void lockedProfileCanQuitWithoutChanges();
   void arrowKeysFoldAndExpandFolders();
+  void sshProfileKeepsItsEndpointKind();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -298,6 +299,28 @@ void UiTest::arrowKeysFoldAndExpandFolders() {
   QApplication::sendEvent(table, &right);
   QCOMPARE(table->model()->rowCount(), before);
   qputenv("PATH", oldPath);
+}
+
+void UiTest::sshProfileKeepsItsEndpointKind() {
+  QTemporaryDir dir;
+  qputenv("XDG_CONFIG_HOME", dir.path().toUtf8());
+  qputenv("XDG_STATE_HOME", dir.path().toUtf8());
+  core::SyncProfile profile;
+  profile.name = QStringLiteral("example");
+  profile.source.kind = core::EndpointKind::Ssh;
+  profile.source.host = QStringLiteral("example.test");
+  profile.source.path = QStringLiteral("/home/user/Develop/src");
+  profile.destination.path = QStringLiteral("/home/alice/Develop/src-example/");
+  const QString path = core::paths::profilesDirectory() + QStringLiteral("/example.json");
+  core::storage::saveProfile(path, profile);
+  core::storage::setCurrentProfilePath(path);
+
+  ui::MainWindow window;
+  const auto edits = window.findChildren<QLineEdit*>();
+  QCOMPARE(edits.at(0)->text(),
+           QStringLiteral("example.test:/home/user/Develop/src"));
+  QCOMPARE(edits.at(1)->text(),
+           QStringLiteral("/home/alice/Develop/src-example/"));
 }
 
 QTEST_MAIN(UiTest)

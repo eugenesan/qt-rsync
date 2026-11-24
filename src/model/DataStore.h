@@ -1303,7 +1303,9 @@ inline void loadChanges(DataStore& store, const QVector<core::Change>& changes) 
   decisions.reserve(changes.size());
   times.reserve(changes.size());
   for (const core::Change& change : changes) {
-    paths.push_back(change.path.toStdString());
+    QString path = change.path;
+    while (path.endsWith('/') && path.size() > 1) path.chop(1);
+    paths.push_back(path.toStdString());
     switch (change.action) {
       case core::Action::Create: actions.push_back(Create); break;
       case core::Action::UpdateContent: actions.push_back(Update); break;

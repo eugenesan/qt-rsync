@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — first real-tree run fixes
+
+- Profile-loaded SSH endpoints keep their `ssh` kind when Compare runs; the
+  field now shows the full `user@host:/path` operand. Typed-in SSH operands are
+  still parsed into SSH endpoints.
+- Normalized trailing slashes from rsync directory paths so folder rows keep
+  their names.
+
 ## Unreleased — remote-run preparation
 
 - Parse `user@host:/path` endpoints typed into the Source/Destination fields,

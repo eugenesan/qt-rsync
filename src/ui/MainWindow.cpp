@@ -224,8 +224,20 @@ void MainWindow::setStatus(const QString& text) {
 void MainWindow::startCompare() {
   d_->source->setText(withTrailingSlash(d_->source->text()));
   d_->destination->setText(withTrailingSlash(d_->destination->text()));
-  d_->profile.source = core::parseEndpoint(d_->source->text());
-  d_->profile.destination = core::parseEndpoint(d_->destination->text());
+  const auto endpointFromField = [](QLineEdit* field,
+                                    const core::Endpoint& current) {
+    const QString text = field->text();
+    // A profile-loaded SSH endpoint must survive as SSH even though the field
+    // only shows its operand; only reparse when the user actually edits it.
+    if (!text.isEmpty() &&
+        (text == current.rsyncOperand() || text == current.path)) {
+      return current;
+    }
+    return core::parseEndpoint(text);
+  };
+  d_->profile.source = endpointFromField(d_->source, d_->profile.source);
+  d_->profile.destination =
+      endpointFromField(d_->destination, d_->profile.destination);
   if (d_->profile.source.path.isEmpty() || d_->profile.destination.path.isEmpty()) {
     setStatus(QStringLiteral("Enter Source and Destination first."));
     return;
@@ -456,8 +468,8 @@ void MainWindow::setProfilePath(const QString& path) {
 
 void MainWindow::loadProfileFile(const QString& path) {
   d_->profile = core::storage::loadProfile(path);
-  d_->source->setText(d_->profile.source.path);
-  d_->destination->setText(d_->profile.destination.path);
+  d_->source->setText(d_->profile.source.rsyncOperand());
+  d_->destination->setText(d_->profile.destination.rsyncOperand());
   setProfilePath(path);
   setStatus(QStringLiteral("Profile loaded: %1").arg(QFileInfo(path).fileName()));
 }
@@ -499,8 +511,8 @@ void MainWindow::restoreProfile() {
       core::storage::saveProfile(path, d_->profile);
       d_->profileLock = std::move(tempLock);
       d_->tempProfile = true;
-      d_->source->setText(d_->profile.source.path);
-      d_->destination->setText(d_->profile.destination.path);
+  d_->source->setText(d_->profile.source.rsyncOperand());
+  d_->destination->setText(d_->profile.destination.rsyncOperand());
       d_->profilePath = path;
       d_->profileButton->setText(QFileInfo(path).completeBaseName() +
                                  QStringLiteral(" (temporary)"));
