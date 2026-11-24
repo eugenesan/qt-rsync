@@ -61,19 +61,19 @@ void UiTest::compareRendersFakeRsyncOutput() {
   qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
 
   ui::MainWindow window;
-  const auto edits = window.findChildren<QLineEdit*>();
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
   QVERIFY(edits.size() >= 2);
   edits.at(0)->setText(QStringLiteral("/src"));
   edits.at(1)->setText(QStringLiteral("/dst"));
 
-  QPushButton* compare = nullptr;
-  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+  QAbstractButton* compare = nullptr;
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) compare = button;
   }
   QVERIFY(compare != nullptr);
   compare->click();
-
-  QLabel* status = window.findChild<QLabel*>();
+  QLabel* status = window.findChild<QLabel*>("status-label");
   QVERIFY(status != nullptr);
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
   QVERIFY(status->text().contains(QStringLiteral("3 item(s)")));
@@ -102,13 +102,14 @@ void UiTest::spaceExcludesEverySelectedItem() {
   qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
 
   ui::MainWindow window;
-  const auto edits = window.findChildren<QLineEdit*>();
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
   edits.at(0)->setText(QStringLiteral("/src"));
   edits.at(1)->setText(QStringLiteral("/dst"));
-  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) button->click();
   }
-  auto* status = window.findChild<QLabel*>();
+  auto* status = window.findChild<QLabel*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
 
   auto* comparison = window.findChild<ui::ComparisonView*>();
@@ -134,9 +135,9 @@ void UiTest::spaceExcludesEverySelectedItem() {
   QVERIFY(excluded >= 3);
   const int hiddenRows = decisionTable->model()->rowCount();
 
-  QPushButton* undo = nullptr;
-  for (QPushButton* button : window.findChildren<QPushButton*>()) {
-    if (button->text().startsWith(QLatin1String("Undo"))) undo = button;
+  QAbstractButton* undo = nullptr;
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
+    if (button->text() == QLatin1String("Undo")) undo = button;
   }
   QVERIFY(undo != nullptr);
   QVERIFY(undo->isEnabled());
@@ -183,20 +184,21 @@ void UiTest::verifyAndSyncKeepComparisonStale() {
   qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
 
   ui::MainWindow window;
-  const auto edits = window.findChildren<QLineEdit*>();
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
   edits.at(0)->setText(QStringLiteral("/src"));
   edits.at(1)->setText(QStringLiteral("/dst"));
-  QPushButton* compare = nullptr;
-  QPushButton* verify = nullptr;
-  QPushButton* sync = nullptr;
-  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+  QAbstractButton* compare = nullptr;
+  QAbstractButton* verify = nullptr;
+  QAbstractButton* sync = nullptr;
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) compare = button;
-    if (button->text().startsWith(QLatin1String("Verify"))) verify = button;
-    if (button->text().startsWith(QLatin1String("Synchronize"))) sync = button;
+    if (button->text() == QLatin1String("Verify")) verify = button;
+    if (button->text() == QLatin1String("Synchronize")) sync = button;
   }
   QVERIFY(compare && verify && sync);
   compare->click();
-  auto* status = window.findChild<QLabel*>();
+  auto* status = window.findChild<QLabel*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
   QVERIFY(verify->isEnabled());
   QVERIFY(sync->isEnabled());
@@ -235,7 +237,8 @@ void UiTest::restoresCachedProfileOnStartup() {
 
   ui::MainWindow window;
   QVERIFY(!window.startupAborted());
-  const auto edits = window.findChildren<QLineEdit*>();
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
   QCOMPARE(edits.at(0)->text(), QStringLiteral("/src"));
   QCOMPARE(edits.at(1)->text(), QStringLiteral("/dst"));
   QCOMPARE(core::storage::currentProfilePath(), path);
@@ -288,13 +291,14 @@ void UiTest::arrowKeysFoldAndExpandFolders() {
   qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
 
   ui::MainWindow window;
-  const auto edits = window.findChildren<QLineEdit*>();
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
   edits.at(0)->setText(QStringLiteral("/src"));
   edits.at(1)->setText(QStringLiteral("/dst"));
-  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) button->click();
   }
-  auto* status = window.findChild<QLabel*>();
+  auto* status = window.findChild<QLabel*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
   const auto tables = window.findChildren<QTableView*>();
   auto* table = tables.at(0);
@@ -336,7 +340,8 @@ void UiTest::sshProfileKeepsItsEndpointKind() {
   ui::MainWindow window;
   app::StartupOptions emptyOptions;
   window.applyStartupOptions(emptyOptions);
-  const auto edits = window.findChildren<QLineEdit*>();
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
   QCOMPARE(edits.at(0)->text(),
            QStringLiteral("example.test:/home/user/Develop/src"));
   QCOMPARE(edits.at(1)->text(),
@@ -357,12 +362,13 @@ void UiTest::cancelStopsARunningCompare() {
   qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
 
   ui::MainWindow window;
-  const auto edits = window.findChildren<QLineEdit*>();
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
   edits.at(0)->setText(QStringLiteral("/src"));
   edits.at(1)->setText(QStringLiteral("/dst"));
-  QPushButton* compare = nullptr;
-  QPushButton* cancel = nullptr;
-  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+  QAbstractButton* compare = nullptr;
+  QAbstractButton* cancel = nullptr;
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) compare = button;
     if (button->text() == QLatin1String("Cancel")) cancel = button;
   }
@@ -370,7 +376,7 @@ void UiTest::cancelStopsARunningCompare() {
   compare->click();
   QVERIFY(cancel->isEnabled());
   cancel->click();
-  auto* status = window.findChild<QLabel*>();
+  auto* status = window.findChild<QLabel*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QStringLiteral("cancel")), 5000);
   QVERIFY(compare->isEnabled());
   QVERIFY(!cancel->isEnabled());
@@ -391,13 +397,14 @@ void UiTest::deleteDecisionAppearsInSyncRules() {
   qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
 
   ui::MainWindow window;
-  const auto edits = window.findChildren<QLineEdit*>();
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
   edits.at(0)->setText(QStringLiteral("/src"));
   edits.at(1)->setText(QStringLiteral("/dst"));
-  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) button->click();
   }
-  auto* status = window.findChild<QLabel*>();
+  auto* status = window.findChild<QLabel*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
 
   auto* comparison = window.findChild<ui::ComparisonView*>();
@@ -405,9 +412,9 @@ void UiTest::deleteDecisionAppearsInSyncRules() {
   QCOMPARE(comparison->decisions().explicitDecision(QStringLiteral(".parentlock")),
            core::Decision::Delete);
 
-  QPushButton* sync = nullptr;
-  for (QPushButton* button : window.findChildren<QPushButton*>()) {
-    if (button->text().startsWith(QLatin1String("Synchronize"))) sync = button;
+  QAbstractButton* sync = nullptr;
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
+    if (button->text() == QLatin1String("Synchronize")) sync = button;
   }
   QVERIFY(sync != nullptr);
   QTimer::singleShot(100, []() {
@@ -452,13 +459,14 @@ void UiTest::mirrorModeTreatsDestinationOnlyAsDeletion() {
   app::StartupOptions options;
   options.mode = QStringLiteral("mirror");
   window.applyStartupOptions(options);
-  const auto edits = window.findChildren<QLineEdit*>();
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
   edits.at(0)->setText(QStringLiteral("/src"));
   edits.at(1)->setText(QStringLiteral("/dst"));
-  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) button->click();
   }
-  auto* status = window.findChild<QLabel*>();
+  auto* status = window.findChild<QLabel*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
   auto* comparison = window.findChild<ui::ComparisonView*>();
   auto it = comparison->store().path_to_id.find("old.txt");
@@ -491,18 +499,19 @@ void UiTest::realMirrorSyncDeletesDestinationOnlyFiles() {
   app::StartupOptions options;
   options.mode = QStringLiteral("mirror");
   window.applyStartupOptions(options);
-  const auto edits = window.findChildren<QLineEdit*>();
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
   edits.at(0)->setText(source);
   edits.at(1)->setText(destination);
-  QPushButton* compare = nullptr;
-  QPushButton* sync = nullptr;
-  for (QPushButton* button : window.findChildren<QPushButton*>()) {
+  QAbstractButton* compare = nullptr;
+  QAbstractButton* sync = nullptr;
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) compare = button;
-    if (button->text().startsWith(QLatin1String("Synchronize"))) sync = button;
+    if (button->text() == QLatin1String("Synchronize")) sync = button;
   }
   QVERIFY(compare && sync);
   compare->click();
-  auto* status = window.findChild<QLabel*>();
+  auto* status = window.findChild<QLabel*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 15000);
 
   QTimer::singleShot(200, []() {

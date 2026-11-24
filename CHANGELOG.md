@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — UI parity: toolbar and input row
+
+- Replaced the plain button row with a `QToolBar`: mode combo (Update/Mirror/
+  New Only), Compare/Verify/Synchronize/Undo/Cancel tool buttons with icons and
+  labels, search field and a settings action.
+- Input row now has browse buttons for Source and Destination and a compact
+  Profile/Settings row.
+
 ## Unreleased — correctness pass
 
 - Verify now compares the second dry run's parsed output against the execution

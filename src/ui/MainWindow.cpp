@@ -19,6 +19,9 @@
 #include <QRegularExpression>
 #include <QSplitter>
 #include <QTemporaryFile>
+#include <QComboBox>
+#include <QToolBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include "core/Command.h"
@@ -31,6 +34,7 @@
 #include "ui/SettingsDialog.h"
 #include "ui/SyncDialog.h"
 #include "ui/LockedProfileDialog.h"
+#include "ui/Icons.h"
 
 namespace qt_rsync::ui {
 namespace {
@@ -54,11 +58,13 @@ class MainWindow::Private {
  public:
   QLineEdit* source = nullptr;
   QLineEdit* destination = nullptr;
-  QPushButton* compare = nullptr;
-  QPushButton* verify = nullptr;
-  QPushButton* sync = nullptr;
-  QPushButton* undo = nullptr;
-  QPushButton* cancel = nullptr;
+  QToolButton* compare = nullptr;
+  QToolButton* verify = nullptr;
+  QToolButton* sync = nullptr;
+  QToolButton* undo = nullptr;
+  QToolButton* cancel = nullptr;
+  QComboBox* mode = nullptr;
+  QLineEdit* search = nullptr;
   bool cancelled = false;
   QLabel* status = nullptr;
   QPlainTextEdit* journal = nullptr;
@@ -81,13 +87,67 @@ class MainWindow::Private {
   bool tempProfile = false;
   QString profilePath;
   std::unique_ptr<core::storage::FileLock> profileLock;
-  QPushButton* profileButton = nullptr;
+  QToolButton* profileButton = nullptr;
   QString logPath;
   QFile* logFile = nullptr;
 };
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent), d_(new Private) {
+  auto* toolbar = new QToolBar(QStringLiteral("Comparison"), this);
+  addToolBar(toolbar);
+  toolbar->setIconSize(QSize(20, 20));
+  toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+  toolbar->addWidget(new QLabel(QStringLiteral("Mode:"), toolbar));
+  d_->mode = new QComboBox(toolbar);
+  d_->mode->addItem(QStringLiteral("Update"), static_cast<int>(core::SyncMode::Update));
+  d_->mode->addItem(QStringLiteral("Mirror"), static_cast<int>(core::SyncMode::Mirror));
+  d_->mode->addItem(QStringLiteral("New Only"), static_cast<int>(core::SyncMode::NewOnly));
+  connect(d_->mode, qOverload<int>(&QComboBox::currentIndexChanged), this,
+          [this](int index) {
+            d_->profile.transfer.mode =
+                static_cast<core::SyncMode>(d_->mode->itemData(index).toInt());
+          });
+  toolbar->addWidget(d_->mode);
+  toolbar->addSeparator();
+
+  const auto addTool = [&](QToolButton*& button, const QString& text,
+                           const QString& iconName) {
+    button = new QToolButton(toolbar);
+    button->setText(text);
+    button->setIcon(icons::toolbarIcon(iconName));
+    button->setToolTip(text);
+    toolbar->addWidget(button);
+  };
+  addTool(d_->compare, QStringLiteral("Compare"), QStringLiteral("compare"));
+  addTool(d_->verify, QStringLiteral("Verify"), QStringLiteral("verify"));
+  addTool(d_->sync, QStringLiteral("Synchronize"), QStringLiteral("sync"));
+  addTool(d_->undo, QStringLiteral("Undo"), QStringLiteral("undo"));
+  addTool(d_->cancel, QStringLiteral("Cancel"), QStringLiteral("cancel"));
+  d_->undo->setEnabled(false);
+  d_->cancel->setEnabled(false);
+  d_->verify->setEnabled(false);
+  d_->sync->setEnabled(false);
+  core::storage::Settings settings;
+  d_->verify->setVisible(
+      settings.value(QStringLiteral("verification/enabled"), true).toBool());
+
+  toolbar->addSeparator();
+  toolbar->addWidget(new QLabel(QStringLiteral("Search"), toolbar));
+  d_->search = new QLineEdit(toolbar);
+  d_->search->setObjectName(QStringLiteral("search-edit"));
+  d_->search->setPlaceholderText(QStringLiteral("Search the list..."));
+  d_->search->setClearButtonEnabled(true);
+  d_->search->setFixedWidth(220);
+  toolbar->addWidget(d_->search);
+  toolbar->addSeparator();
+  auto* settingsAction = toolbar->addAction(
+      icons::toolbarIcon(QStringLiteral("settings")), QStringLiteral("Settings"));
+  connect(settingsAction, &QAction::triggered, this, [this]() {
+    SettingsDialog dialog(this);
+    dialog.exec();
+  });
+
   setWindowTitle(QStringLiteral("qt-rsync"));
   resize(1280, 800);
 
@@ -97,47 +157,58 @@ MainWindow::MainWindow(QWidget* parent)
 
   auto* paths = new QWidget(central);
   auto* form = new QFormLayout(paths);
+  form->setContentsMargins(4, 2, 4, 2);
+  form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
   d_->source = new QLineEdit(paths);
+  d_->source->setObjectName(QStringLiteral("source-edit"));
   d_->destination = new QLineEdit(paths);
-  d_->source->setPlaceholderText(QStringLiteral("/home/user/source"));
-  d_->destination->setPlaceholderText(QStringLiteral("/home/user/destination"));
-  form->addRow(QStringLiteral("Source:"), d_->source);
-  form->addRow(QStringLiteral("Destination:"), d_->destination);
+  d_->destination->setObjectName(QStringLiteral("destination-edit"));
+  d_->source->setPlaceholderText(QStringLiteral("Local path or user@host:/path"));
+  d_->destination->setPlaceholderText(QStringLiteral("Local path or user@host:/path"));
 
-  auto* actions = new QWidget(paths);
-  auto* actionLayout = new QHBoxLayout(actions);
-  actionLayout->setContentsMargins(0, 0, 0, 0);
-  d_->compare = new QPushButton(QStringLiteral("Compare"), actions);
-  d_->verify = new QPushButton(QStringLiteral("Verify (F8)"), actions);
-  d_->sync = new QPushButton(QStringLiteral("Synchronize (F9)"), actions);
-  d_->undo = new QPushButton(QStringLiteral("Undo (Ctrl+Z)"), actions);
-  d_->undo->setEnabled(false);
-  d_->cancel = new QPushButton(QStringLiteral("Cancel"), actions);
-  d_->cancel->setEnabled(false);
-  d_->verify->setEnabled(false);
-  d_->sync->setEnabled(false);
-  core::storage::Settings settings;
-  d_->verify->setVisible(
-      settings.value(QStringLiteral("verification/enabled"), true).toBool());
-  actionLayout->addWidget(d_->compare);
-  actionLayout->addWidget(d_->verify);
-  actionLayout->addWidget(d_->sync);
-  actionLayout->addWidget(d_->undo);
-  actionLayout->addWidget(d_->cancel);
-  form->addRow(QString(), actions);
+  const auto withBrowse = [&](QLineEdit* field) {
+    auto* row = new QWidget(paths);
+    auto* rowLayout = new QHBoxLayout(row);
+    rowLayout->setContentsMargins(0, 0, 0, 0);
+    rowLayout->setSpacing(3);
+    rowLayout->addWidget(field, 1);
+    auto* browse = new QToolButton(row);
+    browse->setIcon(icons::folderIcon());
+    browse->setText(QStringLiteral("..."));
+    browse->setToolTip(QStringLiteral("Browse for a local directory"));
+    connect(browse, &QToolButton::clicked, this, [this, field]() {
+      const QString directory = QFileDialog::getExistingDirectory(
+          this, QStringLiteral("Select directory"), field->text());
+      if (!directory.isEmpty()) field->setText(directory);
+    });
+    rowLayout->addWidget(browse);
+    return row;
+  };
+  form->addRow(QStringLiteral("Source:"), withBrowse(d_->source));
+  form->addRow(QStringLiteral("Destination:"), withBrowse(d_->destination));
 
-  d_->profileButton = new QPushButton(QStringLiteral("Profile"), paths);
+  d_->profileButton = new QToolButton(paths);
+  d_->profileButton->setText(QStringLiteral("Profile"));
+  d_->profileButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+  d_->profileButton->setIcon(icons::toolbarIcon(QStringLiteral("settings")));
   d_->profileButton->setMenu(new QMenu(d_->profileButton));
   connect(d_->profileButton->menu(), &QMenu::aboutToShow,
           this, &MainWindow::updateProfileMenu);
-  form->addRow(QStringLiteral("Profile:"), d_->profileButton);
-
-  auto* settingsButton = new QPushButton(QStringLiteral("Settings..."), paths);
-  connect(settingsButton, &QPushButton::clicked, this, [this]() {
+  auto* settingsButton = new QToolButton(paths);
+  settingsButton->setText(QStringLiteral("Settings..."));
+  settingsButton->setIcon(icons::toolbarIcon(QStringLiteral("settings")));
+  connect(settingsButton, &QToolButton::clicked, this, [this]() {
     SettingsDialog dialog(this);
     dialog.exec();
   });
-  form->addRow(QString(), settingsButton);
+  auto* profileRow = new QWidget(paths);
+  auto* profileLayout = new QHBoxLayout(profileRow);
+  profileLayout->setContentsMargins(0, 0, 0, 0);
+  profileLayout->addWidget(d_->profileButton);
+  profileLayout->addWidget(settingsButton);
+  profileLayout->addStretch(1);
+  form->addRow(QStringLiteral("Profile:"), profileRow);
   layout->addWidget(paths);
 
   auto* splitter = new QSplitter(Qt::Vertical, central);
@@ -155,6 +226,7 @@ MainWindow::MainWindow(QWidget* parent)
   d_->progress->hide();
   layout->addWidget(d_->progress);
   d_->status = new QLabel(QStringLiteral("Ready"), central);
+  d_->status->setObjectName(QStringLiteral("status-label"));
   layout->addWidget(d_->status);
   d_->journal = new QPlainTextEdit(central);
   d_->journal->setReadOnly(true);
@@ -164,12 +236,12 @@ MainWindow::MainWindow(QWidget* parent)
   d_->compareProcess = new QProcess(this);
   d_->operationProcess = new QProcess(this);
   d_->inventoryProcess = new QProcess(this);
-  connect(d_->compare, &QPushButton::clicked, this, &MainWindow::startCompare);
-  connect(d_->verify, &QPushButton::clicked, this, &MainWindow::verifyPlan);
-  connect(d_->sync, &QPushButton::clicked, this, &MainWindow::synchronize);
-  connect(d_->undo, &QPushButton::clicked, this,
+  connect(d_->compare, &QAbstractButton::clicked, this, &MainWindow::startCompare);
+  connect(d_->verify, &QAbstractButton::clicked, this, &MainWindow::verifyPlan);
+  connect(d_->sync, &QAbstractButton::clicked, this, &MainWindow::synchronize);
+  connect(d_->undo, &QAbstractButton::clicked, this,
           [this]() { d_->comparison->undoDecision(); });
-  connect(d_->cancel, &QPushButton::clicked, this, &MainWindow::cancelOperation);
+  connect(d_->cancel, &QAbstractButton::clicked, this, &MainWindow::cancelOperation);
   auto* undoShortcut = new QShortcut(QKeySequence::Undo, this);
   connect(undoShortcut, &QShortcut::activated, this,
           [this]() { d_->comparison->undoDecision(); });

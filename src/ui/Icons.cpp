@@ -103,4 +103,61 @@ QIcon rootFolderIcon() {
   });
 }
 
+QIcon toolbarIcon(const QString& name) {
+  if (name == QLatin1String("compare")) {
+    return make([](QPainter& p) {
+      p.setPen(QPen(QColor("#0891B2"), 1.6, Qt::SolidLine, Qt::RoundCap));
+      p.drawLine(3, 8, 12, 8);
+      p.drawLine(9, 4, 13, 8);
+      p.drawLine(9, 12, 13, 8);
+    });
+  }
+  if (name == QLatin1String("sync")) {
+    return make([](QPainter& p) {
+      p.setBrush(QColor("#15803D"));
+      p.setPen(Qt::NoPen);
+      QPolygonF triangle;
+      triangle << QPointF(4, 3) << QPointF(13, 8) << QPointF(4, 13);
+      p.drawPolygon(triangle);
+    });
+  }
+  if (name == QLatin1String("verify")) {
+    return make([](QPainter& p) {
+      p.setPen(QPen(QColor("#15803D"), 2, Qt::SolidLine, Qt::RoundCap));
+      p.drawLine(3, 8, 7, 12);
+      p.drawLine(7, 12, 13, 4);
+    });
+  }
+  if (name == QLatin1String("cancel")) {
+    return make([](QPainter& p) {
+      p.setPen(QPen(QColor("#B91C1C"), 2, Qt::SolidLine, Qt::RoundCap));
+      p.drawLine(4, 4, 12, 12);
+      p.drawLine(12, 4, 4, 12);
+    });
+  }
+  if (name == QLatin1String("undo")) {
+    return make([](QPainter& p) {
+      p.setPen(QPen(QColor("#6B7280"), 1.6, Qt::SolidLine, Qt::RoundCap));
+      p.drawLine(3, 8, 13, 8);
+      p.drawLine(7, 4, 3, 8);
+      p.drawLine(7, 12, 3, 8);
+    });
+  }
+  if (name == QLatin1String("settings")) {
+    return make([](QPainter& p) {
+      p.setPen(QPen(QColor("#6B7280"), 1.4));
+      p.drawEllipse(QPointF(8, 8), 5, 5);
+      p.drawEllipse(QPointF(8, 8), 2, 2);
+    });
+  }
+  if (name == QLatin1String("search")) {
+    return make([](QPainter& p) {
+      p.setPen(QPen(QColor("#6B7280"), 1.6));
+      p.drawEllipse(QPointF(6, 6), 4, 4);
+      p.drawLine(9, 9, 13, 13);
+    });
+  }
+  return QIcon();
+}
+
 }  // namespace qt_rsync::ui::icons
