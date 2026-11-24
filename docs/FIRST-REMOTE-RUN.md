@@ -4,27 +4,26 @@ This is a runbook for comparing qt-rsync with qpy-rsync on the machine that owns
 the real SSH profile. The target machine has the same software, so no ABI issues
 are expected; the details below are what matter.
 
-## 0. Get the code onto the target machine
+## 0. Use the shared binaries (no clone or rebuild)
 
-Push first, then clone (or copy the working tree) there:
+Both project directories are mounted on the target machine, so run the exact
+binaries built on the dev machine — no rebuild, no copy, no sync worry.
 
-```sh
-# on this machine
-git push origin master
+- qt-rsync binary: `<project-root>/qt-rsync/build/bin/qt-rsync`
+- qpy-rsync launcher: `<project-root>/qpy-rsync/qpy-rsync.sh`
+  (it uses `/usr/bin/python3` and sets `PYTHONPATH` from its own directory; its
+  native view extension is already built at
+  `<project-root>/qpy-rsync/src/qpy_rsync/native_hybrid.so`)
 
-# on the target machine
-cd ~/Develop/src
-git clone git@github.com:alice/qt-rsync.git qt-rsync
-cd qt-rsync
-./build.sh                       # Qt6 + CMake + Ninja, no Python needed
-./test.sh                        # optional: 53 QtTest cases, offscreen, no X
-```
-
-`build.sh` defaults to `/tmp/opencode/qt-rsync-build`. For a stable path use:
+If your home path on the target machine matches this one, the absolute paths
+are:
 
 ```sh
-QT_RSYNC_BUILD_DIR=$HOME/Develop/src/qt-rsync/build ./build.sh
+/home/user/Develop/src/qt-rsync/build/bin/qt-rsync
+/home/user/Develop/src/qpy-rsync/qpy-rsync.sh
 ```
+
+Push later for history only; it is not needed to run the shared binaries.
 
 ## 1. Environment (identical for both apps)
 
