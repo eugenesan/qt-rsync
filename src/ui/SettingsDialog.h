@@ -21,7 +21,6 @@ class SettingsDialog : public QDialog {
   QCheckBox* sound_ = nullptr;
   QCheckBox* timing_ = nullptr;
   QCheckBox* debug_ = nullptr;
-  QCheckBox* preserve_ = nullptr;
   QCheckBox* verification_ = nullptr;
   QCheckBox* verificationRsync_ = nullptr;
   QCheckBox* sessionLogging_ = nullptr;

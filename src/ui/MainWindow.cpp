@@ -614,8 +614,12 @@ MainWindow::MainWindow(QWidget* parent)
   d_->commandPreview->setMinimumWidth(0);
   d_->commandPreview->setSizePolicy(QSizePolicy::Ignored,
                                     QSizePolicy::Preferred);
+  // Grow with the command, but cap at three lines like qpy; longer commands
+  // scroll vertically instead of pushing the journal out of the window.
   d_->commandPreview->setMinimumHeight(
       d_->commandPreview->fontMetrics().lineSpacing() + 12);
+  d_->commandPreview->setMaximumHeight(
+      d_->commandPreview->fontMetrics().lineSpacing() * 3 + 12);
   d_->commandPreview->setPlaceholderText(QStringLiteral("Command preview appears here."));
   logColumnLayout->addWidget(d_->commandPreview);
 
@@ -796,7 +800,7 @@ void MainWindow::setStatus(const QString& text) {
   d_->status->setToolTip(text);
   d_->status->setText(text);
   d_->status->setCursorPosition(0);
-  const QString time = QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz"));
+  const QString time = QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zz"));
   const QString line = time + QStringLiteral(" ") + text;
   d_->journalLines.append(line);
   appendJournalLine(line);
@@ -875,7 +879,7 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   d_->progress->hide();
   d_->progressLabel->setText(QStringLiteral("Comparison completed"));
   startDestinationInventory();
-  setStatus(QStringLiteral("Comparison complete: %1 item(s)")
+  setStatus(QStringLiteral("Comparison complete: %1 changed item(s)")
                           .arg(parsed.changes.size()));
 }
 

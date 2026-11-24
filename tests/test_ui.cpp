@@ -78,7 +78,7 @@ void UiTest::compareRendersFakeRsyncOutput() {
   QLineEdit* status = window.findChild<QLineEdit*>("status-label");
   QVERIFY(status != nullptr);
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 5000);
-  QVERIFY(status->text().contains(QStringLiteral("3 item(s)")));
+  QVERIFY(status->text().contains(QStringLiteral("3 changed item(s)")));
   QVERIFY(edits.at(0)->text().endsWith('/'));
   QVERIFY(edits.at(1)->text().endsWith('/'));
   const auto tables = window.findChildren<QTableView*>();
@@ -156,7 +156,7 @@ void UiTest::settingsDialogPersistsDiagnostics() {
   qputenv("XDG_STATE_HOME", dir.path().toUtf8());
   ui::SettingsDialog dialog;
   QCOMPARE(dialog.findChildren<QTabWidget*>().size(), 1);
-  QCOMPARE(dialog.findChildren<QCheckBox*>().size(), 11);
+  QCOMPARE(dialog.findChildren<QCheckBox*>().size(), 10);
   for (QCheckBox* box : dialog.findChildren<QCheckBox*>()) {
     if (box->text().contains(QStringLiteral("timing"))) box->setChecked(true);
   }

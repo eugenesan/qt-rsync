@@ -58,7 +58,9 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
     }
     view->horizontalHeader()->setHighlightSections(false);
     view->setSelectionBehavior(QAbstractItemView::SelectRows);
-    view->setAlternatingRowColors(true);
+    // qpy paints its own alternating group background in the delegate. The
+    // view's per-row alternation put a second, brighter stripe on top of it.
+    view->setAlternatingRowColors(false);
     auto* model = new model::TableModel(&store_, pane, this);
     view->setModel(model);
     views_.append(view);
@@ -132,13 +134,17 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
     header->setSectionResizeMode(nameColumn, QHeaderView::Stretch);
     header->setSectionResizeMode(itemsColumn, QHeaderView::Fixed);
     header->setSectionResizeMode(sizeColumn, QHeaderView::Fixed);
-    header->resizeSection(itemsColumn, 70);
-    header->resizeSection(sizeColumn, 140);
+    header->resizeSection(itemsColumn, 60);
+    header->resizeSection(sizeColumn, 85);
   }
   QHeaderView* decisionHeader = views_[1]->horizontalHeader();
   decisionHeader->setStretchLastSection(false);
   decisionHeader->setSectionResizeMode(4, QHeaderView::Fixed);
   decisionHeader->resizeSection(4, 88);
+  // qpy shows an ascending arrow on the source name column; it tells the
+  // user which order the shared tree is in.
+  views_[0]->horizontalHeader()->setSortIndicatorShown(true);
+  views_[0]->horizontalHeader()->setSortIndicator(0, Qt::AscendingOrder);
 
   for (QTableView* view : views_) {
     view->installEventFilter(keyFilter_);
