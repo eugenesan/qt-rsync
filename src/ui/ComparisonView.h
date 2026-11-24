@@ -33,6 +33,9 @@ class ComparisonView : public QWidget {
   void applyDestinationMetadata(
       const QHash<QString, QPair<qlonglong, QString>>& metadata);
   void markDelete(const QString& path);
+  void resetDecision(const QString& path);
+  void resetSubtreeDecisions(const QString& path);
+  void resetAllDecisions();
   bool undoDecision();
 
  signals:
@@ -43,6 +46,8 @@ class ComparisonView : public QWidget {
   void filterRequested(const QString& pattern, const QString& path);
   void deleteFilterRequested(const QString& pattern, const QString& path);
   void deleteRequested(const QString& path);
+  void diffRequested(const QString& path);
+  void openDirectoryRequested(int pane, const QString& path);
 
  private slots:
   void applyDecision(const QString& path, int decision);

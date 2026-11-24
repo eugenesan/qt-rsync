@@ -199,6 +199,34 @@ void ComparisonView::applyDestinationMetadata(
   emit decisionChanged();
 }
 
+void ComparisonView::resetDecision(const QString& path) {
+  decisions_.reset(path);
+  decisionHistory_.append(decisions_.explicitItemsAsHash());
+  syncDecisionsToStore();
+  store_.rebuild_visible();
+  for (model::TableModel* model : models_) model->reset();
+  emit decisionChanged();
+  emit undoAvailable(true);
+}
+
+void ComparisonView::resetSubtreeDecisions(const QString& path) {
+  decisions_.resetSubtree(path);
+  syncDecisionsToStore();
+  store_.rebuild_visible();
+  for (model::TableModel* model : models_) model->reset();
+  emit decisionChanged();
+  emit undoAvailable(!decisionHistory_.isEmpty());
+}
+
+void ComparisonView::resetAllDecisions() {
+  decisions_.clear();
+  syncDecisionsToStore();
+  store_.rebuild_visible();
+  for (model::TableModel* model : models_) model->reset();
+  emit decisionChanged();
+  emit undoAvailable(!decisionHistory_.isEmpty());
+}
+
 void ComparisonView::markDelete(const QString& path) {
   applyDecision(path, static_cast<int>(core::Decision::Delete));
 }
@@ -335,21 +363,51 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
   const QString path = index.data(Qt::UserRole).toString();
   QMenu menu(view);
   if (!path.isEmpty()) {
-    menu.addAction(QStringLiteral("Copy Path"), [path]() {
-      QApplication::clipboard()->setText(path);
-    });
-    menu.addAction(QStringLiteral("Copy Filename"), [path]() {
-      QApplication::clipboard()->setText(path.section('/', -1));
-    });
+    auto* heading = menu.addAction(path);
+    heading->setEnabled(false);
     menu.addSeparator();
+  }
+  menu.addAction(QStringLiteral("Copy Path"), [path]() {
+    QApplication::clipboard()->setText(path);
+  });
+  menu.addAction(QStringLiteral("Copy Filename"), [path]() {
+    QApplication::clipboard()->setText(path.section('/', -1));
+  });
+  menu.addAction(QStringLiteral("Copy Relative Path"), [path]() {
+    QString relative = path;
+    while (relative.startsWith('/')) relative.remove(0, 1);
+    QApplication::clipboard()->setText(relative);
+  });
+  menu.addAction(QStringLiteral("Open Directory"), [this, pane, path]() {
+    emit openDirectoryRequested(pane, path);
+  });
+  menu.addSeparator();
+  menu.addAction(QStringLiteral("Open in Diff Tool\t1"), [this, path]() {
+    emit diffRequested(path);
+  });
+  menu.addSeparator();
 
-    const auto id = store_.path_to_id.find(path.toStdString());
-    const bool isDirectory = id != store_.path_to_id.end() &&
-                             id->second < static_cast<int>(store_.is_dir.size()) &&
-                             store_.is_dir[id->second] != 0;
-    auto* exclude = menu.addMenu(QStringLiteral("Exclude via Filter"));
+  if (pane == 1 && !path.isEmpty()) {
+    menu.addAction(QStringLiteral("Reset This Decision"),
+                   [this, path]() { resetDecision(path); });
+    menu.addAction(QStringLiteral("Reset Subtree Decisions"),
+                   [this, path]() { resetSubtreeDecisions(path); });
+    auto* resetAll = menu.addAction(QStringLiteral("Reset All Decisions"),
+                                    [this]() { resetAllDecisions(); });
+    resetAll->setEnabled(decisions_.hasExplicit());
+    menu.addSeparator();
+  }
+
+  if (!path.isEmpty()) {
+    const auto it = store_.path_to_id.find(path.toStdString());
+    const bool isDirectory =
+        it != store_.path_to_id.end() &&
+        it->second < static_cast<int>(store_.is_dir.size()) &&
+        store_.is_dir[it->second] != 0;
+
+    auto* excludeMenu = menu.addMenu(QStringLiteral("Exclude via Filter"));
     for (const core::FilterPhrase& phrase : core::phrasesFor(path, isDirectory)) {
-      exclude->addAction(phrase.label, [this, phrase, path]() {
+      excludeMenu->addAction(phrase.label, [this, phrase, path]() {
         emit filterRequested(phrase.pattern, path);
       });
     }
@@ -363,39 +421,34 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
     deleteMenu->addSeparator();
     deleteMenu->addAction(QStringLiteral("Decision only (apply at sync)"),
                           [this, path]() { emit deleteRequested(path); });
-    
-    const bool directory = id != store_.path_to_id.end() &&
-                           id->second < static_cast<int>(store_.is_dir.size()) &&
-                           store_.is_dir[id->second] != 0;
-    if (directory) {
-      auto* fold = menu.addMenu(QStringLiteral("Collapse / Expand"));
-      fold->addAction(store_.is_collapsed(id->second) ? QStringLiteral("Expand Folder")
-                                                     : QStringLiteral("Collapse Folder"),
-                      [this, pane, id]() {
-                        foldCurrent(pane, !store_.is_collapsed(id->second));
-                      });
-      fold->addSeparator();
-      fold->addAction(QStringLiteral("Collapse All Folders"),
-                      [this]() { foldAll(true); });
-      fold->addAction(QStringLiteral("Expand All Folders"),
-                      [this]() { foldAll(false); });
-    }
     menu.addSeparator();
 
-    const int decision = decisions_.explicitDecision(path) ==
-                                 core::Decision::Inherit
-                             ? 0
-                             : static_cast<int>(decisions_.explicitDecision(path));
-    if (decision == 2) {
+    const int decision = static_cast<int>(decisions_.explicitDecision(path));
+    if (decision == static_cast<int>(core::Decision::Exclude)) {
       menu.addAction(QStringLiteral("Include Item"),
                      [this, path]() { applyDecision(path, 0); });
-    } else if (decision == 3) {
+    } else if (decision == static_cast<int>(core::Decision::Delete)) {
       menu.addAction(QStringLiteral("Remove Delete Decision"),
                      [this, path]() { applyDecision(path, 0); });
     } else {
-      menu.addAction(QStringLiteral("Exclude Item"),
+      menu.addAction(QStringLiteral("Exclude Item\tSpace"),
                      [this, path]() { applyDecision(path, 2); });
     }
+
+    auto* fold = menu.addMenu(QStringLiteral("Collapse / Expand"));
+    if (isDirectory) {
+      fold->addAction(store_.is_collapsed(it->second)
+                          ? QStringLiteral("Expand Folder")
+                          : QStringLiteral("Collapse Folder"),
+                      [this, pane, it]() {
+                        foldCurrent(pane, !store_.is_collapsed(it->second));
+                      });
+      fold->addSeparator();
+    }
+    fold->addAction(QStringLiteral("Collapse All Folders"),
+                    [this]() { foldAll(true); });
+    fold->addAction(QStringLiteral("Expand All Folders"),
+                    [this]() { foldAll(false); });
   }
   menu.exec(view->viewport()->mapToGlobal(position));
 }

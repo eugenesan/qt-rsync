@@ -3,7 +3,9 @@
 #include <QDialogButtonBox>
 #include <QDebug>
 #include <QFile>
+#include <QDesktopServices>
 #include <QFileDialog>
+#include <QUrl>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QMenu>
@@ -360,6 +362,15 @@ MainWindow::MainWindow(QWidget* parent)
           });
   connect(d_->comparison, &ComparisonView::deleteRequested, this,
           [this](const QString& path) { d_->comparison->markDelete(path); });
+  connect(d_->comparison, &ComparisonView::diffRequested, this, [this](const QString& path) {
+    appendJournalLine(QStringLiteral("Diff tool requested for ") + path);
+  });
+  connect(d_->comparison, &ComparisonView::openDirectoryRequested, this,
+          [this](int pane, const QString&) {
+    const QString root = pane == 2 ? d_->profile.destination.path
+                                   : d_->profile.source.path;
+    QDesktopServices::openUrl(QUrl::fromLocalFile(root));
+  });
 }
 
 MainWindow::~MainWindow() {
