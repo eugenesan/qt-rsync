@@ -3,6 +3,8 @@
 #include <QWidget>
 
 class QCheckBox;
+class QLabel;
+class QToolButton;
 
 namespace qt_rsync::ui {
 
@@ -19,10 +21,13 @@ class ActionFilterBar : public QWidget {
   [[nodiscard]] bool showConflicts() const;
 
   void setConflictsAvailable(bool available);
+  void setExcludedCount(int count);
+  void setUndoEnabled(bool enabled);
 
  signals:
   void filterChanged();
   void resetExclusionsRequested();
+  void undoRequested();
 
  private:
   QCheckBox* excluded_ = nullptr;
@@ -30,6 +35,8 @@ class ActionFilterBar : public QWidget {
   QVector<QCheckBox*> actions_;
   QCheckBox* unchanged_ = nullptr;
   QCheckBox* conflicts_ = nullptr;
+  QLabel* excludedCount_ = nullptr;
+  QToolButton* undo_ = nullptr;
 };
 
 }  // namespace qt_rsync::ui

@@ -154,8 +154,6 @@ MainWindow::MainWindow(QWidget* parent)
           QStringLiteral("Synchronize (F9)"));
   addTool(d_->cancel, QStringLiteral("Cancel"), QStringLiteral("cancel"),
           QStringLiteral("Cancel the running operation (F10)"));
-  addTool(d_->undo, QStringLiteral("Undo"), QStringLiteral("undo"),
-          QStringLiteral("Undo Decision (Ctrl+Z)"));
   toolbar->addSeparator();
   addTool(d_->filtersButton, QStringLiteral("Filters"), QStringLiteral("settings"),
           QStringLiteral("Edit the persistent filter rules (F7)"));
@@ -174,6 +172,44 @@ MainWindow::MainWindow(QWidget* parent)
     SettingsDialog dialog(this);
     dialog.exec();
   });
+  connect(d_->filtersButton, &QAbstractButton::clicked, this, [this]() {
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("Filters"));
+    dialog.resize(640, 420);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* editor = new QPlainTextEdit(&dialog);
+    editor->setPlainText(d_->profile.filterText);
+    layout->addWidget(editor);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    if (dialog.exec() == QDialog::Accepted) {
+      d_->profile.filterText = editor->toPlainText();
+      d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
+    }
+  });
+  auto* layoutButton = new QToolButton(toolbar);
+  layoutButton->setText(QStringLiteral("Layout"));
+  layoutButton->setIcon(icons::toolbarIcon(QStringLiteral("settings")));
+  auto* layoutMenu = new QMenu(layoutButton);
+  const QVector<QPair<QString, QString>> layoutModes{
+      {QStringLiteral("Normal"), QStringLiteral("normal")},
+      {QStringLiteral("Compare only"), QStringLiteral("focus")},
+      {QStringLiteral("Compare with overview"), QStringLiteral("wide")},
+  };
+  for (const auto& mode : layoutModes) {
+    auto* action = layoutMenu->addAction(mode.first);
+    action->setCheckable(true);
+    action->setChecked(mode.second == QStringLiteral("normal"));
+    connect(action, &QAction::triggered, layoutButton, [this, layoutMenu, action]() {
+      for (QAction* other : layoutMenu->actions()) other->setChecked(other == action);
+      d_->overview->setVisible(true);
+    });
+  }
+  layoutButton->setMenu(layoutMenu);
+  layoutButton->setPopupMode(QToolButton::InstantPopup);
+  toolbar->addWidget(layoutButton);
   toolbar->addSeparator();
   toolbar->addWidget(new QLabel(QStringLiteral("Search"), toolbar));
   d_->search = new QLineEdit(toolbar);
@@ -193,6 +229,14 @@ MainWindow::MainWindow(QWidget* parent)
   d_->source->setObjectName(QStringLiteral("source-edit"));
   d_->source->setPlaceholderText(QStringLiteral("Local: /path or ~/path    SSH: [user@]host:/absolute/path"));
   sourceLayout->addWidget(d_->source, 1);
+  auto* sourceOpen = new QToolButton(sourcePanel);
+  sourceOpen->setText(QStringLiteral("Open"));
+  sourceOpen->setIcon(icons::toolbarIcon(QStringLiteral("compare")));
+  sourceOpen->setToolTip(QStringLiteral("Open the Source directory"));
+  connect(sourceOpen, &QToolButton::clicked, this, [this]() {
+    QDesktopServices::openUrl(QUrl::fromLocalFile(d_->source->text()));
+  });
+  sourceLayout->addWidget(sourceOpen);
   auto* sourceBrowse = new QToolButton(sourcePanel);
   sourceBrowse->setText(QStringLiteral("..."));
   sourceBrowse->setIcon(icons::folderIcon());
@@ -217,6 +261,14 @@ MainWindow::MainWindow(QWidget* parent)
   d_->destination->setObjectName(QStringLiteral("destination-edit"));
   d_->destination->setPlaceholderText(d_->source->placeholderText());
   destinationLayout->addWidget(d_->destination, 1);
+  auto* destinationOpen = new QToolButton(destinationPanel);
+  destinationOpen->setText(QStringLiteral("Open"));
+  destinationOpen->setIcon(icons::toolbarIcon(QStringLiteral("compare")));
+  destinationOpen->setToolTip(QStringLiteral("Open the Destination directory"));
+  connect(destinationOpen, &QToolButton::clicked, this, [this]() {
+    QDesktopServices::openUrl(QUrl::fromLocalFile(d_->destination->text()));
+  });
+  destinationLayout->addWidget(destinationOpen);
   auto* destinationBrowse = new QToolButton(destinationPanel);
   destinationBrowse->setText(QStringLiteral("..."));
   destinationBrowse->setIcon(icons::folderIcon());
@@ -314,8 +366,6 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->compare, &QAbstractButton::clicked, this, &MainWindow::startCompare);
   connect(d_->verify, &QAbstractButton::clicked, this, &MainWindow::verifyPlan);
   connect(d_->sync, &QAbstractButton::clicked, this, &MainWindow::synchronize);
-  connect(d_->undo, &QAbstractButton::clicked, this,
-          [this]() { d_->comparison->undoDecision(); });
   connect(d_->cancel, &QAbstractButton::clicked, this, &MainWindow::cancelOperation);
   connect(d_->preserve, &QAbstractButton::clicked, this, [this]() {
     core::storage::Settings settings;
@@ -334,8 +384,10 @@ MainWindow::MainWindow(QWidget* parent)
   addShortcut(Qt::Key_F8, &MainWindow::verifyPlan);
   addShortcut(Qt::Key_F9, &MainWindow::synchronize);
   addShortcut(Qt::Key_F10, &MainWindow::cancelOperation);
-  connect(d_->comparison, &ComparisonView::undoAvailable, d_->undo,
-          &QAbstractButton::setEnabled);
+  connect(d_->filterBar, &ActionFilterBar::undoRequested, this,
+          [this]() { d_->comparison->undoDecision(); });
+  connect(d_->comparison, &ComparisonView::undoAvailable, d_->filterBar,
+          &ActionFilterBar::setUndoEnabled);
   connect(d_->compareProcess, &QProcess::finished, this, &MainWindow::onCompareFinished);
   connect(d_->compareProcess, &QProcess::errorOccurred, this, &MainWindow::onCompareError);
   connect(d_->operationProcess, &QProcess::finished, this, &MainWindow::onOperationFinished);
@@ -359,6 +411,8 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->comparison, &ComparisonView::decisionChanged, this, [this]() {
     d_->verified = false;
     refreshPlan();
+    d_->filterBar->setExcludedCount(
+        d_->comparison->decisions().excludedPaths().size());
     d_->overview->rebuild(d_->comparison->store());
   });
   connect(d_->comparison, &ComparisonView::filterRequested, this,
@@ -894,6 +948,8 @@ void MainWindow::updateProfileMenu() {
                            : QFileInfo(d_->profilePath).fileName();
   auto* heading = menu->addAction(name);
   heading->setEnabled(false);
+  connect(menu->addAction(QStringLiteral("Edit...")), &QAction::triggered,
+          d_->filtersButton, &QAbstractButton::click);
   menu->addSeparator();
   connect(menu->addAction(QStringLiteral("Save")), &QAction::triggered,
           this, &MainWindow::saveCurrentProfile);

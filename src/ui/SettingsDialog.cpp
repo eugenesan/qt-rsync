@@ -93,6 +93,21 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
       settings.value(QStringLiteral("verification/rsync"), true).toBool());
   advancedForm->addRow(QString(), verification_);
   advancedForm->addRow(QString(), verificationRsync_);
+  detectInherited_ = new QCheckBox(
+      QStringLiteral("Flag new destination-only items below included folders"), advanced);
+  rawRsync_ = new QCheckBox(QStringLiteral("Log raw rsync output"), advanced);
+  twoPass_ = new QCheckBox(
+      QStringLiteral("Use two rsync runs for destination metadata"), advanced);
+  inventoryPreload_ = new QCheckBox(
+      QStringLiteral("Preload the source listing for unchanged items"), advanced);
+  detectInherited_->setChecked(settings.value(QStringLiteral("decisions/detect-inherited"), false).toBool());
+  rawRsync_->setChecked(settings.value(QStringLiteral("logging/rsync_output"), false).toBool());
+  twoPass_->setChecked(settings.value(QStringLiteral("advanced/dest_metadata_two_pass"), false).toBool());
+  inventoryPreload_->setChecked(settings.value(QStringLiteral("advanced/inventory_preload"), false).toBool());
+  advancedForm->addRow(QString(), detectInherited_);
+  advancedForm->addRow(QString(), rawRsync_);
+  advancedForm->addRow(QString(), twoPass_);
+  advancedForm->addRow(QString(), inventoryPreload_);
   tabs->addTab(advanced, QStringLiteral("Advanced"));
 
   auto* buttons = new QDialogButtonBox(
@@ -120,6 +135,10 @@ void SettingsDialog::save() {
     commands << tools_->item(row)->text();
   }
   settings.setValue(QStringLiteral("tools/commands"), commands);
+  settings.setValue(QStringLiteral("decisions/detect-inherited"), detectInherited_->isChecked());
+  settings.setValue(QStringLiteral("logging/rsync_output"), rawRsync_->isChecked());
+  settings.setValue(QStringLiteral("advanced/dest_metadata_two_pass"), twoPass_->isChecked());
+  settings.setValue(QStringLiteral("advanced/inventory_preload"), inventoryPreload_->isChecked());
   settings.sync();
 }
 

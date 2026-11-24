@@ -25,6 +25,10 @@ class SettingsDialog : public QDialog {
   QCheckBox* verificationRsync_ = nullptr;
   QCheckBox* sessionLogging_ = nullptr;
   QListWidget* tools_ = nullptr;
+  QCheckBox* detectInherited_ = nullptr;
+  QCheckBox* rawRsync_ = nullptr;
+  QCheckBox* twoPass_ = nullptr;
+  QCheckBox* inventoryPreload_ = nullptr;
 };
 
 }  // namespace qt_rsync::ui

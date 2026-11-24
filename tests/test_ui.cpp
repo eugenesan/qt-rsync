@@ -154,7 +154,7 @@ void UiTest::settingsDialogPersistsDiagnostics() {
   qputenv("XDG_STATE_HOME", dir.path().toUtf8());
   ui::SettingsDialog dialog;
   QCOMPARE(dialog.findChildren<QTabWidget*>().size(), 1);
-  QCOMPARE(dialog.findChildren<QCheckBox*>().size(), 7);
+  QCOMPARE(dialog.findChildren<QCheckBox*>().size(), 11);
   for (QCheckBox* box : dialog.findChildren<QCheckBox*>()) {
     if (box->text().contains(QStringLiteral("timing"))) box->setChecked(true);
   }

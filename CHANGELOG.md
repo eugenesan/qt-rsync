@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — UI parity follow-ups
+
+- Decision-column checkbox clicks now use the pane-independent decision role.
+- Decision pane and lists scroll together with a single scrollbar on the
+  destination pane; sort indicators are shown and overview sorting is stable.
+- Moved Undo into the decision filter bar, added an excluded-item count, filter
+  editor, profile Edit entry, layout menu, open-location buttons, overview
+  summary icons and the missing Advanced settings options.
+
 ## Unreleased — X11 interaction parity
 
 - Fixed Space decisions when the key is delivered to the table viewport (the

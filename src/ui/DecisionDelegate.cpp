@@ -103,8 +103,9 @@ bool DecisionDelegate::editorEvent(QEvent* event, QAbstractItemModel* model,
   }
   const QString path = index.data(Qt::UserRole).toString();
   if (path.isEmpty()) return true;
-  const int current = model->data(index, Qt::CheckStateRole).toInt();
-  emit decisionToggled(path, nextDecision(current));
+  const int current = model->data(index, Qt::UserRole + 24).toInt();
+  const int next = nextDecision(current);
+  emit decisionToggled(path, next);
   return true;
 }
 

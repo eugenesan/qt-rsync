@@ -52,6 +52,9 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   for (int pane = 0; pane < 3; ++pane) {
     auto* view = new QTableView(this);
     view->verticalHeader()->hide();
+    if (pane != 2) {
+      view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    }
     view->horizontalHeader()->setHighlightSections(false);
     view->setSelectionBehavior(QAbstractItemView::SelectRows);
     view->setAlternatingRowColors(true);

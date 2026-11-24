@@ -1,6 +1,8 @@
 #include "ui/ActionFilterBar.h"
 
 #include <QCheckBox>
+#include <QLabel>
+#include <QToolButton>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QShortcut>
@@ -75,6 +77,16 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
   conflicts_ = check(QStringLiteral("Review changed decisions"),
                      icons::toolbarIcon(QStringLiteral("verify")), 0, false);
   conflicts_->hide();
+  excludedCount_ = new QLabel(QStringLiteral("0"), this);
+  excludedCount_->setToolTip(QStringLiteral("Excluded items"));
+  layout->addWidget(excludedCount_);
+  undo_ = new QToolButton(this);
+  undo_->setText(QStringLiteral("Undo"));
+  undo_->setIcon(icons::toolbarIcon(QStringLiteral("undo")));
+  undo_->setToolTip(QStringLiteral("Undo Decision (Ctrl+Z)"));
+  undo_->setEnabled(false);
+  layout->addWidget(undo_);
+  connect(undo_, &QToolButton::clicked, this, &ActionFilterBar::undoRequested);
 }
 
 bool ActionFilterBar::showExcluded() const { return excluded_->isChecked(); }
@@ -86,6 +98,14 @@ bool ActionFilterBar::actionVisible(int action) const {
          actions_.at(action)->isChecked();
 }
 bool ActionFilterBar::showConflicts() const { return conflicts_->isChecked(); }
+
+void ActionFilterBar::setExcludedCount(int count) {
+  excludedCount_->setText(QString::number(count));
+}
+
+void ActionFilterBar::setUndoEnabled(bool enabled) {
+  undo_->setEnabled(enabled);
+}
 
 void ActionFilterBar::setConflictsAvailable(bool available) {
   conflicts_->setVisible(available);
