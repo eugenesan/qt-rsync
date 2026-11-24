@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — final parity items
+
+- Unchanged-items checkbox now runs a source inventory and merges the unchanged
+  records into the comparison.
+- Toolbar icons use the KDE/Breeze theme when available, with drawn fallbacks.
+- Real-rsync test confirms Exclude decisions become merged-filter exclusions.
+
 ## Unreleased — UI parity completion
 
 - Added the General-page action colour table and the remaining toolbar buttons

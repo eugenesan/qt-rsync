@@ -1,9 +1,11 @@
 #include "ui/Icons.h"
 
 #include <QColor>
+#include <QIcon>
 #include <QPainter>
 
 #include <functional>
+#include <QHash>
 #include <QPixmap>
 
 namespace qt_rsync::ui::icons {
@@ -104,6 +106,17 @@ QIcon rootFolderIcon() {
 }
 
 QIcon toolbarIcon(const QString& name) {
+  static const QHash<QString, QString> themeNames{
+      {QStringLiteral("compare"), QStringLiteral("document-compare")},
+      {QStringLiteral("sync"), QStringLiteral("media-playback-start")},
+      {QStringLiteral("verify"), QStringLiteral("dialog-ok-apply")},
+      {QStringLiteral("cancel"), QStringLiteral("dialog-close")},
+      {QStringLiteral("undo"), QStringLiteral("edit-undo")},
+      {QStringLiteral("settings"), QStringLiteral("configure")},
+      {QStringLiteral("search"), QStringLiteral("system-search")},
+  };
+  const QIcon themed = QIcon::fromTheme(themeNames.value(name));
+  if (!themed.isNull()) return themed;
   if (name == QLatin1String("compare")) {
     return make([](QPainter& p) {
       p.setPen(QPen(QColor("#0891B2"), 1.6, Qt::SolidLine, Qt::RoundCap));

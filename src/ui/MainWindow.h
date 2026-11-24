@@ -35,6 +35,7 @@ class MainWindow : public QMainWindow {
   void onCompareError(QProcess::ProcessError error);
   void startDestinationInventory();
   void onInventoryFinished(int exitCode, QProcess::ExitStatus status);
+  void startInventory();
   void verifyPlan();
   void synchronize();
   void onOperationFinished(int exitCode, QProcess::ExitStatus status);

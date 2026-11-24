@@ -419,6 +419,10 @@ MainWindow::MainWindow(QWidget* parent)
   addShortcut(Qt::Key_F8, &MainWindow::verifyPlan);
   addShortcut(Qt::Key_F9, &MainWindow::synchronize);
   addShortcut(Qt::Key_F10, &MainWindow::cancelOperation);
+  connect(d_->filterBar, &ActionFilterBar::unchangedToggled, this,
+          [this](bool enabled) {
+            if (enabled) startInventory();
+          });
   connect(d_->filterBar, &ActionFilterBar::undoRequested, this,
           [this]() { d_->comparison->undoDecision(); });
   connect(d_->comparison, &ComparisonView::undoAvailable, d_->filterBar,
@@ -613,6 +617,13 @@ void MainWindow::startDestinationInventory() {
   d_->inventoryProcess->start(spec.program, spec.arguments);
 }
 
+void MainWindow::startInventory() {
+  const core::ProcessSpec spec =
+      core::buildInventorySpec(d_->profile, d_->profile.source);
+  setProcessEnvironment(spec, d_->inventoryProcess);
+  d_->inventoryProcess->start(spec.program, spec.arguments);
+}
+
 void MainWindow::onInventoryFinished(int, QProcess::ExitStatus) {
   if (d_->cancelled) return;
   const QString text = core::cleanQtNoise(
@@ -628,6 +639,16 @@ void MainWindow::onInventoryFinished(int, QProcess::ExitStatus) {
                      match.captured(2) + ' ' + match.captured(3)});
   }
   if (!metadata.isEmpty()) d_->comparison->applyDestinationMetadata(metadata);
+  const QString sourceText = core::cleanQtNoise(
+      QString::fromLocal8Bit(d_->inventoryProcess->readAllStandardOutput()));
+  const QVector<core::Change> unchanged = core::parseInventory(sourceText);
+  if (!unchanged.isEmpty()) {
+    QVector<core::Change> merged = d_->changes;
+    merged.append(unchanged);
+    d_->changes = merged;
+    d_->comparison->setChanges(merged);
+    d_->overview->rebuild(d_->comparison->store());
+  }
 }
 
 void MainWindow::refreshPlan() {

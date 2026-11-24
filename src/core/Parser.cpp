@@ -114,6 +114,26 @@ std::optional<Change> parseRecord(const QString& rawLine, bool deleteEnabled) {
   return change;
 }
 
+QVector<Change> parseInventory(const QString& text) {
+  QVector<Change> changes;
+  static const QRegularExpression line(
+      QStringLiteral("^([-dDL])\\S*\\s+\\d+\\s+\\d{4}/\\d{2}/\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}\\s+(.+)$"));
+  for (const QString& entry : text.split('\n')) {
+    const auto match = line.match(entry.trimmed());
+    if (!match.hasMatch()) continue;
+    QString path = match.captured(2).trimmed();
+    if (path.isEmpty() || path == QLatin1String(".") || path == QLatin1String("./")) continue;
+    while (path.endsWith('/')) path.chop(1);
+    Change change;
+    change.path = path;
+    change.action = Action::NoChange;
+    change.kind = match.captured(1) == QLatin1String("d") ? Kind::Directory : Kind::File;
+    change.itemizedCode = QStringLiteral("=");
+    changes.append(change);
+  }
+  return changes;
+}
+
 ParseResult parseOutput(const QString& text, bool deleteEnabled) {
   ParseResult result;
   const QStringList lines = text.split('\n');

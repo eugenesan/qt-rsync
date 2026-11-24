@@ -73,6 +73,8 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
   }
   unchanged_ = check(QStringLiteral("Show unchanged items"),
                      icons::toolbarIcon(QStringLiteral("search")), 8, false);
+  connect(unchanged_, &QCheckBox::toggled, this,
+          &ActionFilterBar::unchangedToggled);
   separator();
   conflicts_ = check(QStringLiteral("Review changed decisions"),
                      icons::toolbarIcon(QStringLiteral("verify")), 0, false);

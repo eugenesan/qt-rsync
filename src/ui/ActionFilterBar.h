@@ -28,6 +28,7 @@ class ActionFilterBar : public QWidget {
   void filterChanged();
   void resetExclusionsRequested();
   void undoRequested();
+  void unchangedToggled(bool enabled);
 
  private:
   QCheckBox* excluded_ = nullptr;
