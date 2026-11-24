@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — remote-run preparation
+
+- Parse `user@host:/path` endpoints typed into the Source/Destination fields,
+  so an SSH profile can be used without loading a profile file.
+- Added `docs/FIRST-REMOTE-RUN.md`: exact environment, binaries, cwd, launch
+  commands and capture steps for the first side-by-side run on the target
+  machine.
+
 ## Unreleased — phase 5: parity fixes from real-tree comparison
 
 - Fixed `--dir-pair` so the second operand is captured; local endpoints now

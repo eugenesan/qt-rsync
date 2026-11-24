@@ -76,5 +76,6 @@ struct SyncProfile {
 QString normalizePosixPath(const QString& value);
 QString destinationBackupDirectory(const SyncProfile& profile);
 QStringList backupProtectionArguments(const SyncProfile& profile);
+Endpoint parseEndpoint(const QString& text);
 
 }  // namespace qt_rsync::core

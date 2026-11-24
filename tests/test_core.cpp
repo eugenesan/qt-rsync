@@ -83,6 +83,7 @@ class CoreTest : public QObject {
   void settingsAreSplitByPrefix();
   void pidLocksDetectLiveOwnersAndTakeOverStaleOnes();
   void legacyPathsAreMigrated();
+  void sshEndpointTextIsParsed();
 
   // Existing smoke checks
   void endpointOperandKeepsSshSyntax();
@@ -699,6 +700,18 @@ void CoreTest::legacyPathsAreMigrated() {
   QVERIFY(QFile::exists(qt_rsync::core::paths::configSettingsPath()));
   QVERIFY(QFile::exists(qt_rsync::core::paths::logDirectory()));
   QVERIFY(storage::currentProfilePath().contains(QStringLiteral("/qt-rsync/profiles/")));
+}
+
+void CoreTest::sshEndpointTextIsParsed() {
+  const Endpoint remote = parseEndpoint(QStringLiteral("alice@example.test:/home/user/src"));
+  QCOMPARE(remote.kind, EndpointKind::Ssh);
+  QCOMPARE(remote.user, QStringLiteral("alice"));
+  QCOMPARE(remote.host, QStringLiteral("example"));
+  QCOMPARE(remote.path, QStringLiteral("/home/user/src"));
+  QCOMPARE(remote.rsyncOperand(), QStringLiteral("alice@example.test:/home/user/src"));
+  const Endpoint local = parseEndpoint(QStringLiteral("/tmp/source"));
+  QCOMPARE(local.kind, EndpointKind::Local);
+  QCOMPARE(local.path, QStringLiteral("/tmp/source"));
 }
 
 QTEST_MAIN(CoreTest)

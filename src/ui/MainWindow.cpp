@@ -224,8 +224,8 @@ void MainWindow::setStatus(const QString& text) {
 void MainWindow::startCompare() {
   d_->source->setText(withTrailingSlash(d_->source->text()));
   d_->destination->setText(withTrailingSlash(d_->destination->text()));
-  d_->profile.source.path = d_->source->text();
-  d_->profile.destination.path = d_->destination->text();
+  d_->profile.source = core::parseEndpoint(d_->source->text());
+  d_->profile.destination = core::parseEndpoint(d_->destination->text());
   if (d_->profile.source.path.isEmpty() || d_->profile.destination.path.isEmpty()) {
     setStatus(QStringLiteral("Enter Source and Destination first."));
     return;
@@ -252,10 +252,10 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   const core::ParseResult parsed = core::parseOutput(
       QString::fromUtf8(output), d_->profile.transfer.mirrorEnabled());
   d_->changes = parsed.changes;
-  const auto baseName = [](const QString& path) {
-    QString clean = path.trimmed();
+  const auto baseName = [](const QString& operand) {
+    QString clean = operand.trimmed();
     while (clean.endsWith('/')) clean.chop(1);
-    const QString name = QFileInfo(clean).fileName();
+    const QString name = clean.section('/', -1);
     return name.isEmpty() ? QStringLiteral("?") : name;
   };
   d_->comparison->setRootNames(baseName(d_->profile.source.path),

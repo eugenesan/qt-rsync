@@ -51,6 +51,24 @@ bool TransferOptions::mirrorEnabled() const {
   return mode == SyncMode::Mirror || legacyDelete;
 }
 
+Endpoint parseEndpoint(const QString& text) {
+  Endpoint endpoint;
+  const QString value = text.trimmed();
+  static const QRegularExpression remote(
+      QStringLiteral("^(?:([^@/:]+)@)?([^/:]+):(/.+)$"));
+  const auto match = remote.match(value);
+  if (match.hasMatch()) {
+    endpoint.kind = EndpointKind::Ssh;
+    endpoint.user = match.captured(1);
+    endpoint.host = match.captured(2);
+    endpoint.path = match.captured(3);
+  } else {
+    endpoint.kind = EndpointKind::Local;
+    endpoint.path = value;
+  }
+  return endpoint;
+}
+
 QString normalizePosixPath(const QString& value) {
   QString text = value.trimmed();
   if (text.isEmpty()) return {};
