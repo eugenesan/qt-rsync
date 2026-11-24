@@ -152,6 +152,7 @@ class MainWindow::Private {
   QProcess* inventoryProcess = nullptr;
   QProcess* destinationInventoryProcess = nullptr;
   QVector<core::Change> inventoryChanges;
+  QHash<QString, QPair<qlonglong, QString>> destinationListingCache;
   QTemporaryFile* filterFile = nullptr;
   core::SyncProfile profile;
   QVector<core::Change> changes;
@@ -1183,6 +1184,7 @@ void MainWindow::startCompare() {
     return;
   }
   d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
+  d_->destinationListingCache.clear();
   const core::ProcessSpec spec = core::buildCompareSpec(d_->profile);
   setProcessEnvironment(spec, d_->compareProcess);
   setCommandPreview(spec);
@@ -1311,16 +1313,74 @@ void MainWindow::startInventory() {
   d_->inventoryProcess->start(spec.program, spec.arguments);
 }
 
+void MainWindow::filterUnchangedAgainstDestination() {
+  // Unchanged objects are the intersection of the source and destination
+  // listings, excluding paths that already changed and their ancestors. The
+  // destination listing was cached during Compare, so only Source is listed
+  // again when the user asks for unchanged items.
+  QSet<QString> changedPaths;
+  for (const core::Change& change : d_->changes) {
+    changedPaths.insert(change.path);
+  }
+  QSet<QString> ancestorPaths;
+  for (const QString& path : changedPaths) {
+    QString parent = path;
+    int slash = parent.lastIndexOf('/');
+    while (slash > 0) {
+      parent = parent.left(slash);
+      ancestorPaths.insert(parent);
+      slash = parent.lastIndexOf('/');
+    }
+  }
+  QVector<core::Change> filtered;
+  for (core::Change change : d_->inventoryChanges) {
+    if (changedPaths.contains(change.path) ||
+        ancestorPaths.contains(change.path)) {
+      continue;
+    }
+    const auto found = d_->destinationListingCache.constFind(change.path);
+    if (found == d_->destinationListingCache.constEnd()) continue;
+    change.action = core::Action::NoChange;
+    change.destinationSize = found->first;
+    change.destinationTime = found->second;
+    filtered.append(change);
+  }
+  d_->inventoryChanges = filtered;
+}
+
+void MainWindow::mergeInventoryChanges() {
+  if (d_->inventoryChanges.isEmpty()) return;
+  QVector<core::Change> merged = d_->changes;
+  QSet<QString> present;
+  for (const core::Change& existing : merged) present.insert(existing.path);
+  for (const core::Change& change : d_->inventoryChanges) {
+    if (present.contains(change.path)) continue;
+    present.insert(change.path);
+    merged.append(change);
+  }
+  d_->changes = merged;
+  d_->comparison->setChanges(merged);
+}
+
 void MainWindow::onInventoryFinished(int, QProcess::ExitStatus) {
   if (d_->cancelled) return;
   const QString sourceText = core::cleanQtNoise(
       QString::fromLocal8Bit(d_->inventoryProcess->readAllStandardOutput()));
   d_->inventoryChanges = core::parseInventory(sourceText);
-  // The source listing only has the unchanged candidates. The destination
-  // listing supplies their metadata and completes the pairing.
+  if (!d_->destinationListingCache.isEmpty()) {
+    filterUnchangedAgainstDestination();
+    mergeInventoryChanges();
+    d_->comparison->applyDestinationMetadata(d_->destinationListingCache);
+    d_->overview->rebuild(d_->comparison->store());
+    d_->progress->hide();
+    return;
+  }
+  // No cached destination listing is available (for example the metadata
+  // listing failed); complete the inventory with a destination listing.
   d_->destinationInventoryForUnchanged = true;
   const core::ProcessSpec spec =
       core::buildInventorySpec(d_->profile, d_->profile.destination);
+  appendJournalLine(QStringLiteral("$ ") + spec.argv().join(' '));
   setProcessEnvironment(spec, d_->destinationInventoryProcess);
   d_->destinationInventoryProcess->start(spec.program, spec.arguments);
   d_->progress->hide();
@@ -1332,27 +1392,17 @@ void MainWindow::onDestinationInventoryFinished(int, QProcess::ExitStatus) {
       QString::fromLocal8Bit(d_->destinationInventoryProcess->readAllStandardOutput()));
   const auto metadata = parseListingMetadata(text);
   if (!metadata.isEmpty()) {
+    d_->destinationListingCache = metadata;
     appendJournalLine(QStringLiteral("Destination metadata: %1 object(s).")
                           .arg(metadata.size()));
   }
   if (d_->destinationInventoryForUnchanged) {
     d_->destinationInventoryForUnchanged = false;
-    d_->inventoryChanges.append(core::parseInventory(text));
-    if (!d_->inventoryChanges.isEmpty()) {
-      QVector<core::Change> merged = d_->changes;
-      QSet<QString> present;
-      for (const core::Change& existing : merged) present.insert(existing.path);
-      for (const core::Change& change : d_->inventoryChanges) {
-        if (present.contains(change.path)) continue;
-        present.insert(change.path);
-        merged.append(change);
-      }
-      d_->changes = merged;
-      d_->comparison->setChanges(merged);
-    }
+    filterUnchangedAgainstDestination();
+    mergeInventoryChanges();
   }
-  if (!metadata.isEmpty()) {
-    d_->comparison->applyDestinationMetadata(metadata);
+  if (!d_->destinationListingCache.isEmpty()) {
+    d_->comparison->applyDestinationMetadata(d_->destinationListingCache);
     d_->overview->rebuild(d_->comparison->store());
   }
   d_->progress->hide();

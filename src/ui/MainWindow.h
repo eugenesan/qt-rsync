@@ -70,6 +70,8 @@ class MainWindow : public QMainWindow {
   void updateVerificationVisibility();
   void updateStateIcons();
   void applyLayoutMode(const QString& mode);
+  void filterUnchangedAgainstDestination();
+  void mergeInventoryChanges();
 
  private:
   class Private;

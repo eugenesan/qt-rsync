@@ -65,9 +65,10 @@ KDE dark-theme and final UI parity pass.
 ### Fixed
 
 - Unchanged files no longer appear after Compare. They are inventory-only and
-  appear only while the Unchanged toggle is on; inventory now reads the source
-  and destination listings separately, preserves source sizes/times and merges
-  each unchanged path once.
+  appear only while the Unchanged toggle is on. The destination listing is
+  cached during Compare, so an inventory request lists only Source, intersects
+  it with the cached destination, preserves source sizes/times and merges each
+  unchanged path once.
 - Unchecked decision boxes are now empty outlines instead of filled blue
   boxes indistinguishable from checked ones.
 - The decision-column borders continue to the bottom of the view.

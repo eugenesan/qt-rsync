@@ -48,7 +48,8 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 ## Delivered in this pass
 
 - Unchanged gate: default compare hides `NoChange`; inventory adds only after
-  the toggle requests it; source sizes/times survive the inventory merge.
+  the toggle requests it; the destination listing is cached at compare time so
+  an inventory request lists Source only; source sizes/times survive the merge.
 - Layout modes: Normal, Compare only and Compare with overview are asserted by
   `layoutModesRearrangeWidgets`.
 - Packaging: `install` CTest stages the build and checks the binary, desktop
