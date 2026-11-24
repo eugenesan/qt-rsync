@@ -26,8 +26,8 @@
 #include <QProcessEnvironment>
 #include <QTime>
 #include <QPlainTextEdit>
+#include <QTextCharFormat>
 #include <QTextCursor>
-#include <QTextEdit>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QShortcut>
@@ -142,7 +142,7 @@ class MainWindow::Private {
   QLabel* progressLabel = nullptr;
   QPlainTextEdit* commandPreview = nullptr;
   ActionFilterBar* filterBar = nullptr;
-  QTextEdit* journal = nullptr;
+  QPlainTextEdit* journal = nullptr;
   QStringList journalLines;
   QProgressBar* progress = nullptr;
   ComparisonView* comparison = nullptr;
@@ -870,8 +870,10 @@ MainWindow::MainWindow(QWidget* parent)
   d_->commandPreview->setPlaceholderText(QStringLiteral("Command preview appears here."));
   logColumnLayout->addWidget(d_->commandPreview);
 
-  d_->journal = new QTextEdit(logColumn);
+  d_->journal = new QPlainTextEdit(logColumn);
   d_->journal->setReadOnly(true);
+  d_->journal->setMaximumBlockCount(5000);
+  d_->journal->setLineWrapMode(QPlainTextEdit::WidgetWidth);
   logColumnLayout->addWidget(d_->journal, 1);
   logSplitter->addWidget(logColumn);
   d_->overview = new OverviewPane(logSplitter);
@@ -1109,11 +1111,15 @@ void MainWindow::appendJournalLine(const QString& line) {
   } else if (line.contains(QStringLiteral("warning"), Qt::CaseInsensitive)) {
     colour = QStringLiteral("#B45309");
   }
-  d_->journal->append(QStringLiteral("<span style='color:%1'>%2</span>")
-                          .arg(colour, line.toHtmlEscaped()));
-  d_->journal->moveCursor(QTextCursor::End);
+  QTextCursor cursor(d_->journal->document());
+  cursor.movePosition(QTextCursor::End);
+  if (!d_->journal->document()->isEmpty()) cursor.insertBlock();
+  QTextCharFormat format;
+  format.setForeground(QColor(colour));
+  cursor.insertText(line, format);
+  d_->journal->setTextCursor(cursor);
   d_->journal->ensureCursorVisible();
-  QTimer::singleShot(50, d_->journal, [journal = d_->journal]() {
+  QTimer::singleShot(0, d_->journal, [journal = d_->journal]() {
     auto* bar = journal->verticalScrollBar();
     if (bar != nullptr) bar->setValue(bar->maximum());
   });
