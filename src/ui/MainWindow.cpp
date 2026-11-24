@@ -86,6 +86,8 @@ class MainWindow::Private {
   QProcess* compareProcess = nullptr;
   QProcess* operationProcess = nullptr;
   QProcess* inventoryProcess = nullptr;
+  QProcess* destinationInventoryProcess = nullptr;
+  QVector<core::Change> inventoryChanges;
   QTemporaryFile* filterFile = nullptr;
   core::SyncProfile profile;
   QVector<core::Change> changes;
@@ -411,6 +413,7 @@ MainWindow::MainWindow(QWidget* parent)
   d_->compareProcess = new QProcess(this);
   d_->operationProcess = new QProcess(this);
   d_->inventoryProcess = new QProcess(this);
+  d_->destinationInventoryProcess = new QProcess(this);
   connect(d_->compare, &QAbstractButton::clicked, this, &MainWindow::startCompare);
   connect(d_->verify, &QAbstractButton::clicked, this, &MainWindow::verifyPlan);
   connect(d_->sync, &QAbstractButton::clicked, this, &MainWindow::synchronize);
@@ -445,6 +448,8 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->operationProcess, &QProcess::finished, this, &MainWindow::onOperationFinished);
   connect(d_->operationProcess, &QProcess::errorOccurred, this, &MainWindow::onOperationError);
   connect(d_->inventoryProcess, &QProcess::finished, this, &MainWindow::onInventoryFinished);
+  connect(d_->destinationInventoryProcess, &QProcess::finished, this,
+          &MainWindow::onDestinationInventoryFinished);
   connect(d_->operationProcess, &QProcess::readyReadStandardOutput, this, [this]() {
     const QString text = core::cleanQtNoise(
         QString::fromLocal8Bit(d_->operationProcess->readAllStandardOutput()));
@@ -631,6 +636,7 @@ void MainWindow::startDestinationInventory() {
 }
 
 void MainWindow::startInventory() {
+  d_->inventoryChanges.clear();
   const core::ProcessSpec spec =
       core::buildInventorySpec(d_->profile, d_->profile.source);
   setProcessEnvironment(spec, d_->inventoryProcess);
@@ -654,10 +660,27 @@ void MainWindow::onInventoryFinished(int, QProcess::ExitStatus) {
   if (!metadata.isEmpty()) d_->comparison->applyDestinationMetadata(metadata);
   const QString sourceText = core::cleanQtNoise(
       QString::fromLocal8Bit(d_->inventoryProcess->readAllStandardOutput()));
-  const QVector<core::Change> unchanged = core::parseInventory(sourceText);
-  if (!unchanged.isEmpty()) {
+  d_->inventoryChanges = core::parseInventory(sourceText);
+  const core::ProcessSpec spec =
+      core::buildInventorySpec(d_->profile, d_->profile.destination);
+  setProcessEnvironment(spec, d_->destinationInventoryProcess);
+  d_->destinationInventoryProcess->start(spec.program, spec.arguments);
+}
+
+void MainWindow::onDestinationInventoryFinished(int, QProcess::ExitStatus) {
+  if (d_->cancelled) return;
+  const QString text = core::cleanQtNoise(
+      QString::fromLocal8Bit(d_->destinationInventoryProcess->readAllStandardOutput()));
+  d_->inventoryChanges.append(core::parseInventory(text));
+  if (!d_->inventoryChanges.isEmpty()) {
     QVector<core::Change> merged = d_->changes;
-    merged.append(unchanged);
+    for (const core::Change& change : d_->inventoryChanges) {
+      bool present = false;
+      for (const core::Change& existing : merged) {
+        if (existing.path == change.path) { present = true; break; }
+      }
+      if (!present) merged.append(change);
+    }
     d_->changes = merged;
     d_->comparison->setChanges(merged);
     d_->overview->rebuild(d_->comparison->store());
