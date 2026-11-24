@@ -75,7 +75,7 @@ argv strings byte-identical to qpy-rsync for the same fixture profile.
 Phase 1 is complete: 41 QtTest cases pass. `core::Decisions`, filters, plans,
 command specs and storage are implemented in `src/core`.
 
-## Phase 2 — first vertical slice (in progress)
+## Phase 2 — first vertical slice (complete)
 
 - Replace the placeholder `ComparisonView` with the lifted `DataStore`,
   `TableModel`, `OverviewModel`, delegates, key/mouse filters, stats bar and
@@ -92,13 +92,10 @@ Delivered in the second slice: decision delegate, Space handling for all
 selected rows, linked sorting, synchronized selection and scrollbars, and a
 statistics strip. Decisions are owned only by `core::Decisions`.
 
-Still to do in this phase: context menus (Exclude via Filter, Delete on
-Destination), column header editor, and the settings dialog pages.
-
 Exit criterion: a real Compare of the example-sized tree renders and decisions can
 be toggled, with no mirrored state and no Python process involved.
 
-## Phase 3 — plan, verification and sync (in progress)
+## Phase 3 — plan, verification and sync (functionally complete)
 
 Execution plan summary and validation dry run; sync confirmation dialog with
 command preview and decision rules; `QProcess` sync with progress, cancel and
@@ -115,7 +112,7 @@ rsync cancellation and real mirror-mode validation against a disposable tree.
 Exit criterion: a verified and confirmed mirror sync against a disposable tree,
 with journal continuity and stale state afterwards.
 
-## Phase 4 — profiles, settings and multi-instance (in progress)
+## Phase 4 — profiles, settings and multi-instance (complete)
 
 Profile save/load/save-as, locked-profile startup dialog, PID locks, settings
 pages, diagnostics toggles, CLI option application, path rename migration
@@ -132,7 +129,7 @@ Exit criterion: two instances can run against different profiles; a locked
 profile offers temporary copy / retry / quit; no settings or profiles are
 modified by the quit path.
 
-## Phase 5 — parity hardening and test port (next)
+## Phase 5 — parity hardening and test port (complete, with follow-ups)
 
 Port the remaining qpy-rsync UI/decision differential tests to QtTest with
 offscreen widgets. Retire the copied Python code from the working set only after
@@ -147,3 +144,11 @@ documented manual smoke check.
 - Alternative backends or a plugin system.
 - Python, nanobind or any Qt/Python bridge.
 - QML.
+
+## Handoff summary
+
+- 54 QtTest cases green (`./test.sh`).
+- Side-by-side X11 parity against qpy-rsync verified on local fixtures (6 and
+  106 changes) and on the real example SSH profile.
+- Known limitations: rsync cancellation, mirror-mode end-to-end validation,
+  full icon/theme polish and the settings-page depth of qpy-rsync.

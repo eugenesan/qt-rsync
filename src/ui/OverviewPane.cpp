@@ -2,6 +2,8 @@
 
 #include <QHeaderView>
 #include <QTreeView>
+
+#include <functional>
 #include <QVBoxLayout>
 
 namespace qt_rsync::ui {
@@ -18,8 +20,33 @@ OverviewPane::OverviewPane(QWidget* parent)
 }
 
 void OverviewPane::rebuild(const model::DataStore& store) {
+  // Remember which folders were open; a reset of the model collapses them.
+  if (!firstBuild_) {
+    expandedPaths_.clear();
+    std::function<void(const QModelIndex&)> walk = [&](const QModelIndex& parent) {
+      for (int row = 0; row < model_->rowCount(parent); ++row) {
+        const QModelIndex index = model_->index(row, 0, parent);
+        if (!index.isValid()) continue;
+        if (tree_->isExpanded(index)) {
+          expandedPaths_.insert(index.data(Qt::UserRole).toString());
+        }
+        walk(index);
+      }
+    };
+    walk(QModelIndex());
+  }
+
   model_->build(store, false);
-  tree_->expandAll();
+
+  if (firstBuild_) {
+    tree_->expandToDepth(1);
+    firstBuild_ = false;
+  } else {
+    for (const QString& path : expandedPaths_) {
+      const QModelIndex index = model_->index_for_path(path.toStdString());
+      if (index.isValid()) tree_->setExpanded(index, true);
+    }
+  }
 
   int included = 0;
   int excluded = 0;

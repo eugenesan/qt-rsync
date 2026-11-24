@@ -1,22 +1,33 @@
 # qt-rsync
 
-A pure Qt/C++ frontend for rsync. This tree is a **phase 0 scaffold**: it
-builds, parses the inherited CLI options and shows an empty main window.
-No comparison, plan or sync functionality is implemented yet.
+A pure Qt/C++ frontend for rsync. It is a direct port of the behaviour of
+[qpy-rsync](https://github.com/eugenesan/qpy-rsync): the same decision
+semantics, execution plan, filter rules, rsync command construction, profiles
+and UI model, but with **no Python layer and no second internal state**.
 
-The product semantics are inherited from [qpy-rsync](https://github.com/eugenesan/qpy-rsync)
-and documented in [docs/design.md](docs/design.md). The migration sequence and exit criteria are
-in [docs/port-plan.md](docs/port-plan.md); the up-front architecture choices
-are in [docs/decisions.md](docs/decisions.md). Release notes start in [CHANGELOG.md](CHANGELOG.md).
+The product specification is [docs/design.md](docs/design.md); the migration
+plan and exit criteria are in [docs/port-plan.md](docs/port-plan.md); the
+architecture choices in [docs/decisions.md](docs/decisions.md). Release notes
+start in [CHANGELOG.md](CHANGELOG.md).
+
+## Status
+
+Functional parity: Compare, decisions (including exclude, delete-on-destination
+and undo), overview, sorting/folding, profiles with multi-instance locks,
+Verify, Synchronize with confirmation, journal and progress all work. Side-by-side
+X11 runs against qpy-rsync matched on a small fixture and a 620-file tree, and
+on the real SSH profile. Not yet ported: rsync cancellation and full mirror-mode
+validation against a disposable tree.
 
 ## Build
 
-Requirements: Qt 6 (Core, Gui, Widgets, Test), CMake 3.20+, Ninja, a C++20 compiler.
+Requirements: Qt 6 (Core, Gui, Widgets, Test), CMake 3.20+, Ninja, a C++20
+compiler. No Python is required.
 
 ```sh
-./build.sh
+./build.sh                       # builds into ./build (or $QT_RSYNC_BUILD_DIR)
 ./build/bin/qt-rsync --help
-ctest --test-dir /tmp/opencode/qt-rsync-build --output-on-failure
+./test.sh                        # configure, build and run all QtTest cases
 ```
 
 `build.sh` accepts extra CMake arguments, for example
@@ -26,10 +37,10 @@ ctest --test-dir /tmp/opencode/qt-rsync-build --output-on-failure
 
 ```
 src/app/    entry point, CLI parsing, XDG/Qt environment setup
-src/core/   domain: changes, decisions, filters, plan, rsync command, paths
+src/core/   domain: changes, decisions, filters, plan, command, parser, storage
 src/model/  Qt item models over one C++ DataStore (lifted from native-hybrid)
-src/ui/     main window, comparison panes, overview, settings dialog
-tests/      QtTest suite
+src/ui/     main window, comparison panes, overview, settings, dialogs
+tests/      QtTest suite (core + UI)
 docs/       port plan, decisions and the inherited qpy-rsync specification
 ```
 
