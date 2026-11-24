@@ -15,6 +15,7 @@
 #include <QActionGroup>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 
 #include <csignal>
 #include <QHBoxLayout>
@@ -614,6 +615,41 @@ MainWindow::MainWindow(QWidget* parent)
   actionsMenu->addAction(QStringLiteral("Expand All Folders"), this,
                          [this]() { d_->comparison->foldAll(false); });
 
+  const auto showHowTo = [this]() {
+    QMessageBox box(this);
+    box.setWindowTitle(QStringLiteral("How to use qt-rsync"));
+    box.setTextFormat(Qt::RichText);
+    box.setText(
+        QStringLiteral(
+            "<b>1. Choose Source and Destination.</b><br>"
+            "Use local paths or <code>[user@]host:/absolute/path</code>. "
+            "At most one endpoint may be remote.<br><br>"
+            "<b>2. Compare.</b> Press F5 or the Compare button. The dry run "
+            "never changes files.<br><br>"
+            "<b>3. Decide.</b> Click the checkbox in the Decisions pane, or "
+            "press Space on selected rows. Right-click for all choices. "
+            "Excluded items are not synchronized.<br><br>"
+            "<b>4. Synchronize.</b> Press F9, review the command and rules, "
+            "then confirm. The comparison becomes stale after writing.<br><br>"
+            "F7 filters, F8 optional verification, F10 cancel, F11 pause."));
+    box.exec();
+  };
+  auto* helpMenu = menuBar()->addMenu(QStringLiteral("Help"));
+  auto* howToAction = helpMenu->addAction(QStringLiteral("How-To"));
+  howToAction->setShortcut(QKeySequence(Qt::Key_F1));
+  connect(howToAction, &QAction::triggered, this, showHowTo);
+  auto* aboutAction = helpMenu->addAction(QStringLiteral("About qt-rsync"));
+  connect(aboutAction, &QAction::triggered, this, [this]() {
+    QMessageBox::about(
+        this, QStringLiteral("About qt-rsync"),
+        QStringLiteral(
+            "<b>qt-rsync</b> %1<br><br>"
+            "A pure Qt/C++ frontend for rsync, ported from qpy-rsync.<br>"
+            "Decisions, execution plans and the data store live in C++; "
+            "rsync performs the comparison and transfer.")
+            .arg(QCoreApplication::applicationVersion()));
+  });
+
   // Mirror the menu bar in the toolbar button, as qpy does for desktops
   // without a global menu.
   auto* appMenu = new QMenu(d_->appMenuButton);
@@ -876,6 +912,7 @@ MainWindow::MainWindow(QWidget* parent)
     auto* shortcut = new QShortcut(sequence, this);
     connect(shortcut, &QShortcut::activated, this, slot);
   };
+  addKey(QKeySequence(Qt::Key_F1), showHowTo);
   addKey(QKeySequence(Qt::Key_F2), &MainWindow::saveCurrentProfile);
   addKey(QKeySequence(Qt::Key_F3), &MainWindow::loadProfile);
   addKey(QKeySequence(Qt::Key_F4), &MainWindow::editProfile);
