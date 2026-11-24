@@ -9,6 +9,7 @@
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QMenu>
+#include <QMenuBar>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -257,6 +258,53 @@ MainWindow::MainWindow(QWidget* parent)
   d_->search->setClearButtonEnabled(true);
   d_->search->setFixedWidth(220);
   toolbar->addWidget(d_->search);
+
+  // Menu bar mirrors the actions available in qpy-rsync.
+  auto* fileMenu = menuBar()->addMenu(QStringLiteral("File"));
+  auto* loadAction = fileMenu->addAction(QStringLiteral("Load Profile..."));
+  loadAction->setShortcut(QKeySequence(Qt::Key_F3));
+  connect(loadAction, &QAction::triggered, this, [this]() { loadProfile(); });
+  auto* saveAction = fileMenu->addAction(QStringLiteral("Save Profile"));
+  saveAction->setShortcut(QKeySequence(Qt::Key_F2));
+  connect(saveAction, &QAction::triggered, this, &MainWindow::saveCurrentProfile);
+  fileMenu->addSeparator();
+  auto* quitAction = fileMenu->addAction(QStringLiteral("Quit"));
+  quitAction->setShortcut(QKeySequence::Quit);
+  connect(quitAction, &QAction::triggered, this, &QWidget::close);
+
+  auto* editMenu = menuBar()->addMenu(QStringLiteral("Edit"));
+  auto* undoAction = editMenu->addAction(QStringLiteral("Undo Decision"));
+  undoAction->setShortcut(QKeySequence::Undo);
+  connect(undoAction, &QAction::triggered, this,
+          [this]() { d_->comparison->undoDecision(); });
+  auto* resetAction = editMenu->addAction(QStringLiteral("Reset Decisions"));
+  connect(resetAction, &QAction::triggered, this,
+          [this]() { d_->comparison->resetAllDecisions(); });
+  editMenu->addSeparator();
+  auto* settingsAction = editMenu->addAction(QStringLiteral("Settings"));
+  settingsAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+,")));
+  connect(settingsAction, &QAction::triggered, d_->settingsButton,
+          &QAbstractButton::click);
+
+  auto* actionsMenu = menuBar()->addMenu(QStringLiteral("Actions"));
+  auto* compareAction = actionsMenu->addAction(QStringLiteral("Compare"));
+  compareAction->setShortcut(QKeySequence(Qt::Key_F5));
+  connect(compareAction, &QAction::triggered, this, &MainWindow::startCompare);
+  auto* filtersAction = actionsMenu->addAction(QStringLiteral("Filters"));
+  filtersAction->setShortcut(QKeySequence(Qt::Key_F7));
+  connect(filtersAction, &QAction::triggered, d_->filtersButton,
+          &QAbstractButton::click);
+  auto* verifyAction = actionsMenu->addAction(QStringLiteral("Verify Decisions"));
+  verifyAction->setShortcut(QKeySequence(Qt::Key_F8));
+  connect(verifyAction, &QAction::triggered, this, &MainWindow::verifyPlan);
+  auto* syncAction = actionsMenu->addAction(QStringLiteral("Synchronize"));
+  syncAction->setShortcut(QKeySequence(Qt::Key_F9));
+  connect(syncAction, &QAction::triggered, this, &MainWindow::synchronize);
+  actionsMenu->addSeparator();
+  actionsMenu->addAction(QStringLiteral("Collapse All Folders"), this,
+                         [this]() { d_->comparison->foldAll(true); });
+  actionsMenu->addAction(QStringLiteral("Expand All Folders"), this,
+                         [this]() { d_->comparison->foldAll(false); });
 
   // Row 2: source + action filter bar + destination.
   auto* locations = new QHBoxLayout();
