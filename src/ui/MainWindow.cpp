@@ -1155,6 +1155,7 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   d_->comparison->setRootNames(baseName(d_->profile.source.path),
                                baseName(d_->profile.destination.path));
   d_->comparison->setChanges(parsed.changes);
+  d_->filterBar->setExcludedCount(0);
   d_->overview->rebuild(d_->comparison->store());
   refreshPlan();
   d_->stale = false;
