@@ -59,6 +59,12 @@ class MainWindow : public QMainWindow {
   void loadProfile();
   void resetProfile();
   void updateProfileMenu();
+  void findNext();
+  void findPrevious();
+
+ private:
+  void refreshSearchMatches();
+  void stepSearch(int direction);
 
  private:
   class Private;

@@ -3,7 +3,6 @@
 #include <QWidget>
 
 class QCheckBox;
-class QLabel;
 class QToolButton;
 
 namespace qt_rsync::ui {
@@ -36,7 +35,6 @@ class ActionFilterBar : public QWidget {
   QVector<QCheckBox*> actions_;
   QCheckBox* unchanged_ = nullptr;
   QCheckBox* conflicts_ = nullptr;
-  QLabel* excludedCount_ = nullptr;
   QToolButton* undo_ = nullptr;
 };
 

@@ -29,6 +29,7 @@ class ComparisonView : public QWidget {
   void setChanges(const QVector<core::Change>& changes);
   void setRootNames(const QString& source, const QString& destination);
   void selectPath(const QString& path);
+  [[nodiscard]] QStringList searchMatches(const QString& text) const;
   void foldCurrent(int pane, bool collapse);
   void foldAll(bool collapse);
   void applyDestinationMetadata(

@@ -125,9 +125,9 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
   verificationRsync_ = new QCheckBox(
       QStringLiteral("Use an rsync dry run when verifying"), advanced);
   verification_->setChecked(
-      settings.value(QStringLiteral("verification/enabled"), true).toBool());
+      settings.value(QStringLiteral("verification/enabled"), false).toBool());
   verificationRsync_->setChecked(
-      settings.value(QStringLiteral("verification/rsync"), true).toBool());
+      settings.value(QStringLiteral("verification/rsync"), false).toBool());
   advancedForm->addRow(QString(), verification_);
   advancedForm->addRow(QString(), verificationRsync_);
   detectInherited_ = new QCheckBox(

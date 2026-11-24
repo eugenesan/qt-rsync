@@ -10,6 +10,7 @@
 #include <QKeyEvent>
 #include <QHeaderView>
 #include <QMenu>
+#include <QRegularExpression>
 #include <QScrollBar>
 #include <QHBoxLayout>
 #include <QTableView>
@@ -344,6 +345,46 @@ void ComparisonView::selectPath(const QString& path) {
   for (QTableView* view : views_) {
     view->setCurrentIndex(view->model()->index(row, 0));
   }
+}
+
+QStringList ComparisonView::searchMatches(const QString& text) const {
+  // qpy's Find rules: a trailing slash matches directories only, a slash
+  // inside the pattern searches the path, and * ? [ ] are globs. Matching
+  // only moves the selection; it never changes the visible rows.
+  QString value = text.trimmed().toLower();
+  if (value.isEmpty()) return {};
+  const bool directoriesOnly = value.endsWith('/');
+  const QString pattern = directoriesOnly ? value.chopped(1) : value;
+  if (pattern.isEmpty()) return {};
+  const bool isGlob = pattern.contains('*') || pattern.contains('?') ||
+                      pattern.contains('[');
+  const bool byPath = pattern.contains('/');
+  QRegularExpression expression;
+  if (isGlob) {
+    expression = QRegularExpression(
+        QRegularExpression::wildcardToRegularExpression(pattern),
+        QRegularExpression::CaseInsensitiveOption);
+  }
+  QStringList matches;
+  for (int row = 0; row < static_cast<int>(store_.visible.size()); ++row) {
+    const int id = store_.visible[row];
+    if (id < 0 || id >= static_cast<int>(store_.paths.size())) continue;
+    const bool isDirectory =
+        id < static_cast<int>(store_.is_dir.size()) && store_.is_dir[id];
+    if (directoriesOnly && !isDirectory) continue;
+    const QString candidate = QString::fromStdString(
+        byPath ? store_.paths[id] : store_.names[id]).toLower();
+    bool hit = false;
+    if (isGlob) {
+      hit = expression.match(candidate).hasMatch();
+    } else if (directoriesOnly) {
+      hit = candidate == pattern;
+    } else {
+      hit = candidate.contains(pattern);
+    }
+    if (hit) matches << QString::fromStdString(store_.paths[id]);
+  }
+  return matches;
 }
 
 void ComparisonView::foldCurrent(int pane, bool collapse) {

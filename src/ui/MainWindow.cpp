@@ -8,6 +8,7 @@
 #include <QUrl>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QFrame>
 #include <QMenu>
 #include <QMenuBar>
 #include <QHBoxLayout>
@@ -21,10 +22,11 @@
 #include <QPushButton>
 #include <QShortcut>
 #include <QRegularExpression>
+#include <QSizePolicy>
 #include <QSplitter>
+#include <QStatusBar>
 #include <QTemporaryFile>
 #include <QComboBox>
-#include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -46,6 +48,15 @@ namespace {
 QString withTrailingSlash(QString path) {
   if (!path.trimmed().isEmpty() && !path.endsWith('/')) path += '/';
   return path;
+}
+
+QFrame* verticalSeparator(QWidget* parent) {
+  auto* line = new QFrame(parent);
+  line->setFrameShape(QFrame::VLine);
+  line->setFrameShadow(QFrame::Plain);
+  line->setFixedWidth(1);
+  line->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+  return line;
 }
 
 void setProcessEnvironment(const core::ProcessSpec& spec, QProcess* process) {
@@ -73,13 +84,20 @@ class MainWindow::Private {
   QToolButton* settingsButton = nullptr;
   QComboBox* mode = nullptr;
   QLineEdit* search = nullptr;
+  QLabel* searchStatus = nullptr;
+  QToolButton* searchPreviousButton = nullptr;
+  QToolButton* searchNextButton = nullptr;
+  QToolButton* appMenuButton = nullptr;
+  QStringList searchMatches;
+  QString searchText;
+  int searchPosition = -1;
   bool cancelled = false;
   QLineEdit* status = nullptr;
+  QLabel* stateLabel = nullptr;
   QLabel* progressLabel = nullptr;
   QPlainTextEdit* commandPreview = nullptr;
   ActionFilterBar* filterBar = nullptr;
   QTextEdit* journal = nullptr;
-  QLineEdit* journalFilter = nullptr;
   QStringList journalLines;
   QProgressBar* progress = nullptr;
   ComparisonView* comparison = nullptr;
@@ -118,95 +136,170 @@ MainWindow::MainWindow(QWidget* parent)
   rootLayout->setContentsMargins(3, 2, 3, 2);
   rootLayout->setSpacing(3);
 
-  // Row 1: application toolbar.
-  auto* toolbar = new QToolBar(QStringLiteral("Main"), this);
-  addToolBar(toolbar);
-  toolbar->setIconSize(QSize(24, 24));
-  toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-  d_->mode = new QComboBox(toolbar);
-  d_->mode->addItem(QStringLiteral("Update"), static_cast<int>(core::SyncMode::Update));
-  d_->mode->addItem(QStringLiteral("Mirror"), static_cast<int>(core::SyncMode::Mirror));
-  d_->mode->addItem(QStringLiteral("New Only"), static_cast<int>(core::SyncMode::NewOnly));
-  connect(d_->mode, qOverload<int>(&QComboBox::currentIndexChanged), this,
-          [this](int index) {
-            d_->profile.transfer.mode =
-                static_cast<core::SyncMode>(d_->mode->itemData(index).toInt());
-          });
-  toolbar->addWidget(d_->mode);
+  // Row 1: application controls. qpy builds a plain row of 40x40
+  // QToolButtons. A QToolBar auto-raises its buttons, and under Breeze that
+  // leaves no visible frame, so the toolbar blended into the window.
+  auto* toolbarRow = new QWidget(root);
+  auto* toolbarLayout = new QHBoxLayout(toolbarRow);
+  toolbarLayout->setContentsMargins(0, 0, 0, 0);
+  toolbarLayout->setSpacing(4);
+  rootLayout->addWidget(toolbarRow);
+
   const auto styleTool = [](QToolButton* button) {
     button->setIconSize(QSize(24, 24));
     button->setToolButtonStyle(Qt::ToolButtonIconOnly);
     button->setFixedSize(40, 40);
   };
+
+  toolbarLayout->addWidget(verticalSeparator(toolbarRow));
+  d_->mode = new QComboBox(toolbarRow);
+  d_->mode->addItem(QStringLiteral("Update"), static_cast<int>(core::SyncMode::Update));
+  d_->mode->addItem(QStringLiteral("Mirror"), static_cast<int>(core::SyncMode::Mirror));
+  d_->mode->addItem(QStringLiteral("New Only"), static_cast<int>(core::SyncMode::NewOnly));
+  d_->mode->setToolTip(
+      QStringLiteral("Mode selection\n"
+                     "Update: copy new and changed items; keep destination-only "
+                     "items.\n"
+                     "Mirror: make Destination match Source, including "
+                     "deletions.\n"
+                     "New Only: copy missing items; do not update or delete "
+                     "existing items."));
+  connect(d_->mode, qOverload<int>(&QComboBox::currentIndexChanged), this,
+          [this](int index) {
+            d_->profile.transfer.mode =
+                static_cast<core::SyncMode>(d_->mode->itemData(index).toInt());
+          });
+  toolbarLayout->addWidget(d_->mode);
+
+  auto* swapButton = new QToolButton(toolbarRow);
+  swapButton->setIcon(icons::toolbarIcon(QStringLiteral("swap")));
+  swapButton->setToolTip(QStringLiteral("Swap Source and Destination"));
+  swapButton->setAccessibleName(QStringLiteral("Swap Source and Destination"));
+  styleTool(swapButton);
+  connect(swapButton, &QToolButton::clicked, this, [this]() {
+    const QString source = d_->source->text();
+    d_->source->setText(d_->destination->text());
+    d_->destination->setText(source);
+  });
+  // qpy adds the swap button to this row first and then reparents it into
+  // the Source panel below; doing the same keeps the order identical.
+  toolbarLayout->addWidget(swapButton);
+
   const auto addTool = [&](QToolButton*& button, const QString& text,
                            const QString& iconName, const QString& tip) {
-    button = new QToolButton(toolbar);
+    button = new QToolButton(toolbarRow);
     button->setText(text);
     button->setIcon(icons::toolbarIcon(iconName));
-    button->setIconSize(QSize(24, 24));
-    button->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    button->setFixedSize(40, 40);
+    button->setAccessibleName(text);
+    styleTool(button);
     button->setToolTip(tip);
-    toolbar->addWidget(button);
+    toolbarLayout->addWidget(button);
   };
-  addTool(d_->compare, QStringLiteral("Compare"), QStringLiteral("compare"),
-          QStringLiteral("Compare Source and Destination (F5)"));
+  addTool(
+      d_->compare, QStringLiteral("Compare"), QStringLiteral("compare"),
+      QStringLiteral(
+          "Compare Source and Destination using an rsync dry run.\n"
+          "No files are changed.\n"
+          "For SSH endpoints this connects to the remote host, so the remote "
+          "host must be reachable and credentials must be available.\n\n"
+          "Shortcut: F5"));
   addTool(d_->preserve, QStringLiteral("Preserve"), QStringLiteral("undo"),
-          QStringLiteral("Preserve decisions"));
+          QStringLiteral(
+              "Preserve decisions: ON\n"
+              "Manual include and exclude decisions survive the next "
+              "comparison, even when the reported action of an item changed.\n"
+              "Click to turn it off and start fresh; Compare will then ask "
+              "for confirmation before discarding the decisions."));
   d_->preserve->setCheckable(true);
   d_->preserve->setChecked(true);
-  addTool(d_->inventoryAfter, QStringLiteral("Inventory"), QStringLiteral("inventory"),
-          QStringLiteral("Inventory after comparison"));
+  addTool(
+      d_->inventoryAfter, QStringLiteral("Inventory"),
+      QStringLiteral("inventory"),
+      QStringLiteral(
+          "Run an inventory after every comparison.\n"
+          "The inventory lists Source and Destination and adds the unchanged "
+          "items to the comparison, so they are shown together with the "
+          "changed ones. The unchanged button then reuses this result "
+          "instead of running the inventory a second time."));
   d_->inventoryAfter->setCheckable(true);
-  addTool(d_->verify, QStringLiteral("Verify"), QStringLiteral("verify"),
-          QStringLiteral("Verify Decisions (F8)"));
-  addTool(d_->sync, QStringLiteral("Synchronize"), QStringLiteral("sync"),
-          QStringLiteral("Synchronize (F9)"));
+  addTool(
+      d_->verify, QStringLiteral("Verify"), QStringLiteral("verify"),
+      QStringLiteral(
+          "Optional diagnostic: check the selected decisions against the "
+          "plan.\n"
+          "Synchronization does not depend on this check.\n"
+          "When no checkbox decisions were changed after the comparison, the "
+          "latest comparison is reused immediately.\n"
+          "Otherwise a second rsync dry run checks the selected subset; that "
+          "run can be cancelled.\n"
+          "For SSH endpoints the dry run connects to the remote host again, "
+          "so the remote host must be reachable and credentials must be "
+          "available.\n\n"
+          "Shortcut: F8"));
+  addTool(
+      d_->sync, QStringLiteral("Synchronize"), QStringLiteral("sync"),
+      QStringLiteral(
+          "Open the confirmation dialog and review the exact rsync command, "
+          "decision rules and counts before writing. Verification is an "
+          "optional diagnostic and is not required to synchronize.\n\n"
+          "Shortcut: F9"));
   addTool(d_->cancel, QStringLiteral("Cancel"), QStringLiteral("cancel"),
-          QStringLiteral("Cancel the running operation (F10)"));
-  auto* pauseButton = new QToolButton(toolbar);
+          QStringLiteral(
+              "Cancel the running operation\n\nShortcut: F10"));
+  auto* pauseButton = new QToolButton(toolbarRow);
   pauseButton->setText(QStringLiteral("Pause"));
+  pauseButton->setAccessibleName(QStringLiteral("Pause the running operation"));
   pauseButton->setIcon(icons::toolbarIcon(QStringLiteral("pause")));
   pauseButton->setCheckable(true);
-  pauseButton->setToolTip(QStringLiteral("Pause the running operation (F11)"));
+  pauseButton->setToolTip(
+      QStringLiteral(
+          "Pause the running rsync operation.\n"
+          "The transfer is suspended and continues with the same button.\n"
+          "For a remote endpoint the connection stays open and the transfer "
+          "resumes where it stopped.\n\n"
+          "Shortcut: F11"));
   connect(pauseButton, &QToolButton::toggled, this, [this](bool checked) {
     if (checked) appendJournalLine(QStringLiteral("Paused"));
   });
   styleTool(pauseButton);
-  toolbar->addWidget(pauseButton);
-  toolbar->addSeparator();
-  addTool(d_->filtersButton, QStringLiteral("Filters"), QStringLiteral("filters"),
-          QStringLiteral("Edit the persistent filter rules (F7)"));
+  toolbarLayout->addWidget(pauseButton);
 
-  d_->profileButton = new QToolButton(toolbar);
-  d_->profileButton->setText(QStringLiteral("Profile"));
-  d_->profileButton->setIcon(icons::toolbarIcon(QStringLiteral("open")));
+  toolbarLayout->addWidget(verticalSeparator(toolbarRow));
+  addTool(d_->filtersButton, QStringLiteral("Filters"), QStringLiteral("filters"),
+          QStringLiteral(
+              "Edit the persistent filter rules\n\nShortcut: F7"));
+
+  d_->profileButton = new QToolButton(toolbarRow);
+  d_->profileButton->setIcon(icons::toolbarIcon(QStringLiteral("profile")));
+  d_->profileButton->setAccessibleName(QStringLiteral("Manage Profiles"));
   d_->profileButton->setMenu(new QMenu(d_->profileButton));
   d_->profileButton->setPopupMode(QToolButton::InstantPopup);
+  d_->profileButton->setToolTip(
+      QStringLiteral("Manage profiles (F2/F3, edit F4)"));
   connect(d_->profileButton->menu(), &QMenu::aboutToShow,
           this, &MainWindow::updateProfileMenu);
   styleTool(d_->profileButton);
-  toolbar->addWidget(d_->profileButton);
-  auto* backupButton = new QToolButton(toolbar);
-  backupButton->setText(QStringLiteral("Backup"));
+  toolbarLayout->addWidget(d_->profileButton);
+  auto* backupButton = new QToolButton(toolbarRow);
   backupButton->setIcon(icons::toolbarIcon(QStringLiteral("backup")));
+  backupButton->setAccessibleName(QStringLiteral("Open the backup directory"));
   backupButton->setToolTip(QStringLiteral("Open the backup directory"));
   connect(backupButton, &QToolButton::clicked, this, [this]() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->profile.backup.directory));
   });
   styleTool(backupButton);
-  toolbar->addWidget(backupButton);
-  auto* logButton = new QToolButton(toolbar);
-  logButton->setText(QStringLiteral("Log"));
+  toolbarLayout->addWidget(backupButton);
+  auto* logButton = new QToolButton(toolbarRow);
   logButton->setIcon(icons::toolbarIcon(QStringLiteral("log")));
+  logButton->setAccessibleName(QStringLiteral("Open the log file"));
   logButton->setToolTip(QStringLiteral("Open the log file"));
   connect(logButton, &QToolButton::clicked, this, [this]() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->logPath));
   });
   styleTool(logButton);
-  toolbar->addWidget(logButton);
-  addTool(d_->settingsButton, QStringLiteral("Settings"), QStringLiteral("settings"),
-          QStringLiteral("Settings"));
+  toolbarLayout->addWidget(logButton);
+  addTool(d_->settingsButton, QStringLiteral("Settings"),
+          QStringLiteral("settings"), QStringLiteral("Settings"));
   connect(d_->settingsButton, &QAbstractButton::clicked, this, [this]() {
     SettingsDialog dialog(this);
     dialog.exec();
@@ -228,9 +321,65 @@ MainWindow::MainWindow(QWidget* parent)
       d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
     }
   });
-  auto* layoutButton = new QToolButton(toolbar);
-  layoutButton->setText(QStringLiteral("Layout"));
-  layoutButton->setIcon(icons::toolbarIcon(QStringLiteral("settings")));
+
+  toolbarLayout->addWidget(verticalSeparator(toolbarRow));
+  auto* findButton = new QToolButton(toolbarRow);
+  findButton->setIcon(icons::toolbarIcon(QStringLiteral("search")));
+  findButton->setAccessibleName(QStringLiteral("Find next"));
+  findButton->setToolTip(QStringLiteral("Find next (Ctrl+F)"));
+  styleTool(findButton);
+  connect(findButton, &QToolButton::clicked, this, &MainWindow::findNext);
+  toolbarLayout->addWidget(findButton);
+  d_->searchPreviousButton = new QToolButton(toolbarRow);
+  d_->searchPreviousButton->setIcon(
+      icons::toolbarIcon(QStringLiteral("search-previous")));
+  d_->searchPreviousButton->setAccessibleName(
+      QStringLiteral("Previous search match"));
+  d_->searchPreviousButton->setToolTip(
+      QStringLiteral("Previous match (Ctrl+Shift+G)"));
+  styleTool(d_->searchPreviousButton);
+  d_->searchPreviousButton->hide();
+  connect(d_->searchPreviousButton, &QToolButton::clicked, this,
+          &MainWindow::findPrevious);
+  toolbarLayout->addWidget(d_->searchPreviousButton);
+  d_->searchNextButton = new QToolButton(toolbarRow);
+  d_->searchNextButton->setIcon(
+      icons::toolbarIcon(QStringLiteral("search-next")));
+  d_->searchNextButton->setAccessibleName(
+      QStringLiteral("Next search match"));
+  d_->searchNextButton->setToolTip(QStringLiteral("Next match (Ctrl+G)"));
+  styleTool(d_->searchNextButton);
+  d_->searchNextButton->hide();
+  connect(d_->searchNextButton, &QToolButton::clicked, this,
+          &MainWindow::findNext);
+  toolbarLayout->addWidget(d_->searchNextButton);
+  d_->search = new QLineEdit(toolbarRow);
+  d_->search->setObjectName(QStringLiteral("search-edit"));
+  d_->search->setPlaceholderText(QStringLiteral("Search the list..."));
+  d_->search->setClearButtonEnabled(true);
+  d_->search->setMinimumWidth(180);
+  d_->search->setToolTip(
+      QStringLiteral(
+          "Find items whose name contains the text; use a slash to match "
+          "the path, a trailing slash to match a directory name exactly, and "
+          "* ? [ ] as globs. So 'dir/' finds only the folder named dir, "
+          "while 'dir/a' finds paths ending in dir/a and '*dir/*.txt' finds "
+          "matching files. Enter jumps to the next match, Shift+Enter to the "
+          "previous one, Ctrl+G repeats it from anywhere. Searching does not "
+          "change the list."));
+  toolbarLayout->addWidget(d_->search, 1);
+  d_->searchStatus = new QLabel(toolbarRow);
+  d_->searchStatus->setObjectName(QStringLiteral("search-status"));
+  d_->searchStatus->setToolTip(
+      QStringLiteral("Search matches in the visible list"));
+  d_->searchStatus->setMinimumWidth(52);
+  d_->searchStatus->hide();
+  toolbarLayout->addWidget(d_->searchStatus);
+
+  auto* layoutButton = new QToolButton(toolbarRow);
+  layoutButton->setIcon(icons::toolbarIcon(QStringLiteral("layout")));
+  layoutButton->setAccessibleName(QStringLiteral("Compare layout"));
+  layoutButton->setToolTip(QStringLiteral("Compare layout"));
   auto* layoutMenu = new QMenu(layoutButton);
   const QVector<QPair<QString, QString>> layoutModes{
       {QStringLiteral("Normal"), QStringLiteral("normal")},
@@ -249,15 +398,15 @@ MainWindow::MainWindow(QWidget* parent)
   layoutButton->setMenu(layoutMenu);
   layoutButton->setPopupMode(QToolButton::InstantPopup);
   styleTool(layoutButton);
-  toolbar->addWidget(layoutButton);
-  toolbar->addSeparator();
-  toolbar->addWidget(new QLabel(QStringLiteral("Search"), toolbar));
-  d_->search = new QLineEdit(toolbar);
-  d_->search->setObjectName(QStringLiteral("search-edit"));
-  d_->search->setPlaceholderText(QStringLiteral("Search the list..."));
-  d_->search->setClearButtonEnabled(true);
-  d_->search->setFixedWidth(220);
-  toolbar->addWidget(d_->search);
+  toolbarLayout->addWidget(layoutButton);
+
+  d_->appMenuButton = new QToolButton(toolbarRow);
+  d_->appMenuButton->setIcon(icons::toolbarIcon(QStringLiteral("appmenu")));
+  d_->appMenuButton->setAccessibleName(QStringLiteral("Application menu"));
+  d_->appMenuButton->setToolTip(QStringLiteral("Application menu"));
+  d_->appMenuButton->setPopupMode(QToolButton::InstantPopup);
+  styleTool(d_->appMenuButton);
+  toolbarLayout->addWidget(d_->appMenuButton);
 
   // Menu bar mirrors the actions available in qpy-rsync.
   auto* fileMenu = menuBar()->addMenu(QStringLiteral("File"));
@@ -306,47 +455,86 @@ MainWindow::MainWindow(QWidget* parent)
   actionsMenu->addAction(QStringLiteral("Expand All Folders"), this,
                          [this]() { d_->comparison->foldAll(false); });
 
+  // Mirror the menu bar in the toolbar button, as qpy does for desktops
+  // without a global menu.
+  auto* appMenu = new QMenu(d_->appMenuButton);
+  for (QAction* top : menuBar()->actions()) {
+    QMenu* submenu = top->menu();
+    if (!submenu) continue;
+    QMenu* mirror = appMenu->addMenu(
+        QString(submenu->title()).remove(QLatin1Char('&')));
+    for (QAction* item : submenu->actions()) {
+      if (item->isSeparator()) {
+        mirror->addSeparator();
+      } else {
+        mirror->addAction(item);
+      }
+    }
+  }
+  d_->appMenuButton->setMenu(appMenu);
+  connect(d_->search, &QLineEdit::returnPressed, this,
+          &MainWindow::findNext);
+  connect(d_->search, &QLineEdit::textChanged, this, [this](const QString&) {
+    refreshSearchMatches();
+  });
+  auto* findShortcut = new QShortcut(QKeySequence::Find, this);
+  connect(findShortcut, &QShortcut::activated, this, [this]() {
+    d_->search->setFocus(Qt::ShortcutFocusReason);
+    d_->search->selectAll();
+  });
+  auto* findNextShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+G")), this);
+  connect(findNextShortcut, &QShortcut::activated, this, &MainWindow::findNext);
+  auto* findPreviousShortcut =
+      new QShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+G")), this);
+  connect(findPreviousShortcut, &QShortcut::activated, this,
+          &MainWindow::findPrevious);
+
   // Row 2: source + action filter bar + destination.
   auto* locations = new QHBoxLayout();
   auto* sourcePanel = new QWidget(root);
   auto* sourceLayout = new QHBoxLayout(sourcePanel);
   sourceLayout->setContentsMargins(0, 0, 0, 0);
-  sourceLayout->setSpacing(3);
-  auto* swapButton = new QToolButton(sourcePanel);
-  swapButton->setText(QStringLiteral("Swap"));
-  swapButton->setIcon(icons::toolbarIcon(QStringLiteral("swap")));
-  swapButton->setToolTip(QStringLiteral("Swap Source and Destination"));
-  styleTool(swapButton);
-  connect(swapButton, &QToolButton::clicked, this, [this]() {
-    const QString source = d_->source->text();
-    d_->source->setText(d_->destination->text());
-    d_->destination->setText(source);
-  });
+  sourceLayout->setSpacing(4);
   sourceLayout->addWidget(swapButton);
-  d_->source = new QLineEdit(sourcePanel);
-  d_->source->setObjectName(QStringLiteral("source-edit"));
-  d_->source->setPlaceholderText(QStringLiteral("Local: /path or ~/path    SSH: [user@]host:/absolute/path"));
-  sourceLayout->addWidget(d_->source, 1);
   auto* sourceOpen = new QToolButton(sourcePanel);
-  sourceOpen->setText(QStringLiteral("Open"));
-  sourceOpen->setIcon(icons::toolbarIcon(QStringLiteral("open")));
+  sourceOpen->setIcon(icons::toolbarIcon(QStringLiteral("cloud-upload")));
+  sourceOpen->setAccessibleName(QStringLiteral("Open the Source directory"));
   sourceOpen->setToolTip(QStringLiteral("Open the Source directory"));
+  styleTool(sourceOpen);
   connect(sourceOpen, &QToolButton::clicked, this, [this]() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->source->text()));
   });
   sourceLayout->addWidget(sourceOpen);
+  d_->source = new QLineEdit(sourcePanel);
+  d_->source->setObjectName(QStringLiteral("source-edit"));
+  const QString endpointPlaceholder =
+      QStringLiteral(
+          "Local: /path or ~/path    SSH: [user@]host:/absolute/path");
+  d_->source->setPlaceholderText(endpointPlaceholder);
+  const QString endpointHelp =
+      QStringLiteral(
+          "Local examples: /home/alice/data or ~/data\n"
+          "SSH examples: server:/srv/data or alice@server:/srv/data\n"
+          "SSH host aliases from ~/.ssh/config are supported. At most one "
+          "endpoint may be remote.");
+  d_->source->setToolTip(endpointHelp);
+  sourceLayout->addWidget(d_->source, 1);
   auto* sourceBrowse = new QToolButton(sourcePanel);
-  sourceBrowse->setText(QStringLiteral("..."));
-  sourceBrowse->setIcon(icons::folderIcon());
+  sourceBrowse->setIcon(icons::toolbarIcon(QStringLiteral("folder-add")));
+  sourceBrowse->setAccessibleName(QStringLiteral("Browse to Source location"));
+  sourceBrowse->setToolTip(QStringLiteral("Browse to Source location"));
+  styleTool(sourceBrowse);
   connect(sourceBrowse, &QToolButton::clicked, this, [this]() {
     const QString dir = QFileDialog::getExistingDirectory(this, QStringLiteral("Browse to Source location"));
     if (!dir.isEmpty()) d_->source->setText(dir);
   });
   sourceLayout->addWidget(sourceBrowse);
+  sourceLayout->addWidget(verticalSeparator(sourcePanel));
 
   auto* filterColumn = new QWidget(root);
   auto* filterLayout = new QVBoxLayout(filterColumn);
   filterLayout->setContentsMargins(0, 0, 0, 0);
+  filterLayout->setSpacing(0);
   filterLayout->setAlignment(Qt::AlignBottom);
   d_->filterBar = new ActionFilterBar(filterColumn);
   filterLayout->addWidget(d_->filterBar);
@@ -354,22 +542,29 @@ MainWindow::MainWindow(QWidget* parent)
   auto* destinationPanel = new QWidget(root);
   auto* destinationLayout = new QHBoxLayout(destinationPanel);
   destinationLayout->setContentsMargins(0, 0, 0, 0);
-  destinationLayout->setSpacing(3);
-  d_->destination = new QLineEdit(destinationPanel);
-  d_->destination->setObjectName(QStringLiteral("destination-edit"));
-  d_->destination->setPlaceholderText(d_->source->placeholderText());
-  destinationLayout->addWidget(d_->destination, 1);
+  destinationLayout->setSpacing(4);
   auto* destinationOpen = new QToolButton(destinationPanel);
-  destinationOpen->setText(QStringLiteral("Open"));
-  destinationOpen->setIcon(icons::toolbarIcon(QStringLiteral("open")));
+  destinationOpen->setIcon(icons::toolbarIcon(QStringLiteral("cloud-download")));
+  destinationOpen->setAccessibleName(
+      QStringLiteral("Open the Destination directory"));
   destinationOpen->setToolTip(QStringLiteral("Open the Destination directory"));
+  styleTool(destinationOpen);
   connect(destinationOpen, &QToolButton::clicked, this, [this]() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->destination->text()));
   });
   destinationLayout->addWidget(destinationOpen);
+  d_->destination = new QLineEdit(destinationPanel);
+  d_->destination->setObjectName(QStringLiteral("destination-edit"));
+  d_->destination->setPlaceholderText(endpointPlaceholder);
+  d_->destination->setToolTip(endpointHelp);
+  destinationLayout->addWidget(d_->destination, 1);
   auto* destinationBrowse = new QToolButton(destinationPanel);
-  destinationBrowse->setText(QStringLiteral("..."));
-  destinationBrowse->setIcon(icons::folderIcon());
+  destinationBrowse->setIcon(icons::toolbarIcon(QStringLiteral("folder-add")));
+  destinationBrowse->setAccessibleName(
+      QStringLiteral("Browse to Destination location"));
+  destinationBrowse->setToolTip(
+      QStringLiteral("Browse to Destination location"));
+  styleTool(destinationBrowse);
   connect(destinationBrowse, &QToolButton::clicked, this, [this]() {
     const QString dir = QFileDialog::getExistingDirectory(this, QStringLiteral("Browse to Destination location"));
     if (!dir.isEmpty()) d_->destination->setText(dir);
@@ -410,28 +605,19 @@ MainWindow::MainWindow(QWidget* parent)
   d_->commandPreview = new QPlainTextEdit(logColumn);
   d_->commandPreview->setObjectName(QStringLiteral("command-preview-label"));
   d_->commandPreview->setReadOnly(true);
+  d_->commandPreview->setLineWrapMode(QPlainTextEdit::WidgetWidth);
+  d_->commandPreview->setWordWrapMode(
+      QTextOption::WrapAtWordBoundaryOrAnywhere);
+  d_->commandPreview->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  d_->commandPreview->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+  d_->commandPreview->setTabChangesFocus(true);
+  d_->commandPreview->setMinimumWidth(0);
+  d_->commandPreview->setSizePolicy(QSizePolicy::Ignored,
+                                    QSizePolicy::Preferred);
+  d_->commandPreview->setMinimumHeight(
+      d_->commandPreview->fontMetrics().lineSpacing() + 12);
   d_->commandPreview->setPlaceholderText(QStringLiteral("Command preview appears here."));
-  d_->commandPreview->setMaximumHeight(64);
   logColumnLayout->addWidget(d_->commandPreview);
-
-  auto* journalBar = new QWidget(logColumn);
-  auto* journalBarLayout = new QHBoxLayout(journalBar);
-  journalBarLayout->setContentsMargins(0, 0, 0, 0);
-  journalBarLayout->addWidget(new QLabel(QStringLiteral("Journal filter:"), journalBar));
-  d_->journalFilter = new QLineEdit(journalBar);
-  d_->journalFilter->setPlaceholderText(QStringLiteral("Filter journal lines..."));
-  d_->journalFilter->setClearButtonEnabled(true);
-  journalBarLayout->addWidget(d_->journalFilter, 1);
-  connect(d_->journalFilter, &QLineEdit::textChanged, this, [this]() {
-    d_->journal->clear();
-    for (const QString& line : d_->journalLines) {
-      if (d_->journalFilter->text().isEmpty() ||
-          line.contains(d_->journalFilter->text(), Qt::CaseInsensitive)) {
-        appendJournalLine(line);
-      }
-    }
-  });
-  logColumnLayout->addWidget(journalBar);
 
   d_->journal = new QTextEdit(logColumn);
   d_->journal->setReadOnly(true);
@@ -446,17 +632,18 @@ MainWindow::MainWindow(QWidget* parent)
   splitter->setSizes({500, 280});
   rootLayout->addWidget(splitter, 1);
 
-  // Status bar.
-  auto* statusBar = new QWidget(root);
-  auto* statusLayout = new QHBoxLayout(statusBar);
-  statusLayout->setContentsMargins(0, 0, 0, 0);
-  statusLayout->addWidget(new QLabel(QStringLiteral("State:"), statusBar));
-  d_->status = new QLineEdit(statusBar);
+  // Status bar, mirroring qpy: a "State:" label and a frameless read-only
+  // field whose colour follows the severity of the last state.
+  d_->stateLabel = new QLabel(QStringLiteral("State:"), this);
+  d_->status = new QLineEdit(this);
   d_->status->setObjectName(QStringLiteral("status-label"));
   d_->status->setReadOnly(true);
   d_->status->setFrame(false);
-  statusLayout->addWidget(d_->status, 1);
-  rootLayout->addWidget(statusBar);
+  d_->status->setCursorPosition(0);
+  d_->status->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+  statusBar()->setSizeGripEnabled(false);
+  statusBar()->addWidget(d_->stateLabel);
+  statusBar()->addWidget(d_->status, 1);
 
   d_->compareProcess = new QProcess(this);
   d_->operationProcess = new QProcess(this);
@@ -589,7 +776,26 @@ void MainWindow::setCommandPreview(const core::ProcessSpec& spec) {
 }
 
 void MainWindow::setStatus(const QString& text) {
+  const QString lower = text.toLower();
+  QString colour;
+  if (lower.contains(QStringLiteral("failed")) ||
+      lower.contains(QStringLiteral("error"))) {
+    colour = QStringLiteral("#B91C1C");
+  } else if (lower.contains(QStringLiteral("complete")) ||
+             lower.contains(QStringLiteral("synchronized")) ||
+             lower.contains(QStringLiteral("verified"))) {
+    colour = QStringLiteral("#15803D");
+  } else if (lower.contains(QStringLiteral("stale")) ||
+             lower.contains(QStringLiteral("cancel"))) {
+    colour = QStringLiteral("#EA580C");
+  }
+  d_->status->setStyleSheet(
+      QStringLiteral(
+          "background-color: palette(window); border: none; padding: 0px 2px;") +
+      (colour.isEmpty() ? QString() : QStringLiteral(" color: %1;").arg(colour)));
+  d_->status->setToolTip(text);
   d_->status->setText(text);
+  d_->status->setCursorPosition(0);
   const QString time = QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz"));
   const QString line = time + QStringLiteral(" ") + text;
   d_->journalLines.append(line);
@@ -663,8 +869,10 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   d_->overview->rebuild(d_->comparison->store());
   refreshPlan();
   d_->stale = false;
-  d_->progress->show();
-  d_->progress->setValue(100);
+  // qpy keeps the progress bar hidden for a comparison; it is only shown
+  // while verifying or synchronizing. Leaving a bright 100% bar on screen
+  // after Compare was a visible mismatch.
+  d_->progress->hide();
   d_->progressLabel->setText(QStringLiteral("Comparison completed"));
   startDestinationInventory();
   setStatus(QStringLiteral("Comparison complete: %1 item(s)")
@@ -1081,6 +1289,63 @@ void MainWindow::resetProfile() {
   d_->destination->clear();
   d_->profile = core::SyncProfile{};
   setStatus(QStringLiteral("Profile reset"));
+}
+
+void MainWindow::refreshSearchMatches() {
+  const QString text = d_->search->text();
+  d_->searchMatches = d_->comparison->searchMatches(text);
+  d_->searchPosition = -1;
+  d_->searchText = text.trimmed().toLower();
+  const bool hasText = !d_->searchText.isEmpty();
+  d_->searchStatus->setVisible(hasText);
+  d_->searchPreviousButton->setVisible(hasText && !d_->searchMatches.isEmpty());
+  d_->searchNextButton->setVisible(hasText && !d_->searchMatches.isEmpty());
+  if (!hasText) {
+    d_->searchStatus->clear();
+    return;
+  }
+  d_->searchStatus->setText(
+      d_->searchMatches.isEmpty()
+          ? QStringLiteral("no match")
+          : QStringLiteral("0/%1").arg(d_->searchMatches.size()));
+}
+
+void MainWindow::stepSearch(int direction) {
+  if (d_->searchMatches.isEmpty()) {
+    refreshSearchMatches();
+    if (d_->searchMatches.isEmpty()) return;
+  }
+  const int count = d_->searchMatches.size();
+  d_->searchPosition = (d_->searchPosition + direction + count) % count;
+  d_->comparison->selectPath(d_->searchMatches.at(d_->searchPosition));
+  d_->searchStatus->setText(
+      QStringLiteral("%1/%2").arg(d_->searchPosition + 1).arg(count));
+}
+
+void MainWindow::findNext() {
+  if (d_->search->text().trimmed().isEmpty()) {
+    d_->search->setFocus(Qt::ShortcutFocusReason);
+    d_->search->selectAll();
+    return;
+  }
+  if (d_->search->text().trimmed().toLower() != d_->searchText ||
+      d_->searchMatches.isEmpty()) {
+    refreshSearchMatches();
+  }
+  stepSearch(1);
+}
+
+void MainWindow::findPrevious() {
+  if (d_->search->text().trimmed().isEmpty()) {
+    d_->search->setFocus(Qt::ShortcutFocusReason);
+    d_->search->selectAll();
+    return;
+  }
+  if (d_->search->text().trimmed().toLower() != d_->searchText ||
+      d_->searchMatches.isEmpty()) {
+    refreshSearchMatches();
+  }
+  stepSearch(-1);
 }
 
 void MainWindow::updateProfileMenu() {

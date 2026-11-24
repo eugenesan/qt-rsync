@@ -159,6 +159,68 @@ QIcon toolbarIcon(const QString& name) {
   if (name == QLatin1String("swap")) {
     return themed({"swap-panels-symbolic", "swap-panels"}, QStyle::SP_BrowserReload);
   }
+  if (name == QLatin1String("excluded")) {
+    // Eye with a slash, the marker qpy uses on the Excluded toggle.
+    return makeGrid([](QPainter& p) {
+      p.setPen(gridPen(QColor("#6b7280"), 1.8));
+      p.drawArc(QRectF(2.5, 4.5, 11.0, 7.0), 0, 180 * 16);
+      p.drawArc(QRectF(2.5, 4.5, 11.0, 7.0), 180 * 16, 180 * 16);
+      p.drawEllipse(QPointF(8.0, 8.0), 2.0, 2.0);
+      p.setPen(gridPen(QColor("#b91c1c"), 1.8));
+      p.drawLine(QPointF(3.0, 13.0), QPointF(13.0, 3.0));
+    });
+  }
+  if (name == QLatin1String("unchanged")) {
+    return makeGrid([](QPainter& p) {
+      p.setPen(gridPen(QColor("#64748b"), 2.0));
+      p.drawLine(QPointF(4.0, 8.6), QPointF(6.9, 11.4));
+      p.drawLine(QPointF(6.9, 11.4), QPointF(12.0, 4.8));
+    });
+  }
+  if (name == QLatin1String("conflict")) {
+    return makeGrid([](QPainter& p) {
+      const QColor colour(QStringLiteral("#b45309"));
+      p.setPen(gridPen(colour, 1.8));
+      p.drawEllipse(QRectF(2.5, 2.5, 11.0, 11.0));
+      p.drawLine(QPointF(8.0, 5.0), QPointF(8.0, 9.5));
+      p.drawPoint(QPointF(8.0, 12.0));
+    });
+  }
+  if (name == QLatin1String("appmenu")) {
+    return makeGrid([](QPainter& p) {
+      p.setPen(gridPen(QColor("#94a3b8"), 1.8));
+      for (double y : {4.5, 8.0, 11.5}) {
+        p.drawLine(QPointF(3.5, y), QPointF(12.5, y));
+      }
+    });
+  }
+  if (name == QLatin1String("search-previous")) {
+    return themed({"go-up", "arrow-up"}, QStyle::SP_ArrowUp);
+  }
+  if (name == QLatin1String("search-next")) {
+    return themed({"go-down", "arrow-down"}, QStyle::SP_ArrowDown);
+  }
+  if (name == QLatin1String("layout")) {
+    return themed({"view-fullscreen", "view-restore", "window-maximize"},
+                  QStyle::SP_ComputerIcon);
+  }
+  if (name == QLatin1String("cloud-upload")) {
+    return themed({"cloud-upload-symbolic", "cloud-upload", "go-up"},
+                  QStyle::SP_ArrowUp);
+  }
+  if (name == QLatin1String("cloud-download")) {
+    return themed({"cloud-download-symbolic", "cloud-download", "go-down"},
+                  QStyle::SP_ArrowDown);
+  }
+  if (name == QLatin1String("folder-add")) {
+    return themed({"folder-new-symbolic", "folder-add-symbolic", "folder-new",
+                   "folder-drag-accept", "folder"},
+                  QStyle::SP_DirOpenIcon);
+  }
+  if (name == QLatin1String("profile")) {
+    return themed({"quickopen-file-symbolic", "quickopen-file", "document-open"},
+                  QStyle::SP_DialogOpenButton);
+  }
   if (name == QLatin1String("compare")) {
     return themed({"kr_comparedirs", "kr_comparedir", "document-compareright",
                    "document-compareright-symbolic"},
