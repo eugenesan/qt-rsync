@@ -59,6 +59,8 @@ and refreshed documentation and packaging.
   disabled until a new comparison.
 - Ctrl+Tab / Ctrl+Shift+Tab cycle the compare layouts again; the navigation
   filter no longer swallows the shortcut.
+- Startup options are validated (mode and compare pair) and Qt-only switches
+  such as `-style Fusion` are forwarded to QApplication again.
 
 ### Changed
 

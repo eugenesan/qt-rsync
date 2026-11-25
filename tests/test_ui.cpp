@@ -91,6 +91,8 @@ class UiTest : public QObject {
   void actionFilterHidesUnrelatedDirectories();
   void staleRootIsMarkedInTheComparison();
   void layoutShortcutCyclesModes();
+  void startupOptionsParseAllOptions();
+  void startupOptionsValidateModeAndComparePair();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1610,6 +1612,47 @@ void UiTest::layoutShortcutCyclesModes() {
   previous->activated();
   QTest::qWait(10);
   QCOMPARE(overview->isVisible(), initial);
+}
+
+void UiTest::startupOptionsParseAllOptions() {
+  QString error;
+  const auto options = app::StartupOptions::parse(
+      {QStringLiteral("qt-rsync"), QStringLiteral("--dir-pair"),
+       QStringLiteral("/src/"), QStringLiteral("/dst/"),
+       QStringLiteral("--backup"), QStringLiteral("/backup/"),
+       QStringLiteral("--mode"), QStringLiteral("new-only"),
+       QStringLiteral("--compare"), QStringLiteral("--log-file"),
+       QStringLiteral("/tmp/run.log"), QStringLiteral("-style"),
+       QStringLiteral("Fusion")}, &error);
+  QVERIFY(error.isEmpty());
+  QCOMPARE(options.source, QStringLiteral("/src/"));
+  QCOMPARE(options.destination, QStringLiteral("/dst/"));
+  QCOMPARE(options.backup, QStringLiteral("/backup/"));
+  QCOMPARE(options.mode, QStringLiteral("new-only"));
+  QVERIFY(options.compare);
+  QCOMPARE(options.logFile, QStringLiteral("/tmp/run.log"));
+  QVERIFY(!options.noLogFile);
+  const QStringList expectedQt{QStringLiteral("-style"), QStringLiteral("Fusion")};
+  QCOMPARE(options.qtArguments, expectedQt);
+
+  const auto disabled = app::StartupOptions::parse(
+      {QStringLiteral("qt-rsync"), QStringLiteral("--no-log-file")}, &error);
+  QVERIFY(error.isEmpty());
+  QVERIFY(disabled.noLogFile);
+}
+
+void UiTest::startupOptionsValidateModeAndComparePair() {
+  QString error;
+  app::StartupOptions::parse(
+      {QStringLiteral("qt-rsync"), QStringLiteral("--compare")}, &error);
+  QVERIFY(error.contains(QStringLiteral("dir-pair")));
+  error.clear();
+  const auto invalid = app::StartupOptions::parse(
+      {QStringLiteral("qt-rsync"), QStringLiteral("--dir-pair"),
+       QStringLiteral("/src/"), QStringLiteral("/dst/"),
+       QStringLiteral("--mode"), QStringLiteral("two-way")}, &error);
+  QVERIFY(error.contains(QStringLiteral("Invalid mode")));
+  QCOMPARE(invalid.mode, QStringLiteral("update"));
 }
 
 QTEST_MAIN(UiTest)

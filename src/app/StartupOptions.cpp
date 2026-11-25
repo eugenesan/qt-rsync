@@ -9,7 +9,7 @@ void StartupOptions::setupParser(QCommandLineParser& p) {
   p.addOptions({
       {{QStringLiteral("dir-pair"), QStringLiteral("d")},
        QStringLiteral("populate Source and Destination"),
-       QStringLiteral("SOURCE DESTINATION")},
+       QStringLiteral("SOURCE")},
       {QStringLiteral("backup"), QStringLiteral("populate the backup directory"),
        QStringLiteral("DIRECTORY")},
       {QStringLiteral("mode"),
@@ -28,9 +28,34 @@ StartupOptions StartupOptions::parse(const QStringList& arguments, QString* erro
   StartupOptions result;
   QCommandLineParser p;
   setupParser(p);
-  const bool ok = p.parse(arguments);
+  // Qt's own platform/style switches are forwarded to QApplication. They are
+  // not application options, so separate them before QCommandLineParser sees
+  // them (it rejects unknown switches).
+  const QStringList known{QStringLiteral("--dir-pair"), QStringLiteral("-d"),
+                          QStringLiteral("--backup"), QStringLiteral("--mode"),
+                          QStringLiteral("--compare"), QStringLiteral("--log-file"),
+                          QStringLiteral("--no-log-file"), QStringLiteral("--version"),
+                          QStringLiteral("-v"), QStringLiteral("--help"),
+                          QStringLiteral("-h")};
+  QStringList appArguments;
+  QStringList qtArgs;
+  // QCommandLineParser::parse() expects the program name as argument zero,
+  // exactly as QCoreApplication::arguments() provides it.
+  for (int index = 0; index < arguments.size(); ++index) {
+    const QString arg = arguments.at(index);
+    if (arg.startsWith('-') && !known.contains(arg)) {
+      qtArgs.append(arg);
+      if (index + 1 < arguments.size() &&
+          !arguments.at(index + 1).startsWith('-')) {
+        qtArgs.append(arguments.at(++index));
+      }
+      continue;
+    }
+    appArguments.append(arg);
+  }
+  const bool ok = p.parse(appArguments);
   if (!ok && error) *error = p.errorText();
-  result.qtArguments = p.positionalArguments();
+  QStringList positional = p.positionalArguments();
   if (p.isSet(QStringLiteral("dir-pair"))) {
     // QCommandLineParser consumes one value per option flag; the second
     // operand arrives as a positional argument.
@@ -38,10 +63,11 @@ StartupOptions StartupOptions::parse(const QStringList& arguments, QString* erro
     if (!pair.isEmpty()) result.source = pair.first();
     if (pair.size() > 1) {
       result.destination = pair.at(1);
-    } else if (!result.qtArguments.isEmpty()) {
-      result.destination = result.qtArguments.first();
+    } else if (!positional.isEmpty()) {
+      result.destination = positional.takeFirst();
     }
   }
+  result.qtArguments = positional + qtArgs;
   result.backup = p.value(QStringLiteral("backup"));
   result.mode = p.value(QStringLiteral("mode"));
   result.compare = p.isSet(QStringLiteral("compare"));
@@ -49,6 +75,22 @@ StartupOptions StartupOptions::parse(const QStringList& arguments, QString* erro
   result.noLogFile = p.isSet(QStringLiteral("no-log-file"));
   result.version = p.isSet(QStringLiteral("version"));
   result.help = p.isSet(QStringLiteral("help"));
+  if (result.mode != QStringLiteral("update") &&
+      result.mode != QStringLiteral("mirror") &&
+      result.mode != QStringLiteral("new-only")) {
+    if (error != nullptr) {
+      *error = QStringLiteral("Invalid mode: %1").arg(result.mode);
+    }
+    result.mode = QStringLiteral("update");
+    return result;
+  }
+  if (result.compare &&
+      (result.source.isEmpty() || result.destination.isEmpty())) {
+    if (error != nullptr) {
+      *error = QStringLiteral("--compare requires --dir-pair SOURCE DESTINATION");
+    }
+    result.compare = false;
+  }
   return result;
 }
 

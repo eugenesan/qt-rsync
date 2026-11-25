@@ -308,6 +308,18 @@ void CoreTest::patternMatching() {
   QVERIFY(patternMatches(QStringLiteral("docs/"), QStringLiteral("docs/a/b.txt")));
   QVERIFY(patternMatches(QStringLiteral("a/**/x.txt"), QStringLiteral("a/b/c/x.txt")));
   QVERIFY(!patternMatches(QString(), QStringLiteral("a.txt")));
+  // qpy's rsync pattern oracle: a basename matches at any depth, a leading
+  // slash anchors to the compared folder, and a trailing slash covers a tree.
+  QVERIFY(patternMatches(QStringLiteral("*.jpg"), QStringLiteral("pictures/photo.jpg")));
+  QVERIFY(patternMatches(QStringLiteral("photo.jpg"), QStringLiteral("a/b/photo.jpg")));
+  QVERIFY(!patternMatches(QStringLiteral("*.jpg"), QStringLiteral("pictures/photo.png")));
+  QVERIFY(patternMatches(QStringLiteral("pictures/"), QStringLiteral("a/b/pictures/photo.jpg")));
+  QVERIFY(patternMatches(QStringLiteral("/docs/"), QStringLiteral("docs/pictures/photo.jpg")));
+  QVERIFY(patternMatches(QStringLiteral("/docs/pictures/"), QStringLiteral("docs/pictures/photo.jpg")));
+  QVERIFY(!patternMatches(QStringLiteral("/docs/pictures/photo.jpg"),
+                          QStringLiteral("other/docs/pictures/photo.jpg")));
+  QVERIFY(patternMatches(QStringLiteral("[0-9]*.txt"), QStringLiteral("2024.txt")));
+  QVERIFY(!patternMatches(QStringLiteral("[0-9]*.txt"), QStringLiteral("docs/report.txt")));
 }
 
 void CoreTest::cleanQtNoiseRemovesOnlyBenignLines() {

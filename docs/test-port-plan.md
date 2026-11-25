@@ -24,12 +24,12 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 | `test_flat_filtering.py` | 31 | Partial: action masks, ancestors, unchanged gate and search matching are covered. Remaining: path/glob filters, directory-only mode, inverse clicks and filter persistence. |
 | `test_action_filters.py` | 19 | Mostly ported: initial state, display-only tooltips, excluded count, focus policy, separators, ancestor retention, Ctrl+click inversion and the checkbox context menu. Remaining: exhaustive state combinations. |
 | `test_command.py` | 13 | Mostly ported: compare/verify/sync argv, modes, filters, delete timing and remote shell. Remaining: exhaustive option combinations. |
-| `test_app_startup_options.py` | 12 | Partial: CLI surface exists; add one case per option and failure path. |
+| `test_app_startup_options.py` | 12 | Ported at the CLI level: complete argument set, Qt-only arguments, log-file/no-log-file, compare pair and invalid mode. Qt environment/migration cases are N/A in the C++ port. |
 | `test_external_tools.py` | 11 | Storage/editor fields ported; placeholder expansion and warnings still open. |
 | `test_changes.py` | 11 | Ported: decision reconcile/exclude/include/delete. |
 | `test_overview.py` | 10 | Partial: share bars, totals, sorting and folder expansion. Remaining: filtering and selection callbacks. |
 | `test_delete_decision.py` | 10 | Mostly ported: delete decisions and mirror rules. |
-| `test_rsync_parser.py` | 9 | Ported: itemized records, deletes, inventory with size/time. |
+| `test_rsync_parser.py` | 9 | Ported: itemized records, deletes, inventory with size/time, context phrases and rsync pattern matching including anchored/trailing and bracket globs. |
 | `test_execution_plan.py` | 9 | Ported: summaries, fingerprints, freshness. |
 | `test_sync_confirmation.py` | 8 | Dialog fields, command, rules and warning ported; add a widget assertion for each field. |
 | `test_settings_dialog.py` | 8 | Ported in part: diagnostics, defaults, tools, logging, colours, verification visibility. |
@@ -81,6 +81,10 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 - Sync output: `rsyncProgressDerivedFromCounters` covers progress derived from
   rsync counters; UI cases cover the stale state after sync and the concise
   journal.
+- CLI: `startupOptionsParseAllOptions` and
+  `startupOptionsValidateModeAndComparePair` cover the qpy startup-option
+  cases that apply to the C++ executable, including forwarding Qt-only
+  switches.
 
 ## Next conversion batches
 
