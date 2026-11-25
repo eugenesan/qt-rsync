@@ -19,13 +19,13 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 
 | qpy module | cases | qt-rsync status |
 |---|---:|---|
-| `test_main_window_offscreen.py` | 95 | Partial: startup, profile cache, locked profile, compare/verify/sync, settings, closing, sync progress/stale state and several view actions are covered. Menu enablement, the full journal and every shortcut still need explicit cases. |
+| `test_main_window_offscreen.py` | 95 | Partial: startup, profile cache, locked profile, compare/verify/sync, settings, closing, sync progress/stale state, basic menus and F-key shortcuts are covered. Full journal states and exact shortcut enablement still need cases. |
 | `test_flat_comparison_view.py` | 49 | Partial: three panes, selection sync, folding, context menus, navigation keys and stale root visuals are covered. Remaining: all header context actions, exact tooltips and per-pane local/remote menus. |
 | `test_flat_filtering.py` | 31 | Partial: action masks, ancestors, unchanged gate and search matching are covered. Remaining: path/glob filters, directory-only mode, inverse clicks and filter persistence. |
 | `test_action_filters.py` | 19 | Mostly ported: initial state, display-only tooltips, excluded count, focus policy, separators, ancestor retention, Ctrl+click inversion and the checkbox context menu. Remaining: exhaustive state combinations. |
 | `test_command.py` | 13 | Mostly ported: compare/verify/sync argv, modes, filters, delete timing and remote shell. Remaining: exhaustive option combinations. |
 | `test_app_startup_options.py` | 12 | Ported at the CLI level: complete argument set, Qt-only arguments, log-file/no-log-file, compare pair and invalid mode. Qt environment/migration cases are N/A in the C++ port. |
-| `test_external_tools.py` | 11 | Storage/editor fields ported; placeholder expansion and warnings still open. |
+| `test_external_tools.py` | 11 | Blocked: qt-rsync stores tool rows but does not implement placeholder expansion/tool launch yet. Either port that feature or mark the module N/A explicitly. |
 | `test_changes.py` | 11 | Ported: decision reconcile/exclude/include/delete. |
 | `test_overview.py` | 10 | Partial: share bars, totals, sorting and folder expansion. Remaining: filtering and selection callbacks. |
 | `test_delete_decision.py` | 10 | Mostly ported: delete decisions and mirror rules. |
@@ -34,7 +34,7 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 | `test_sync_confirmation.py` | 8 | Dialog fields, command, rules and warning ported; add a widget assertion for each field. |
 | `test_settings_dialog.py` | 8 | Ported in part: diagnostics, defaults, tools, logging, colours, verification visibility. |
 | `test_locked_profile_startup.py` | 8 | Ported: retry, temporary copy and quit-without-changes. |
-| `test_diff_tool_service.py` | 8 | Local meld launch implemented; placeholder expansion and remote staging still open. |
+| `test_diff_tool_service.py` | 8 | Local meld launch implemented; placeholder expansion and remote staging remain tied to the external-tools feature gap. |
 | `test_sync_modes.py` | 7 | Ported: update/mirror/new-only argv and destination-only decisions. |
 | `test_inventory.py` | 7 | Ported at the parser/merge level: source and destination listings, filter handling and sizes. |
 | `test_plan_validation.py` | 6 | Ported: verify mismatch/missing/unexpected. |
@@ -85,14 +85,16 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
   `startupOptionsValidateModeAndComparePair` cover the qpy startup-option
   cases that apply to the C++ executable, including forwarding Qt-only
   switches.
+- Menus/shortcuts: `menusAndShortcutsAreWired` asserts the top-level menus,
+  layout actions, Undo/Redo actions and the F1-F12 window shortcuts.
 
 ## Next conversion batches
 
 1. `test_action_filters.py` exhaustive inversion state combinations.
 2. `test_flat_filtering.py` path/glob patterns and directory-only mode.
-3. `test_main_window_offscreen.py` menu enablement and full journal states.
+3. `test_main_window_offscreen.py` exact shortcut enablement and full journal states.
 4. `test_flat_comparison_view.py` per-pane menus and exact tooltips.
 5. `test_settings_dialog.py` and `test_profile_editor.py` widget round-trips.
-6. `test_external_tools.py` placeholder expansion/warnings.
+6. External tool placeholder expansion/launch (feature gap, not only tests).
 7. `test_sync_confirmation.py` per-field dialog assertions.
 8. Golden screenshots for main window, settings, sync dialog and profile editor.

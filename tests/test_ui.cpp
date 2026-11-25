@@ -27,6 +27,9 @@
 #include <QTemporaryDir>
 #include <QTableView>
 #include <QTableWidget>
+#include <QMenu>
+#include <QMenuBar>
+#include <QToolButton>
 #include <QTreeView>
 #include <QImage>
 #include <QShortcut>
@@ -93,6 +96,7 @@ class UiTest : public QObject {
   void layoutShortcutCyclesModes();
   void startupOptionsParseAllOptions();
   void startupOptionsValidateModeAndComparePair();
+  void menusAndShortcutsAreWired();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1653,6 +1657,57 @@ void UiTest::startupOptionsValidateModeAndComparePair() {
        QStringLiteral("--mode"), QStringLiteral("two-way")}, &error);
   QVERIFY(error.contains(QStringLiteral("Invalid mode")));
   QCOMPARE(invalid.mode, QStringLiteral("update"));
+}
+
+void UiTest::menusAndShortcutsAreWired() {
+  ui::MainWindow window;
+  window.show();
+  QTest::qWait(10);
+  const auto action = [&window](const QString& text) -> QAction* {
+    for (QAction* candidate : window.findChildren<QAction*>()) {
+      if (candidate->text() == text) return candidate;
+    }
+    return nullptr;
+  };
+  QVERIFY(action(QStringLiteral("Compare only")) != nullptr);
+  QVERIFY(action(QStringLiteral("Compare with overview")) != nullptr);
+  QVERIFY(action(QStringLiteral("Normal")) != nullptr);
+  QVERIFY(action(QStringLiteral("Undo Decision")) != nullptr);
+  QVERIFY(action(QStringLiteral("Redo Decision")) != nullptr);
+
+  QStringList menuTitles;
+  for (QMenu* menu : window.menuBar()->findChildren<QMenu*>()) {
+    menuTitles << menu->title();
+  }
+  QVERIFY(menuTitles.contains(QStringLiteral("File")));
+  QVERIFY(menuTitles.contains(QStringLiteral("Edit")));
+  QVERIFY(menuTitles.contains(QStringLiteral("View")));
+  QVERIFY(menuTitles.contains(QStringLiteral("Decisions")));
+  QVERIFY(menuTitles.contains(QStringLiteral("Help")));
+
+  QSet<QString> shortcutKeys;
+  for (QShortcut* shortcut : window.findChildren<QShortcut*>()) {
+    shortcutKeys.insert(shortcut->key().toString());
+  }
+  for (Qt::Key key : {Qt::Key_F1, Qt::Key_F2, Qt::Key_F3, Qt::Key_F4,
+                      Qt::Key_F5, Qt::Key_F6, Qt::Key_F7, Qt::Key_F8,
+                      Qt::Key_F9, Qt::Key_F10, Qt::Key_F11, Qt::Key_F12}) {
+    QVERIFY2(shortcutKeys.contains(QKeySequence(key).toString()),
+             qPrintable(QStringLiteral("missing F-key shortcut %1").arg(
+                 static_cast<int>(key))));
+  }
+
+  QToolButton* sync = nullptr;
+  for (QToolButton* tool : window.findChildren<QToolButton*>()) {
+    if (tool->accessibleName() == QStringLiteral("Synchronize")) sync = tool;
+  }
+  QVERIFY(sync != nullptr);
+  QToolButton* preserve = nullptr;
+  for (QToolButton* tool : window.findChildren<QToolButton*>()) {
+    if (tool->text() == QStringLiteral("Preserve")) preserve = tool;
+  }
+  QVERIFY(preserve != nullptr);
+  QVERIFY(preserve->isEnabled());
 }
 
 QTEST_MAIN(UiTest)
