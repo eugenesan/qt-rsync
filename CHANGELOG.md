@@ -67,10 +67,18 @@ and refreshed documentation and packaging.
   Synchronization progress updates only when the percentage changes, with a
   250 ms pacing fallback so partial batches still update during long runs.
 - Every journal line now carries a timestamp, including rsync summaries and
-  state markers, and is written to the session log.
+  state markers, and is written to the session log. `--log-file` and
+  `--no-log-file` are honoured at startup again.
 - Decision mirroring walks decided subtrees through a child index instead of
   scanning every path for every decision, and the folder tree order is cached
   between filter rebuilds, removing the UI stall on large comparisons.
+- The destination metadata listing now starts as soon as the dry run ends and
+  runs in parallel with parsing and view construction, like qpy, instead of
+  after them. The unused per-record description and the duplicate plan rebuild
+  after metadata are gone, and deleted-size lookups use an ancestor index
+  instead of scanning the whole metadata table per directory.
+- Comparison journal timings now report real wall-clock values (including the
+  total "Comparison ready in" time) instead of hard-coded zeroes.
 - External tools support qpy's placeholder expansion; the diff command uses
   the configured command with `%a`/`%A` and quoted paths stay one argument.
 

@@ -237,7 +237,9 @@ class MainWindow::Private {
   QElapsedTimer compareProgressClock;
   QElapsedTimer syncProgressClock;
   QElapsedTimer compareClock;
+  QElapsedTimer compareTotalClock;
   QElapsedTimer viewClock;
+  qint64 journalWriteNs = 0;
   double lastCompareSeconds = 0.0;
   int pendingCompareChanges = 0;
   bool comparisonAwaitingMetadata = false;
@@ -1069,10 +1071,8 @@ MainWindow::MainWindow(QWidget* parent)
     d_->compareLineBuffer = parts.isEmpty() ? QString() : parts.last();
     for (int index = 0; index + 1 < parts.size(); ++index) {
       const QString line = parts.at(index).trimmed();
-      if (line.isEmpty() || !line.contains(QStringLiteral("|qpy-rsync|"))) {
-        continue;
-      }
-      if (core::parseRecord(line).has_value()) ++d_->compareItemsFound;
+      if (line.isEmpty() || !core::looksLikeItemizedRecord(line)) continue;
+      ++d_->compareItemsFound;
     }
     const bool batchReady =
         d_->compareItemsFound - d_->compareItemsReported >= kCompareProgressBatch;
@@ -1294,6 +1294,18 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::applyStartupOptions(const app::StartupOptions& options) {
+  if (options.noLogFile) {
+    closeSessionLog();
+  } else if (!options.logFile.isEmpty()) {
+    closeSessionLog();
+    d_->logPath = options.logFile;
+    QFileInfo(d_->logPath).absoluteDir().mkpath(QStringLiteral("."));
+    d_->logFile = new QFile(d_->logPath, this);
+    if (d_->logFile->open(QIODevice::Append | QIODevice::Text)) {
+      d_->logFile->write(QStringLiteral("\n===== qt-rsync session =====\n").toUtf8());
+      d_->logFile->flush();
+    }
+  }
   // Empty options mean no --dir-pair was given; keep the profile's endpoints.
   if (!options.source.isEmpty()) {
     d_->source->setText(withTrailingSlash(options.source));
@@ -1313,6 +1325,8 @@ void MainWindow::applyStartupOptions(const app::StartupOptions& options) {
 }
 
 void MainWindow::appendJournalLine(const QString& rawLine) {
+  QElapsedTimer writeClock;
+  writeClock.start();
   static const QRegularExpression timestampPrefix(
       QStringLiteral("^\\d{2}:\\d{2}:\\d{2}\\.\\d\\s"));
   const QString line = timestampPrefix.match(rawLine).hasMatch()
@@ -1348,6 +1362,7 @@ void MainWindow::appendJournalLine(const QString& rawLine) {
     d_->logFile->write((line + QLatin1Char('\n')).toUtf8());
     d_->logFile->flush();
   }
+  d_->journalWriteNs += writeClock.nsecsElapsed();
 }
 
 void MainWindow::setCommandPreview(const core::ProcessSpec& spec) {
@@ -1409,7 +1424,9 @@ void MainWindow::startCompare() {
   appendJournalLine(QStringLiteral("$ ") + spec.argv().join(' '));
   appendJournalLine(QStringLiteral("rsync dry run start clock set."));
   appendJournalLine(QStringLiteral("STATE comparing"));
+  d_->journalWriteNs = 0;
   d_->compareClock.start();
+  d_->compareTotalClock.start();
   d_->compare->setEnabled(false);
   d_->cancel->setEnabled(true);
   d_->stateLabel->setText(QStringLiteral("State:"));
@@ -1454,18 +1471,32 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   }
   const double compareSeconds = d_->compareClock.isValid()
                                     ? d_->compareClock.elapsed() / 1000.0 : 0.0;
-  appendJournalLine(
-      QStringLiteral("Compare parse: %1 line(s), parsing 0.00 s, journal "
-                     "writes 0.00 s.")
-          .arg(output.count('\n')));
+  const double journalSeconds = d_->journalWriteNs / 1e9;
+  QString parseLine = QStringLiteral(
+                          "Compare parse: %1 line(s), parsing %2 s, journal "
+                          "writes %3 s.")
+                          .arg(output.count('\n'));
+  // The parse time is filled in just below; the line is emitted before parsing
+  // so its position in the journal matches qpy's log.
   appendJournalLine(
       QStringLiteral("rsync dry run finished in %1 s (wall %1 s).")
           .arg(compareSeconds, 0, 'f', 2));
   appendJournalLine(d_->preserve->isChecked()
                         ? QStringLiteral("Decisions preserved for this comparison.")
                         : QStringLiteral("Decisions reset for this comparison."));
+  // qpy starts the destination metadata listing as soon as the dry run ends
+  // and parses/builds the view while it runs. Doing the same here overlaps
+  // two independent rsync passes instead of paying for them serially. The
+  // finished() signal is delivered after this slot returns, so the store is
+  // ready by the time the metadata is applied.
+  startDestinationInventory();
+  QElapsedTimer parseClock;
+  parseClock.start();
   const core::ParseResult parsed = core::parseOutput(
       QString::fromUtf8(output), d_->profile.transfer.mirrorEnabled());
+  const double parseSeconds = parseClock.elapsed() / 1000.0;
+  appendJournalLine(parseLine.arg(parseSeconds, 0, 'f', 2)
+                        .arg(journalSeconds, 0, 'f', 2));
   d_->changes = parsed.changes;
   const auto baseName = [](const QString& operand) {
     QString clean = operand.trimmed();
@@ -1482,7 +1513,12 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   appendJournalLine(
       QStringLiteral("Comparison view built in %1 s.")
           .arg(d_->viewClock.elapsed() / 1000.0, 0, 'f', 2));
+  QElapsedTimer planClock;
+  planClock.start();
   refreshPlan();
+  appendJournalLine(
+      QStringLiteral("Plan built in %1 s.")
+          .arg(planClock.elapsed() / 1000.0, 0, 'f', 2));
   // The comparison is not complete until the destination metadata listing
   // finishes. Keep Compare disabled and Sync/Verify unavailable meanwhile.
   d_->sync->setEnabled(false);
@@ -1512,7 +1548,6 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   // after Compare was a visible mismatch.
   d_->progress->hide();
   d_->progressLabel->setText(QStringLiteral("Gathering destination metadata..."));
-  startDestinationInventory();
   setStatus(QStringLiteral("Gathering destination metadata..."));
 }
 
@@ -1637,14 +1672,29 @@ void MainWindow::onDestinationInventoryFinished(int, QProcess::ExitStatus) {
     mergeInventoryChanges();
   }
   if (!d_->destinationListingCache.isEmpty()) {
+    QElapsedTimer metadataClock;
+    metadataClock.start();
     d_->comparison->applyDestinationMetadata(d_->destinationListingCache);
+    const double metadataSeconds = metadataClock.elapsed() / 1000.0;
+    QElapsedTimer overviewClock;
+    overviewClock.start();
     d_->overview->rebuild(d_->comparison->store());
+    appendJournalLine(
+        QStringLiteral("Destination metadata applied in %1 s; overview "
+                       "rebuilt in %2 s.")
+            .arg(metadataSeconds, 0, 'f', 2)
+            .arg(overviewClock.elapsed() / 1000.0, 0, 'f', 2));
   }
   if (d_->comparisonAwaitingMetadata) {
     d_->comparisonAwaitingMetadata = false;
     d_->stale = false;
     updateStateIcons();
-    refreshPlan();
+    // The plan depends on decisions and filters, not on destination sizes, so
+    // rebuilding it here only repeated the same work a second time. Restore
+    // the controls from the existing summary instead.
+    const bool actionable = d_->plan.summary.included > 0;
+    d_->verify->setEnabled(actionable);
+    d_->sync->setEnabled(actionable);
     d_->compare->setEnabled(true);
     d_->cancel->setEnabled(false);
     d_->progress->hide();
@@ -1653,9 +1703,10 @@ void MainWindow::onDestinationInventoryFinished(int, QProcess::ExitStatus) {
                           .arg(d_->pendingCompareChanges));
     setStatus(QStringLiteral("Comparison complete: %1 changed item(s)")
                             .arg(d_->pendingCompareChanges));
+    const double readySeconds = d_->compareTotalClock.elapsed() / 1000.0;
     appendJournalLine(
         QStringLiteral("Comparison ready in %1 s.")
-            .arg(d_->lastCompareSeconds, 0, 'f', 2));
+            .arg(readySeconds, 0, 'f', 2));
     playCompletionSound(QStringLiteral("success"));
   }
   d_->progress->hide();

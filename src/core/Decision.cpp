@@ -237,17 +237,24 @@ int Decisions::reconcile(const QVector<Change>& changes, bool preserve,
   conflicts_.clear();
   QSet<QString> stale;
 
+  // One pass over the paths builds the set of all ancestor folders. The old
+  // code rescanned every path for every explicit decision, which made a
+  // bulk "delete using decisions" edit quadratic on a large comparison.
+  QSet<QString> ancestorPaths;
+  for (const QString& candidate : currentPaths) {
+    int slash = candidate.lastIndexOf('/');
+    while (slash >= 0) {
+      ancestorPaths.insert(candidate.left(slash));
+      if (slash == 0) break;
+      slash = candidate.lastIndexOf('/', slash - 1);
+    }
+  }
+
   for (auto it = explicit_.cbegin(); it != explicit_.cend(); ++it) {
     const QString& path = it.key();
     const Decision decision = it.value();
     const bool exists = current.contains(path);
-    bool hasDescendants = false;
-    for (const QString& candidate : currentPaths) {
-      if (candidate.startsWith(path + '/')) {
-        hasDescendants = true;
-        break;
-      }
-    }
+    const bool hasDescendants = ancestorPaths.contains(path);
     const bool identityChanged = identities_.contains(path) &&
                                  identities_.value(path) != current.value(path);
 
@@ -271,28 +278,38 @@ int Decisions::reconcile(const QVector<Change>& changes, bool preserve,
   }
 
   if (detectInherited && preserve && !identities_.isEmpty()) {
+    // Index destination-only paths by every ancestor so the lookup below is
+    // constant time instead of scanning all current/identity paths per folder.
+    QHash<QString, QSet<QString>> currentByAncestor;
+    QHash<QString, QSet<QString>> previousByAncestor;
+    const auto index = [](QHash<QString, QSet<QString>>& target,
+                          const QString& key) {
+      int slash = key.lastIndexOf('/');
+      target[key].insert(key);
+      while (slash >= 0) {
+        target[key.left(slash)].insert(key);
+        if (slash == 0) break;
+        slash = key.lastIndexOf('/', slash - 1);
+      }
+    };
+    for (auto currentIt = current.cbegin(); currentIt != current.cend(); ++currentIt) {
+      if (currentIt.value().first == Action::DestinationOnly) {
+        index(currentByAncestor, currentIt.key());
+      }
+    }
+    for (auto identityIt = identities_.cbegin(); identityIt != identities_.cend();
+         ++identityIt) {
+      if (identityIt.value().first == Action::DestinationOnly) {
+        index(previousByAncestor, identityIt.key());
+      }
+    }
     for (auto it = explicit_.cbegin(); it != explicit_.cend(); ++it) {
       const QString path = it.key();
       if (stale.contains(path) || it.value() != Decision::Include) continue;
-      const QString prefix = path.isEmpty() ? QString() : path + '/';
-      QSet<QString> covered;
-      for (auto currentIt = current.cbegin(); currentIt != current.cend(); ++currentIt) {
-        if (currentIt.value().first == Action::DestinationOnly &&
-            (currentIt.key() == path || currentIt.key().startsWith(prefix))) {
-          covered.insert(currentIt.key());
-        }
-      }
+      const QSet<QString> covered = currentByAncestor.value(path);
       if (covered.isEmpty()) continue;
-      QSet<QString> previous;
-      for (auto identityIt = identities_.cbegin(); identityIt != identities_.cend();
-           ++identityIt) {
-        if (identityIt.value().first == Action::DestinationOnly &&
-            (identityIt.key() == path || identityIt.key().startsWith(prefix))) {
-          previous.insert(identityIt.key());
-        }
-      }
       QSet<QString> appearedPaths = covered;
-      appearedPaths.subtract(previous);
+      appearedPaths.subtract(previousByAncestor.value(path));
       const int appeared = appearedPaths.size();
       if (appeared > 0) {
         stale.insert(path);

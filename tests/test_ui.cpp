@@ -100,6 +100,7 @@ class UiTest : public QObject {
   void menusAndShortcutsAreWired();
   void compareProgressShowsItemsFound();
   void journalEntriesHaveTimestamps();
+  void metadataListingStartsBeforeViewBuild();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1804,6 +1805,54 @@ void UiTest::journalEntriesHaveTimestamps() {
     ++checked;
   }
   QVERIFY(checked > 4);
+  qputenv("PATH", oldPath);
+}
+
+void UiTest::metadataListingStartsBeforeViewBuild() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString script = dir.path() + QStringLiteral("/rsync");
+  QFile file(script);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write("#!/bin/sh\n"
+             "case \"$*\" in\n"
+             "  *--dry-run*)\n"
+             "    printf '%s\\n' "
+             "'.d..tp.....|qpy-rsync|4096|qpy-rsync|2026-11-23|qpy-rsync|docs/'\n"
+             "    ;;\n"
+             "  *--list-only*) sleep 1; printf '%s\\n' "
+             "'drwxr-xr-x          4,096 2026/11/25 11:23:22 ./' ;;\n"
+             "esac\n");
+  file.close();
+  QVERIFY(QFile::setPermissions(script, QFile::ReadOwner | QFile::WriteOwner |
+                                           QFile::ExeOwner));
+  const QByteArray oldPath = qgetenv("PATH");
+  qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
+
+  ui::MainWindow window;
+  app::StartupOptions options;
+  window.applyStartupOptions(options);
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
+  edits.at(0)->setText(QStringLiteral("/src"));
+  edits.at(1)->setText(QStringLiteral("/dst"));
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
+    if (button->text() == QLatin1String("Compare")) button->click();
+  }
+  auto* status = window.findChild<QLineEdit*>("status-label");
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 8000);
+
+  QPlainTextEdit* journal = nullptr;
+  for (QPlainTextEdit* edit : window.findChildren<QPlainTextEdit*>()) {
+    if (edit->objectName() != QStringLiteral("command-preview-label")) journal = edit;
+  }
+  QVERIFY(journal != nullptr);
+  const QString text = journal->toPlainText();
+  const int listing = text.indexOf(QStringLiteral("$ rsync -r --list-only"));
+  const int parse = text.indexOf(QStringLiteral("Compare parse:"));
+  QVERIFY2(listing >= 0, qPrintable(text));
+  QVERIFY2(parse >= 0, qPrintable(text));
+  QVERIFY2(listing < parse, qPrintable(text));
   qputenv("PATH", oldPath);
 }
 

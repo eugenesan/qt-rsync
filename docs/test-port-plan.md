@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 460 pytest cases. qt-rsync has 91 QtTest cases
-(45 core, 46 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 460 pytest cases. qt-rsync has 93 QtTest cases
+(46 core, 47 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -90,6 +90,10 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
   layout actions, Undo/Redo actions and the F1-F12 window shortcuts.
 - Compare progress: `compareProgressShowsItemsFound` streams a fake dry run with
   1000 records and checks the batched "item(s) found" label.
+  `liveRecordCheckMatchesParser` guards the cheap counter used while streaming.
+- Compare performance: `metadataListingStartsBeforeViewBuild` checks that the
+  destination listing is launched before the view is built, and
+  `journalEntriesHaveTimestamps` checks the timestamped journal.
 - External tools: `externalToolPlaceholders` covers the qpy placeholder cases
   and the diff command now uses the configured placeholder-aware command.
 

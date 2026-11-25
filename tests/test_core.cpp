@@ -35,6 +35,7 @@ class CoreTest : public QObject {
  private slots:
   void rsyncProgressDerivedFromCounters();
   void externalToolPlaceholders();
+  void liveRecordCheckMatchesParser();
   // Decisions (ported from qpy-rsync tests/unit/test_changes.py)
   void changeProperties();
   void inheritedExclusionAndChildOverride();
@@ -847,6 +848,21 @@ void CoreTest::externalToolPlaceholders() {
   QString emptyError;
   QVERIFY(buildToolCommand(QString(), placeholderValues(local), &emptyError).isEmpty());
   QVERIFY(!emptyError.isEmpty());
+}
+
+void CoreTest::liveRecordCheckMatchesParser() {
+  const QString record = QStringLiteral(
+      ">f+++++++++|qpy-rsync|1|qpy-rsync|2026-11-23|qpy-rsync|docs/file.txt");
+  QVERIFY(looksLikeItemizedRecord(record));
+  QVERIFY(parseRecord(record).has_value());
+  QVERIFY(!looksLikeItemizedRecord(QStringLiteral("a|qpy-rsync|b")));
+  QVERIFY(!looksLikeItemizedRecord(QStringLiteral("checking to-chk=1/2")));
+  QVERIFY(!looksLikeItemizedRecord(
+      QStringLiteral(">f+++++++++|qpy-rsync|1|qpy-rsync|t|qpy-rsync|.")));
+  const QString deletion = QStringLiteral(
+      "*deleting   |qpy-rsync|0|qpy-rsync|2026-11-23|qpy-rsync|docs/old/");
+  QVERIFY(looksLikeItemizedRecord(deletion));
+  QVERIFY(parseRecord(deletion).has_value());
 }
 
 QTEST_MAIN(CoreTest)

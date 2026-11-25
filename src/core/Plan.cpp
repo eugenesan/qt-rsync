@@ -27,16 +27,33 @@ QString normalized(const QString& path) {
   return result;
 }
 
-std::int64_t destinationSubtreeSize(const QString& path, Kind kind,
-                                    const DestinationMetadata& metadata) {
+// Walk every metadata entry once and accumulate its size into each ancestor.
+// The old code scanned the entire metadata table for every deleted directory,
+// which was O(deletes * metadata) on a half-million-row comparison.
+QHash<QString, std::int64_t> buildDescendantSizes(
+    const DestinationMetadata& metadata) {
+  QHash<QString, std::int64_t> sums;
+  for (auto it = metadata.cbegin(); it != metadata.cend(); ++it) {
+    const std::int64_t size = it.value().first.value_or(0);
+    QString path = normalized(it.key());
+    int slash = path.lastIndexOf('/');
+    while (slash >= 0) {
+      const QString ancestor = path.left(slash);
+      sums[ancestor] += size;
+      if (slash == 0) break;
+      slash = path.lastIndexOf('/', slash - 1);
+    }
+  }
+  return sums;
+}
+
+std::int64_t destinationSubtreeSize(
+    const QString& path, Kind kind, const DestinationMetadata& metadata,
+    const QHash<QString, std::int64_t>& descendantSizes) {
   const QString clean = normalized(path);
   const auto own = metadata.value(clean).first;
   if (kind != Kind::Directory) return own.value_or(0);
-  const QString prefix = clean + '/';
-  std::int64_t sum = 0;
-  for (auto it = metadata.cbegin(); it != metadata.cend(); ++it) {
-    if (it.key().startsWith(prefix)) sum += it.value().first.value_or(0);
-  }
+  const std::int64_t sum = descendantSizes.value(clean, 0);
   if (sum > 0) return sum;
   return own.value_or(0);
 }
@@ -89,6 +106,7 @@ QVector<PlanItem> ExecutionPlan::includedItems() const {
 
 QString planItemsFingerprint(const QVector<PlanItem>& items) {
   QByteArray payload;
+  payload.reserve(static_cast<qsizetype>(items.size()) * 24);
   for (const PlanItem& item : items) {
     payload += item.path.toUtf8();
     payload += actionName(item.action).toUtf8();
@@ -118,9 +136,13 @@ QString comparisonSignature(const QVector<Change>& changes,
   for (const Change& change : changes) {
     const QString path = normalized(change.path);
     if (!Decisions::selectable(change) && !extraPaths.contains(path)) continue;
-    const QString key = path + QChar('\0') + actionName(change.action) +
-                        QChar('\0') + kindName(change.kind) + QChar('\0');
-    accumulator ^= crc32(key.toUtf8());
+    QByteArray key = path.toUtf8();
+    key += '\0';
+    key += actionName(change.action).toUtf8();
+    key += '\0';
+    key += kindName(change.kind).toUtf8();
+    key += '\0';
+    accumulator ^= crc32(key);
     ++count;
   }
   return QString::number(count) + ':' +
@@ -191,6 +213,8 @@ ExecutionPlan buildExecutionPlan(const SyncProfile& profile,
     }
   }
 
+  const QHash<QString, std::int64_t> descendantSizes =
+      buildDescendantSizes(metadata);
   for (const QString& path : deletePaths) {
     bool hasDeleteAncestor = false;
     QString parent = path.section('/', 0, -2);
@@ -203,7 +227,7 @@ ExecutionPlan buildExecutionPlan(const SyncProfile& profile,
     }
     if (!hasDeleteAncestor) {
       plan.summary.deletedSize += destinationSubtreeSize(
-          path, deleteKinds.value(path, Kind::File), metadata);
+          path, deleteKinds.value(path, Kind::File), metadata, descendantSizes);
     }
   }
 

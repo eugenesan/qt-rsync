@@ -119,6 +119,21 @@ QString describeItemized(const QString& code) {
                            : reasons.join(QStringLiteral(", "));
 }
 
+bool looksLikeItemizedRecord(const QString& rawLine) {
+  const qsizetype first = rawLine.indexOf(kSeparator);
+  if (first <= 0) return false;
+  const qsizetype second = rawLine.indexOf(kSeparator, first + kSeparator.size());
+  if (second < 0) return false;
+  const qsizetype third = rawLine.indexOf(kSeparator, second + kSeparator.size());
+  if (third < 0) return false;
+  if (rawLine.indexOf(kSeparator, third + kSeparator.size()) >= 0) return false;
+  const QString code = rawLine.left(first).trimmed();
+  if (!isItemizedCode(code)) return false;
+  const QString path = rawLine.mid(third + kSeparator.size()).trimmed();
+  return !path.isEmpty() && path != QLatin1String(".") &&
+         path != QLatin1String("./");
+}
+
 std::optional<Change> parseRecord(const QString& rawLine, bool deleteEnabled) {
   const QString line = rawLine.trimmed();
   if (line.isEmpty() || !line.contains(kSeparator)) return std::nullopt;
@@ -134,7 +149,6 @@ std::optional<Change> parseRecord(const QString& rawLine, bool deleteEnabled) {
   const bool deleting = code.startsWith(QLatin1String("*deleting"));
   Change change;
   change.itemizedCode = code;
-  change.reason = describeItemized(code);
   if (deleting) {
     change.action = deleteEnabled ? Action::Delete : Action::DestinationOnly;
     change.kind = nameAndLink.endsWith('/') ? Kind::Directory : Kind::File;
@@ -207,6 +221,7 @@ QVector<Change> parseInventory(const QString& text) {
 ParseResult parseOutput(const QString& text, bool deleteEnabled) {
   ParseResult result;
   const QStringList lines = text.split('\n');
+  result.changes.reserve(lines.size());
   for (const QString& line : lines) {
     auto change = parseRecord(line, deleteEnabled);
     if (change.has_value()) {

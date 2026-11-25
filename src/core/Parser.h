@@ -32,6 +32,9 @@ bool isRsyncSummaryLine(const QString& line);
 std::optional<Change> parseRecord(const QString& line, bool deleteEnabled = true);
 ParseResult parseOutput(const QString& text, bool deleteEnabled = true);
 QString describeItemized(const QString& code);
+// Cheap structural check used for live progress counting. Accepts exactly the
+// lines parseRecord() would turn into a change, without building a Change.
+bool looksLikeItemizedRecord(const QString& rawLine);
 QVector<Change> parseInventory(const QString& text);
 
 }  // namespace qt_rsync::core
