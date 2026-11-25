@@ -78,6 +78,7 @@ class MainWindow : public QMainWindow {
   void saveWindowState();
   void filterUnchangedAgainstDestination();
   void mergeInventoryChanges();
+  void finishComparison();
 
  private:
   class Private;
