@@ -107,7 +107,10 @@ void OverviewPane::rebuild(const model::DataStore& store) {
   // The overview describes every row the filters leave, after action
   // filters, unchanged gating and exclusions. Folded compare rows stay in
   // the totals, like qpy's overview.
+  const int sortSection = tree_->header()->sortIndicatorSection();
+  const Qt::SortOrder sortOrder = tree_->header()->sortIndicatorOrder();
   model_->build(store, false);
+  if (sortSection >= 0) model_->sort(sortSection, sortOrder);
 
   if (firstBuild_) {
     // Expand only the synthetic Total row; every real directory starts
