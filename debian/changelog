@@ -1,3 +1,13 @@
+qt-rsync (0.2.0-0) resolute; urgency=medium
+
+  * 0.2.0: refreshed README and KDE-theme screenshots; screenshots, icon and
+    desktop entry live in resources/; obsolete Actions labels renamed to
+    Decisions; directory decision filters and directory-aware Items counts;
+    overview totals and Files row; overview rebuild keeps sort and folded
+    totals.
+
+ -- Eugene San (eugenesan) <eugenesan@gmail.com>  Tue, 24 Nov 2026 18:40:00 -0700
+
 qt-rsync (0.1.0-0) resolute; urgency=medium
 
   * 0.1.0: first pure Qt 6/C++ release. Complete port of qpy-rsync's

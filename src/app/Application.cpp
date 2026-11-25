@@ -17,7 +17,7 @@ int run(int argc, char** argv) {
   // here produced the wrong colours, separators and button frames.
   QCoreApplication::setApplicationName(QStringLiteral("qt-rsync"));
 #ifndef QT_RSYNC_VERSION
-#define QT_RSYNC_VERSION "0.1.0"
+#define QT_RSYNC_VERSION "0.2.0"
 #endif
 #ifndef QT_RSYNC_GIT_COMMIT
 #define QT_RSYNC_GIT_COMMIT "unknown"

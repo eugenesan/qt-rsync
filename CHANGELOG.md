@@ -1,8 +1,42 @@
 # Changelog
 
 All notable changes to qt-rsync. Versions group a few related milestones
-rather than every commit; the port started at 0.0.1 and reached 0.1.0 on
+rather than every commit; the port started at 0.0.1 and reached 0.2.0 on
 2026-11-24.
+
+## 0.2.0 — 2026-11-24
+
+Parity follow-up: decision terminology, directory filters, overview totals,
+and refreshed documentation and packaging.
+
+### Added
+
+- The README was rewritten in the qpy-rsync style and uses new KDE-theme
+  screenshots. The screenshots, the application icon and the desktop entry
+  live in `resources/`.
+- Overview has a Files row under Total for root-level objects, size-based
+  Share percentages that add up, and Share as the default sorted/indicated
+  column.
+- Compare Items and the overview count every displayed item, including a
+  reported directory as one item of its parent. Synthesized navigation
+  folders and faded filtered-out parents are not counted, so the overview
+  Total equals the root row's Items.
+
+### Changed
+
+- Changing the sync mode marks an existing comparison stale, disables
+  Sync/Verify and orange-badges the Compare icon until a fresh comparison.
+- “Apply the decision filters to directories” now follows qpy semantics: off
+  by default so directory rows ignore decision filters, on makes a directory
+  a faded, uncounted parent when its own change is filtered out.
+- Obsolete “Actions”/“Action” labels were renamed to “Decisions”, including
+  the menu, decision colours, filter tooltips and the comparison column.
+- The overview rebuild keeps the chosen sort and the folded totals.
+
+### Packaging
+
+- The Debian package is `0.2.0-0` and installs the refreshed desktop entry,
+  icon and launcher.
 
 ## 0.1.0 — 2026-11-24
 
@@ -60,20 +94,6 @@ KDE dark-theme and final UI parity pass.
 - Sorting any comparison column sorts the shared data and updates the
   indicators on all three panes.
 - Overview directories start collapsed; only the synthetic Total row is open.
-- Overview now has a Files row under Total for root-level objects, size-based
-  Share percentages that add up, and Share as the default sorted/indicated
-  column.
-- Compare Items and the overview count every displayed item, including a
-  reported directory as one item of its parent. Synthesized navigation
-  folders and faded filtered-out parents are not counted, so the overview
-  Total equals the root row's Items.
-- Changing the sync mode marks an existing comparison stale, disables
-  Sync/Verify and orange-badges the Compare icon until a fresh comparison.
-- “Apply the decision filters to directories” now follows qpy semantics: off
-  by default so directory rows ignore decision filters, on makes a directory
-  a faded, uncounted parent when its own change is filtered out.
-- Obsolete “Actions”/“Action” labels were renamed to “Decisions”, including
-  the menu, decision colours, filter tooltips and the comparison column.
 - `--version` includes the checkout commit hash.
 - Layout modes now work: Normal, Compare only and Compare with overview.
 - Overview statistics use labels instead of painter text, so entries cannot
