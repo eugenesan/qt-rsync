@@ -68,8 +68,8 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
   separator();
   directories_ = check(
       QStringLiteral(
-          "Apply the action filters to reported directories too.\n"
-          "A directory whose own action is filtered out stays as a faded "
+          "Apply the decision filters to reported directories too.\n"
+          "A directory whose own change is filtered out stays as a faded "
           "parent when it holds visible items, and is not counted."),
       icons::folderIcon(), 0, false);
   directories_->setAccessibleName(
@@ -90,11 +90,11 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
         QStringLiteral(
             "Display only: %1\n"
             "This checkbox filters the view and doesn't affect the sync. Use "
-            "the sync mode selector or the action checkboxes below to control "
+            "the sync mode selector or the decision checkboxes below to control "
             "the sync.\n"
             "Alt+%2 clicks this checkbox; Ctrl+%2 inverts it.\n"
-            "Ctrl+click shows only this action, and a second inverted click "
-            "brings every action back. Right-click opens the same choices.")
+            "Ctrl+click shows only this decision, and a second inverted click "
+            "brings every decision back. Right-click opens the same choices.")
             .arg(entry.first)
             .arg(shortcutNumber),
         icons::actionIcon(entry.second), shortcutNumber);

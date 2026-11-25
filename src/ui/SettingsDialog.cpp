@@ -155,18 +155,18 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
   generalHint->setWordWrap(true);
   generalLayout->addWidget(generalHint);
 
-  auto* coloursBox = new QGroupBox(QStringLiteral("Action colours"), general);
+  auto* coloursBox = new QGroupBox(QStringLiteral("Decision colours"), general);
   auto* coloursLayout = new QVBoxLayout(coloursBox);
   auto* coloursHint = new QLabel(
       QStringLiteral(
-          "The colour marks the items of an action in the list. Switch the "
-          "marking off to leave an action in the plain colour."),
+          "The colour marks the items of a decision in the list. Switch the "
+          "marking off to leave a decision in the plain colour."),
       coloursBox);
   coloursHint->setWordWrap(true);
   coloursLayout->addWidget(coloursHint);
   colours_ = new QTableWidget(0, 3, coloursBox);
   colours_->setHorizontalHeaderLabels(
-      {QStringLiteral("Action"), QStringLiteral("Colour"), QStringLiteral("Marked")});
+      {QStringLiteral("Decision"), QStringLiteral("Colour"), QStringLiteral("Marked")});
   colours_->verticalHeader()->setVisible(false);
   colours_->setSelectionBehavior(QAbstractItemView::SelectRows);
   colours_->horizontalHeader()->setSectionResizeMode(
@@ -199,7 +199,7 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
     if (column != 1) return;
     const QColor chosen = QColorDialog::getColor(
         QColor(colours_->item(row, 1)->text()), this,
-        QStringLiteral("Action colour"));
+        QStringLiteral("Decision colour"));
     if (!chosen.isValid()) return;
     colours_->item(row, 1)->setText(chosen.name());
     colours_->item(row, 1)->setBackground(chosen);

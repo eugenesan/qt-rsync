@@ -25,8 +25,8 @@ StatsBar::StatsBar(QWidget* parent) : QWidget(parent) {
   const QString summaryTip =
       QStringLiteral(
           "Selected: the items that are checked in the comparison,\n"
-          "with their total size and the count of each action. The icons "
-          "below are the same actions.");
+          "with their total size and the count of each change type. The icons "
+          "below are the same types.");
   summary_->setToolTip(summaryTip);
   setToolTip(summaryTip);
   layout_->addWidget(summary_);

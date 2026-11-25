@@ -275,7 +275,7 @@ MainWindow::MainWindow(QWidget* parent)
           QStringLiteral(
               "Preserve decisions: ON\n"
               "Manual include and exclude decisions survive the next "
-              "comparison, even when the reported action of an item changed.\n"
+              "comparison, even when the reported change of an item changed.\n"
               "Click to turn it off and start fresh; Compare will then ask "
               "for confirmation before discarding the decisions."));
   d_->preserve->setCheckable(true);
@@ -636,7 +636,7 @@ MainWindow::MainWindow(QWidget* parent)
             [this, mode]() { applyLayoutMode(mode.second); });
   }
 
-  auto* actionsMenu = menuBar()->addMenu(QStringLiteral("Actions"));
+  auto* actionsMenu = menuBar()->addMenu(QStringLiteral("Decisions"));
   auto* resetAllAction =
       actionsMenu->addAction(QStringLiteral("Reset All Decisions"));
   connect(resetAllAction, &QAction::triggered, this,

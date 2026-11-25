@@ -70,6 +70,7 @@ class UiTest : public QObject {
   void actionFilterBarSeparatesEveryPair();
   void sortIndicatorsAndRowsAreLinked();
   void directoryFiltersApplyOnlyWhenEnabled();
+  void overviewCountsReportedDirectoriesOnly();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -993,6 +994,63 @@ void UiTest::directoryFiltersApplyOnlyWhenEnabled() {
   const auto found = view.store().path_to_id.find("docs");
   QVERIFY(found != view.store().path_to_id.end());
   QVERIFY(view.store().faded.at(found->second) != 0);
+}
+
+void UiTest::overviewCountsReportedDirectoriesOnly() {
+  ui::ComparisonView view;
+  auto makeChange = [](const QString& path, core::Action action, core::Kind kind,
+                       qlonglong size) {
+    core::Change change;
+    change.path = path;
+    change.action = action;
+    change.kind = kind;
+    change.size = size;
+    return change;
+  };
+  QVector<core::Change> changes;
+  changes << makeChange(QStringLiteral("a.txt"), core::Action::Create,
+                        core::Kind::File, 100)
+          << makeChange(QStringLiteral("b.txt"), core::Action::Create,
+                        core::Kind::File, 50)
+          << makeChange(QStringLiteral("tools"), core::Action::UpdateMetadata,
+                        core::Kind::Directory, 0)
+          << makeChange(QStringLiteral("tools/c.py"), core::Action::Create,
+                        core::Kind::File, 25)
+          << makeChange(QStringLiteral("plain/d.txt"), core::Action::Create,
+                        core::Kind::File, 5);
+  view.setChanges(changes);
+  const auto& store = view.store();
+  const auto rootIt = store.path_to_id.find(model::DataStore::root_path());
+  QVERIFY(rootIt != store.path_to_id.end());
+  const int root = rootIt->second;
+  // a.txt, b.txt, the reported tools folder, tools/c.py and plain/d.txt.
+  // The synthesized plain folder itself is not an item.
+  QCOMPARE(store.dir_items.at(root), 5LL);
+
+  model::OverviewModel overview;
+  overview.build(store, true);
+  const QModelIndex total = overview.index(0, 0);
+  QVERIFY(total.isValid());
+  QCOMPARE(overview.data(total.siblingAtColumn(2)).toLongLong(),
+           store.dir_items.at(root));
+
+  auto findChild = [&overview](const QModelIndex& parent, const QString& name) {
+    for (int row = 0; row < overview.rowCount(parent); ++row) {
+      const QModelIndex index = overview.index(row, 0, parent);
+      if (overview.data(index).toString() == name) return index;
+    }
+    return QModelIndex();
+  };
+  const QModelIndex files = findChild(total, QStringLiteral("Files"));
+  QVERIFY(files.isValid());
+  // Root objects: a.txt, b.txt and the reported tools directory.
+  QCOMPARE(overview.data(files.siblingAtColumn(2)).toLongLong(), 3LL);
+  const QModelIndex tools = findChild(total, QStringLiteral("tools"));
+  QVERIFY(tools.isValid());
+  QCOMPARE(overview.data(tools.siblingAtColumn(2)).toLongLong(), 1LL);
+  const QModelIndex plain = findChild(total, QStringLiteral("plain"));
+  QVERIFY(plain.isValid());
+  QCOMPARE(overview.data(plain.siblingAtColumn(2)).toLongLong(), 1LL);
 }
 
 QTEST_MAIN(UiTest)

@@ -10,7 +10,7 @@ KDE dark-theme and final UI parity pass.
 
 ### Added
 
-- File/Edit/View/Actions/Help menus, a mirrored application-menu button and
+- File/Edit/View/Decisions/Help menus, a mirrored application-menu button and
   window-level shortcuts for F1–F12, Ctrl+Z, Ctrl+Shift+Z and find actions.
 - Full synchronization confirmation dialog: fingerprint, endpoints, backup
   state, counts grid, destructive warning, command preview and decision rules.
@@ -62,15 +62,18 @@ KDE dark-theme and final UI parity pass.
 - Overview directories start collapsed; only the synthetic Total row is open.
 - Overview now has a Files row under Total for root-level objects, size-based
   Share percentages that add up, and Share as the default sorted/indicated
-  column. Directory containers are not counted as overview items, so Total
-  matches the root row and statistics bar.
-- Compare directory Items count only the child files that are displayed; faded
-  unchanged parents are not counted.
+  column.
+- Compare Items and the overview count every displayed item, including a
+  reported directory as one item of its parent. Synthesized navigation
+  folders and faded filtered-out parents are not counted, so the overview
+  Total equals the root row's Items.
 - Changing the sync mode marks an existing comparison stale, disables
   Sync/Verify and orange-badges the Compare icon until a fresh comparison.
-- “Apply the action filters to directories” now follows qpy semantics: off by
-  default so directory rows ignore action filters, on makes a directory a
-  faded, uncounted parent when its own action is filtered out.
+- “Apply the decision filters to directories” now follows qpy semantics: off
+  by default so directory rows ignore decision filters, on makes a directory
+  a faded, uncounted parent when its own change is filtered out.
+- Obsolete “Actions”/“Action” labels were renamed to “Decisions”, including
+  the menu, decision colours, filter tooltips and the comparison column.
 - `--version` includes the checkout commit hash.
 - Layout modes now work: Normal, Compare only and Compare with overview.
 - Overview statistics use labels instead of painter text, so entries cannot

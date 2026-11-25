@@ -355,7 +355,7 @@ PlanFreshness checkPlanFreshness(const ExecutionPlan& plan,
         planned.insert(item.identity());
       }
     }
-    if (current != planned) result.reasons << QStringLiteral("comparison actions changed");
+    if (current != planned) result.reasons << QStringLiteral("comparison decisions changed");
   }
   result.fresh = result.reasons.isEmpty();
   return result;

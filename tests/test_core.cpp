@@ -372,7 +372,7 @@ void CoreTest::planFreshnessDetectsChanges() {
   QVector<Change> changed{makeChange("a", Action::UpdateContent)};
   const auto staleChanges = checkPlanFreshness(plan, testProfile(), changed);
   QVERIFY(!staleChanges.fresh);
-  QVERIFY(staleChanges.reasons.contains("comparison actions changed"));
+  QVERIFY(staleChanges.reasons.contains("comparison decisions changed"));
 }
 
 void CoreTest::profileFingerprintIgnoresIdentity() {
@@ -445,7 +445,7 @@ void CoreTest::syntheticDeleteEntersPlan() {
            QStringList({QStringLiteral("-s /.parentlock")}));
   QVERIFY(!checkPlanFreshness(plan, testProfile(), changes,
                               decisionSignature(decisions)).reasons.contains(
-      "comparison actions changed"));
+      "comparison decisions changed"));
 }
 
 void CoreTest::decisionFilterRulesAndOrdering() {

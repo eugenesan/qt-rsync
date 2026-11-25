@@ -61,6 +61,13 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
   `filterEditorValidatesAndListsRules`.
 - Action filters: hiding, ancestor retention, keyboard-only focus and separator
   count are covered by new UI cases.
+- Directory decision filters: `directoryFiltersApplyOnlyWhenEnabled` checks
+  that directories ignore the action filters until the toggle is on, and that
+  a filtered directory stays as a faded, uncounted parent with visible
+  children.
+- Overview totals: `overviewCountsReportedDirectoriesOnly` checks that a
+  reported directory counts as one item of its parent, synthesized folders do
+  not, and the overview Total equals the root row's Items.
 
 ## Next conversion batches
 

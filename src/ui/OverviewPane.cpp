@@ -104,9 +104,10 @@ void OverviewPane::rebuild(const model::DataStore& store) {
     walk(QModelIndex());
   }
 
-  // The overview must describe the rows the compare view is showing, after
-  // action filters, unchanged gating and exclusions.
-  model_->build(store, true);
+  // The overview describes every row the filters leave, after action
+  // filters, unchanged gating and exclusions. Folded compare rows stay in
+  // the totals, like qpy's overview.
+  model_->build(store, false);
 
   if (firstBuild_) {
     // Expand only the synthetic Total row; every real directory starts
