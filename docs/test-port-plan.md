@@ -19,13 +19,13 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 
 | qpy module | cases | qt-rsync status |
 |---|---:|---|
-| `test_main_window_offscreen.py` | 95 | Partial: startup, profile cache, locked profile, compare/verify/sync, settings, closing, sync progress/stale state, basic menus and F-key shortcuts are covered. Full journal states and exact shortcut enablement still need cases. |
+| `test_main_window_offscreen.py` | 95 | Partial: startup, profile cache, locked profile, compare/verify/sync, compare and sync progress, settings, closing, stale state, basic menus and F-key shortcuts are covered. Full journal states and exact shortcut enablement still need cases. |
 | `test_flat_comparison_view.py` | 49 | Partial: three panes, selection sync, folding, context menus, navigation keys and stale root visuals are covered. Remaining: all header context actions, exact tooltips and per-pane local/remote menus. |
 | `test_flat_filtering.py` | 31 | Partial: action masks, ancestors, unchanged gate and search matching are covered. Remaining: path/glob filters, directory-only mode, inverse clicks and filter persistence. |
 | `test_action_filters.py` | 19 | Mostly ported: initial state, display-only tooltips, excluded count, focus policy, separators, ancestor retention, Ctrl+click inversion and the checkbox context menu. Remaining: exhaustive state combinations. |
 | `test_command.py` | 13 | Mostly ported: compare/verify/sync argv, modes, filters, delete timing and remote shell. Remaining: exhaustive option combinations. |
 | `test_app_startup_options.py` | 12 | Ported at the CLI level: complete argument set, Qt-only arguments, log-file/no-log-file, compare pair and invalid mode. Qt environment/migration cases are N/A in the C++ port. |
-| `test_external_tools.py` | 11 | Blocked: qt-rsync stores tool rows but does not implement placeholder expansion/tool launch yet. Either port that feature or mark the module N/A explicitly. |
+| `test_external_tools.py` | 11 | Ported at the core level: placeholder expansion, options, remote/local paths, double percent, unknown placeholders and bad commands are covered. The tool table still has no per-tool launch menu. |
 | `test_changes.py` | 11 | Ported: decision reconcile/exclude/include/delete. |
 | `test_overview.py` | 10 | Partial: share bars, totals, sorting and folder expansion. Remaining: filtering and selection callbacks. |
 | `test_delete_decision.py` | 10 | Mostly ported: delete decisions and mirror rules. |
@@ -34,7 +34,7 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 | `test_sync_confirmation.py` | 8 | Dialog fields, command, rules and warning ported; add a widget assertion for each field. |
 | `test_settings_dialog.py` | 8 | Ported in part: diagnostics, defaults, tools, logging, colours, verification visibility. |
 | `test_locked_profile_startup.py` | 8 | Ported: retry, temporary copy and quit-without-changes. |
-| `test_diff_tool_service.py` | 8 | Local meld launch implemented; placeholder expansion and remote staging remain tied to the external-tools feature gap. |
+| `test_diff_tool_service.py` | 8 | Local diff launch now uses the configured placeholder-aware command; remote staging remains out of scope for this build. |
 | `test_sync_modes.py` | 7 | Ported: update/mirror/new-only argv and destination-only decisions. |
 | `test_inventory.py` | 7 | Ported at the parser/merge level: source and destination listings, filter handling and sizes. |
 | `test_plan_validation.py` | 6 | Ported: verify mismatch/missing/unexpected. |
@@ -87,6 +87,10 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
   switches.
 - Menus/shortcuts: `menusAndShortcutsAreWired` asserts the top-level menus,
   layout actions, Undo/Redo actions and the F1-F12 window shortcuts.
+- Compare progress: `compareProgressShowsItemsFound` streams a fake dry run and
+  checks the live "item(s) found" label.
+- External tools: `externalToolPlaceholders` covers the qpy placeholder cases
+  and the diff command now uses the configured placeholder-aware command.
 
 ## Next conversion batches
 
@@ -95,6 +99,5 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 3. `test_main_window_offscreen.py` exact shortcut enablement and full journal states.
 4. `test_flat_comparison_view.py` per-pane menus and exact tooltips.
 5. `test_settings_dialog.py` and `test_profile_editor.py` widget round-trips.
-6. External tool placeholder expansion/launch (feature gap, not only tests).
 7. `test_sync_confirmation.py` per-field dialog assertions.
 8. Golden screenshots for main window, settings, sync dialog and profile editor.

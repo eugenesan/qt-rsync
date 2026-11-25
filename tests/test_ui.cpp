@@ -97,6 +97,7 @@ class UiTest : public QObject {
   void startupOptionsParseAllOptions();
   void startupOptionsValidateModeAndComparePair();
   void menusAndShortcutsAreWired();
+  void compareProgressShowsItemsFound();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1708,6 +1709,52 @@ void UiTest::menusAndShortcutsAreWired() {
   }
   QVERIFY(preserve != nullptr);
   QVERIFY(preserve->isEnabled());
+}
+
+void UiTest::compareProgressShowsItemsFound() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString script = dir.path() + QStringLiteral("/rsync");
+  QFile file(script);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write("#!/bin/sh\n"
+             "case \"$*\" in *--list-only*) exit 0 ;; esac\n"
+             "printf '%s\\n' '>f+++++++++|qpy-rsync|1|qpy-rsync|2026-11-23|qpy-rsync|docs/a.txt'\n"
+             "sleep 1\n"
+             "printf '%s\\n' '>f+++++++++|qpy-rsync|1|qpy-rsync|2026-11-23|qpy-rsync|docs/b.txt'\n"
+             "sleep 2\n");
+  file.close();
+  QVERIFY(QFile::setPermissions(script, QFile::ReadOwner | QFile::WriteOwner |
+                                           QFile::ExeOwner));
+  const QByteArray oldPath = qgetenv("PATH");
+  qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
+
+  ui::MainWindow window;
+  app::StartupOptions options;
+  window.applyStartupOptions(options);
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
+  edits.at(0)->setText(QStringLiteral("/src"));
+  edits.at(1)->setText(QStringLiteral("/dst"));
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
+    if (button->text() == QLatin1String("Compare")) button->click();
+  }
+  const auto progressText = [&window]() {
+    for (QLabel* label : window.findChildren<QLabel*>()) {
+      if (label->text().contains(QStringLiteral("item(s) found"))) {
+        return label->text();
+      }
+    }
+    return QString();
+  };
+  auto* progress = window.findChild<QProgressBar*>();
+  QVERIFY(progress != nullptr);
+  QTRY_VERIFY_WITH_TIMEOUT(!progressText().isEmpty(), 3000);
+  QTRY_VERIFY_WITH_TIMEOUT(progressText().contains(QStringLiteral("2 item(s) found")), 3000);
+  QVERIFY(progress->isVisible() || progress->maximum() == 0);
+  auto* status = window.findChild<QLineEdit*>("status-label");
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 8000);
+  qputenv("PATH", oldPath);
 }
 
 QTEST_MAIN(UiTest)

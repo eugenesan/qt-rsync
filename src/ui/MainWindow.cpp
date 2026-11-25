@@ -49,6 +49,7 @@
 #include "core/Command.h"
 #include "core/Filter.h"
 #include "core/Parser.h"
+#include "core/ExternalTools.h"
 #include "core/Paths.h"
 #include "core/Storage.h"
 #include "ui/ComparisonView.h"
@@ -224,6 +225,9 @@ class MainWindow::Private {
   bool syncing = false;
   bool verifying = false;
   QString operationOutput;
+  QString compareOutput;
+  QString compareLineBuffer;
+  int compareItemsFound = 0;
   QElapsedTimer compareClock;
   QElapsedTimer viewClock;
   double lastCompareSeconds = 0.0;
@@ -1046,6 +1050,25 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->inventoryProcess, &QProcess::finished, this, &MainWindow::onInventoryFinished);
   connect(d_->destinationInventoryProcess, &QProcess::finished, this,
           &MainWindow::onDestinationInventoryFinished);
+  connect(d_->compareProcess, &QProcess::readyReadStandardOutput, this, [this]() {
+    const QString text = core::cleanQtNoise(
+        QString::fromLocal8Bit(d_->compareProcess->readAllStandardOutput()));
+    if (text.isEmpty()) return;
+    d_->compareOutput += text;
+    d_->compareLineBuffer += text;
+    const QStringList parts =
+        d_->compareLineBuffer.split(QRegularExpression(QStringLiteral("[\r\n]+")));
+    d_->compareLineBuffer = parts.isEmpty() ? QString() : parts.last();
+    for (int index = 0; index + 1 < parts.size(); ++index) {
+      const QString line = parts.at(index).trimmed();
+      if (line.isEmpty() || !line.contains(QStringLiteral("|qpy-rsync|"))) {
+        continue;
+      }
+      if (core::parseRecord(line).has_value()) ++d_->compareItemsFound;
+    }
+    d_->progressLabel->setText(
+        QStringLiteral("Comparing... %1 item(s) found").arg(d_->compareItemsFound));
+  });
   // Rsync writes itemized records, progress and the statistics block to the
   // same stream. Keep every line for the verification diff, but only progress
   // (as a bar/label) and the summary reach the journal.
@@ -1207,22 +1230,30 @@ MainWindow::MainWindow(QWidget* parent)
               return;
             }
             core::storage::Settings settings;
-            QString tool = QStringLiteral("meld");
             const QString configuredCommand =
                 settings.value(QStringLiteral("tools/diff-command"))
                     .toString()
                     .trimmed();
-            const QStringList commands =
-                settings.value(QStringLiteral("tools/commands")).toStringList();
             const QString command = configuredCommand.isEmpty()
-                                        ? (commands.isEmpty() ? QString()
-                                                              : commands.first())
+                                        ? QStringLiteral("meld %a %A")
                                         : configuredCommand;
-            if (!command.isEmpty()) tool = command.section(' ', 0, 0);
-            if (!QProcess::startDetached(tool, {source, destination})) {
+            const core::ToolContext toolContext =
+                core::itemContext(path, false, d_->profile.source.path,
+                                  d_->profile.destination.path,
+                                  d_->profile.source, d_->profile.destination,
+                                  QStringLiteral("Diff"));
+            QString toolError;
+            const QStringList argv = core::buildToolCommand(
+                command, core::placeholderValues(toolContext), &toolError);
+            if (argv.isEmpty() || !toolError.isEmpty()) {
+              QMessageBox::information(
+                  this, QStringLiteral("Diff tool unavailable"), toolError);
+              return;
+            }
+            if (!QProcess::startDetached(argv.first(), argv.mid(1))) {
               QMessageBox::information(
                   this, QStringLiteral("Diff tool unavailable"),
-                  QStringLiteral("Could not start %1.").arg(tool));
+                  QStringLiteral("Could not start %1.").arg(argv.first()));
               return;
             }
             appendJournalLine(QStringLiteral("Opened diff for ") + path);
@@ -1359,6 +1390,13 @@ void MainWindow::startCompare() {
   d_->stateLabel->setText(QStringLiteral("State:"));
   d_->stateLabel->setStyleSheet(QString());
   setStatus(QStringLiteral("Comparing..."));
+  d_->compareOutput.clear();
+  d_->compareLineBuffer.clear();
+  d_->compareItemsFound = 0;
+  d_->progress->setRange(0, 0);
+  d_->progress->setValue(0);
+  d_->progress->show();
+  d_->progressLabel->setText(QStringLiteral("Comparing... 0 item(s) found"));
   d_->pauseButton->setChecked(false);
   d_->compareProcess->start(spec.program, spec.arguments);
 }
@@ -1371,8 +1409,13 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
     setStatus(QStringLiteral("Comparison cancelled"));
     return;
   }
-  const QByteArray output = d_->compareProcess->readAllStandardOutput();
+  QByteArray output = d_->compareOutput.toUtf8();
+  output.append(d_->compareProcess->readAllStandardOutput());
   const QString stderr = QString::fromLocal8Bit(d_->compareProcess->readAllStandardError());
+  d_->compareOutput.clear();
+  d_->compareLineBuffer.clear();
+  d_->progress->setRange(0, 100);
+  d_->progress->hide();
   if (status != QProcess::NormalExit || exitCode != 0) {
     setStatus(QStringLiteral("Compare failed: %1")
                             .arg(stderr.trimmed().isEmpty()
@@ -1448,6 +1491,8 @@ void MainWindow::onCompareError(QProcess::ProcessError error) {
   Q_UNUSED(error)
   d_->compare->setEnabled(true);
   d_->cancel->setEnabled(false);
+  d_->progress->setRange(0, 100);
+  d_->progress->hide();
   setStatus(QStringLiteral("Could not start rsync: %1")
                           .arg(d_->compareProcess->errorString()));
 }

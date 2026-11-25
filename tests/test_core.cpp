@@ -7,6 +7,7 @@
 #include "core/Command.h"
 #include "core/Storage.h"
 #include "core/Parser.h"
+#include "core/ExternalTools.h"
 #include "core/Paths.h"
 
 #include <QTemporaryDir>
@@ -33,6 +34,7 @@ class CoreTest : public QObject {
 
  private slots:
   void rsyncProgressDerivedFromCounters();
+  void externalToolPlaceholders();
   // Decisions (ported from qpy-rsync tests/unit/test_changes.py)
   void changeProperties();
   void inheritedExclusionAndChildOverride();
@@ -764,6 +766,87 @@ void CoreTest::rsyncProgressDerivedFromCounters() {
   QVERIFY(isRsyncSummaryLine(QStringLiteral("Number of files: 10")));
   QVERIFY(!isRsyncSummaryLine(
       QStringLiteral(">f+++++++++ file.txt")));
+}
+
+namespace {
+QStringList toolArgs(const QString& a, const QString& b = QString(),
+                     const QString& c = QString(), const QString& d = QString()) {
+  QStringList result;
+  result << a;
+  if (!b.isEmpty()) result << b;
+  if (!c.isEmpty()) result << c;
+  if (!d.isEmpty()) result << d;
+  return result;
+}
+}  // namespace
+
+void CoreTest::externalToolPlaceholders() {
+  Endpoint localSource{EndpointKind::Local, QStringLiteral("/src")};
+  Endpoint localDestination{EndpointKind::Local, QStringLiteral("/dst")};
+  Endpoint remoteDestination{EndpointKind::Ssh, QStringLiteral("/dst")};
+  remoteDestination.host = QStringLiteral("127.0.0.1");
+  remoteDestination.user = QStringLiteral("me");
+
+  const auto context = [&](const Endpoint& other,
+                           const QString& path = QStringLiteral("docs/photo.png"),
+                           bool isDirectory = false) {
+    return itemContext(path, isDirectory, QStringLiteral("/src"),
+                       QStringLiteral("/dst"), localSource, other,
+                       QStringLiteral("Kate"));
+  };
+  const auto run = [&](const QString& command, const ToolContext& toolContext,
+                       const QString& options = QString()) -> QStringList {
+    auto values = placeholderValues(toolContext);
+    values.insert(QStringLiteral("O"), options);
+    return buildToolCommand(command, values);
+  };
+
+  const auto local = context(localDestination);
+  QCOMPARE(run(QStringLiteral("kate %d/%f"), local),
+           toolArgs(QStringLiteral("kate"), QStringLiteral("/src/docs/photo.png")));
+  QCOMPARE(run(QStringLiteral("kate %a"), local),
+           toolArgs(QStringLiteral("kate"), QStringLiteral("/src/docs/photo.png")));
+  QCOMPARE(run(QStringLiteral("kate %f"), local),
+           toolArgs(QStringLiteral("kate"), QStringLiteral("photo.png")));
+  QCOMPARE(run(QStringLiteral("kate %x"), local),
+           toolArgs(QStringLiteral("kate"), QStringLiteral("png")));
+  QCOMPARE(run(QStringLiteral("kate %b"), local),
+           toolArgs(QStringLiteral("kate"), QStringLiteral("photo")));
+  QCOMPARE(run(QStringLiteral("kate %d"), local),
+           toolArgs(QStringLiteral("kate"), QStringLiteral("/src/docs")));
+  QCOMPARE(run(QStringLiteral("meld %A"), local),
+           toolArgs(QStringLiteral("meld"), QStringLiteral("/dst/docs/photo.png")));
+  QCOMPARE(run(QStringLiteral("meld %D"), local),
+           toolArgs(QStringLiteral("meld"), QStringLiteral("/dst/docs")));
+  QCOMPARE(run(QStringLiteral("meld %T"), local),
+           toolArgs(QStringLiteral("meld"), QStringLiteral("Kate")));
+  QCOMPARE(run(QStringLiteral("kate %O %f"), local, QStringLiteral("-R --wait")),
+           toolArgs(QStringLiteral("kate"), QStringLiteral("-R"),
+                    QStringLiteral("--wait"), QStringLiteral("photo.png")));
+
+  const auto remote = context(remoteDestination);
+  QCOMPARE(run(QStringLiteral("scp %d/%f %U%V%R%W%D/%F"), remote),
+           toolArgs(QStringLiteral("scp"), QStringLiteral("/src/docs/photo.png"),
+                    QStringLiteral("me@127.0.0.1:/dst/docs/photo.png")));
+  QCOMPARE(run(QStringLiteral("kate %P"), remote),
+           toolArgs(QStringLiteral("kate"), QStringLiteral("://")));
+  QCOMPARE(run(QStringLiteral("kate %R"), local), toolArgs(QStringLiteral("kate")));
+  QCOMPARE(run(QStringLiteral("echo %%"), local),
+           toolArgs(QStringLiteral("echo"), QStringLiteral("%")));
+  QCOMPARE(run(QStringLiteral("kate %a"),
+               context(localDestination, QStringLiteral("my docs/photo.png"))),
+           toolArgs(QStringLiteral("kate"), QStringLiteral("/src/my docs/photo.png")));
+  QCOMPARE(run(QStringLiteral("meld %D %d"),
+               context(localDestination, QStringLiteral("docs"), true)),
+           toolArgs(QStringLiteral("meld"), QStringLiteral("/dst/docs"),
+                    QStringLiteral("/src/docs")));
+
+  QCOMPARE(unknownPlaceholders(QStringLiteral("kate %z %f")),
+           toolArgs(QStringLiteral("%z")));
+  QVERIFY(unknownPlaceholders(QStringLiteral("kate %f %d")).isEmpty());
+  QString emptyError;
+  QVERIFY(buildToolCommand(QString(), placeholderValues(local), &emptyError).isEmpty());
+  QVERIFY(!emptyError.isEmpty());
 }
 
 QTEST_MAIN(CoreTest)

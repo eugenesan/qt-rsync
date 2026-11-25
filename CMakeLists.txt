@@ -47,6 +47,7 @@ add_library(qt_rsync_core
     src/core/Paths.cpp
     src/core/Storage.cpp
     src/core/Parser.cpp
+    src/core/ExternalTools.cpp
 )
 target_include_directories(qt_rsync_core PUBLIC src)
 target_link_libraries(qt_rsync_core PUBLIC Qt6::Core)

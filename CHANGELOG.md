@@ -61,6 +61,10 @@ and refreshed documentation and packaging.
   filter no longer swallows the shortcut.
 - Startup options are validated (mode and compare pair) and Qt-only switches
   such as `-style Fusion` are forwarded to QApplication again.
+- Compare progress is visible again: the dry run streams its itemized records
+  into a live "N item(s) found" label with an indeterminate bar.
+- External tools support qpy's placeholder expansion; the diff command uses
+  the configured command with `%a`/`%A` and quoted paths stay one argument.
 
 ### Changed
 
