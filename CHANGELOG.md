@@ -32,6 +32,9 @@ and refreshed documentation and packaging.
   positions, not stale row numbers, so a shrinking list cannot leave it out of
   range. The compared folder no longer has an exclude checkbox and ignores
   Space.
+- Overview folders can be excluded with Space or the context menu, restored
+  from their subtree, and excluded by an rsync filter from the same menu.
+  Adding a filter from the overview marks the comparison stale.
 
 ### Changed
 

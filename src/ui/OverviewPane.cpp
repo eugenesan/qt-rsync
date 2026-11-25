@@ -1,7 +1,10 @@
 #include "ui/OverviewPane.h"
 
 #include <QApplication>
+#include <QContextMenuEvent>
 #include <QHeaderView>
+#include <QKeyEvent>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QStyledItemDelegate>
@@ -10,6 +13,7 @@
 #include <functional>
 #include <QVBoxLayout>
 
+#include "core/Filter.h"
 #include "ui/Icons.h"
 
 namespace qt_rsync::ui {
@@ -20,6 +24,8 @@ class OverviewTree : public QTreeView {
   explicit OverviewTree(QWidget* parent = nullptr) : QTreeView(parent) {}
 
   std::function<void(const QString&)> jumpCallback;
+  std::function<void(const QString&)> excludeCallback;
+  std::function<void(const QString&, const QPoint&)> contextCallback;
 
   QRect jumpRect(const QModelIndex& index) const {
     const QRect row = visualRect(index);
@@ -57,6 +63,29 @@ class OverviewTree : public QTreeView {
         jumpRect(index).contains(event->pos());
     setCursor(overJump ? Qt::PointingHandCursor : Qt::ArrowCursor);
     QTreeView::mouseMoveEvent(event);
+  }
+
+  void keyPressEvent(QKeyEvent* event) override {
+    if (event->key() == Qt::Key_Space && excludeCallback) {
+      const QString path = currentIndex().data(Qt::UserRole).toString();
+      if (!path.isEmpty()) {
+        excludeCallback(path);
+        event->accept();
+        return;
+      }
+    }
+    QTreeView::keyPressEvent(event);
+  }
+
+  void contextMenuEvent(QContextMenuEvent* event) override {
+    const QModelIndex index = indexAt(event->pos());
+    const QString path = index.data(Qt::UserRole).toString();
+    if (!path.isEmpty() && contextCallback) {
+      contextCallback(path, event->globalPos());
+      event->accept();
+      return;
+    }
+    QTreeView::contextMenuEvent(event);
   }
 };
 
@@ -108,6 +137,13 @@ OverviewPane::OverviewPane(QWidget* parent)
   overviewTree->jumpCallback = [this](const QString& path) {
     emit folderActivated(path);
   };
+  overviewTree->excludeCallback = [this](const QString& path) {
+    emit excludeRequested(path);
+  };
+  overviewTree->contextCallback = [this](const QString& path,
+                                          const QPoint& globalPosition) {
+    showFolderMenu(path, globalPosition);
+  };
   tree_->setModel(model_);
   tree_->setUniformRowHeights(true);
   tree_->setAlternatingRowColors(true);
@@ -137,6 +173,36 @@ OverviewPane::OverviewPane(QWidget* parent)
 
 void OverviewPane::setActionColours(const QVector<QString>& colours) {
   stats_->setActionColours(colours);
+}
+
+void OverviewPane::showFolderMenu(const QString& path,
+                                  const QPoint& globalPosition) {
+  QMenu menu(this);
+  QAction* heading = menu.addAction(path);
+  heading->setEnabled(false);
+  menu.addSeparator();
+  QAction* exclude = menu.addAction(QStringLiteral("Exclude Folder\tSpace"));
+  QAction* restore = menu.addAction(QStringLiteral("Restore Folder"));
+  menu.addSeparator();
+  QMenu* filterMenu = menu.addMenu(QStringLiteral("Exclude via Filter"));
+  QVector<QPair<QAction*, QString>> filterActions;
+  for (const core::FilterPhrase& phrase : core::phrasesFor(path, true)) {
+    QAction* action = filterMenu->addAction(phrase.label);
+    filterActions.append({action, phrase.pattern});
+  }
+  QAction* chosen = menu.exec(globalPosition);
+  if (chosen == exclude) {
+    emit excludeRequested(path);
+  } else if (chosen == restore) {
+    emit restoreRequested(path);
+  } else {
+    for (const auto& entry : filterActions) {
+      if (entry.first == chosen) {
+        emit filterRequested(entry.second, path);
+        break;
+      }
+    }
+  }
 }
 
 void OverviewPane::rebuild(const model::DataStore& store) {

@@ -21,8 +21,13 @@ class OverviewPane : public QWidget {
 
  signals:
   void folderActivated(const QString& path);
+  void excludeRequested(const QString& path);
+  void restoreRequested(const QString& path);
+  void filterRequested(const QString& pattern, const QString& path);
 
  private:
+  void showFolderMenu(const QString& path, const QPoint& globalPosition);
+
   QTreeView* tree_;
   model::OverviewModel* model_;
   StatsBar* stats_;

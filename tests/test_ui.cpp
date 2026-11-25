@@ -80,6 +80,7 @@ class UiTest : public QObject {
   void excludeKeepsFocusOnNearestRow();
   void excludeBatchFocusesAfterLastExcluded();
   void rootHasNoExcludeDecision();
+  void overviewSpaceExcludesTheSelectedFolder();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1306,6 +1307,45 @@ void UiTest::rootHasNoExcludeDecision() {
   view.applyDecision(root, static_cast<int>(core::Decision::Exclude));
   QCOMPARE(view.decisions().explicitItems().size(), 0);
   QCOMPARE(store.visible.size(), static_cast<std::size_t>(3));
+}
+
+void UiTest::overviewSpaceExcludesTheSelectedFolder() {
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("docs/a.txt"),
+                               QStringLiteral("docs/b.txt"),
+                               QStringLiteral("other/c.txt")}));
+  ui::OverviewPane overview;
+  overview.rebuild(view.store());
+  overview.resize(520, 260);
+  overview.show();
+  QTest::qWait(1);
+  auto* tree = overview.findChild<QTreeView*>();
+  QVERIFY(tree != nullptr);
+  QAbstractItemModel* model = tree->model();
+  QVERIFY(model != nullptr);
+  const QModelIndex total = model->index(0, 0);
+  QVERIFY(total.isValid());
+  QModelIndex docs;
+  for (int row = 0; row < model->rowCount(total); ++row) {
+    const QModelIndex index = model->index(row, 0, total);
+    if (model->data(index).toString() == QStringLiteral("docs")) {
+      docs = index;
+      break;
+    }
+  }
+  QVERIFY(docs.isValid());
+  QSignalSpy spy(&overview, &ui::OverviewPane::excludeRequested);
+  tree->setCurrentIndex(docs);
+  QKeyEvent space(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
+  QApplication::sendEvent(tree, &space);
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.takeFirst().at(0).toString(), QStringLiteral("docs"));
+
+  // Total is the container and is not an action target.
+  tree->setCurrentIndex(total);
+  QApplication::sendEvent(tree, &space);
+  QCOMPARE(spy.count(), 0);
+  overview.close();
 }
 
 QTEST_MAIN(UiTest)

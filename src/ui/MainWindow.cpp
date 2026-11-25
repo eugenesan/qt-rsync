@@ -902,6 +902,20 @@ MainWindow::MainWindow(QWidget* parent)
           [this](const QString& path) {
             d_->comparison->activatePath(path);
           });
+  connect(d_->overview, &OverviewPane::excludeRequested, this,
+          [this](const QString& path) {
+            d_->comparison->applyDecision(
+                path, static_cast<int>(core::Decision::Exclude));
+          });
+  connect(d_->overview, &OverviewPane::restoreRequested, this,
+          [this](const QString& path) {
+            d_->comparison->applyDecision(
+                path, static_cast<int>(core::Decision::Inherit));
+          });
+  connect(d_->overview, &OverviewPane::filterRequested, this,
+          [this](const QString& pattern, const QString& path) {
+            addFilterPattern(pattern, path);
+          });
   logSplitter->setStretchFactor(0, 1);
   logSplitter->setStretchFactor(1, 0);
   logSplitter->setSizes({680, 620});
@@ -1605,7 +1619,20 @@ void MainWindow::addFilterPattern(const QString& pattern, const QString& path) {
                      : text + QStringLiteral("\n# Added from ") + path +
                            QStringLiteral("\n") + pattern;
   d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
-  setStatus(QStringLiteral("Filter added: %1").arg(pattern));
+  if (!d_->changes.isEmpty()) {
+    // A new filter changes the comparison's result set. Do not let an old
+    // plan be synchronized with a filter the user has not compared yet.
+    d_->stale = true;
+    d_->verified = false;
+    d_->sync->setEnabled(false);
+    d_->verify->setEnabled(false);
+    updateStateIcons();
+    setStatus(QStringLiteral(
+        "Stale comparison: added the filter %1. Compare again to refresh "
+        "results.").arg(pattern));
+  } else {
+    setStatus(QStringLiteral("Filter added: %1").arg(pattern));
+  }
 }
 
 bool MainWindow::startupAborted() const {
