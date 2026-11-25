@@ -234,6 +234,8 @@ class MainWindow::Private {
   int compareItemsFound = 0;
   int compareItemsReported = 0;
   int lastSyncPercent = -1;
+  QElapsedTimer compareProgressClock;
+  QElapsedTimer syncProgressClock;
   QElapsedTimer compareClock;
   QElapsedTimer viewClock;
   double lastCompareSeconds = 0.0;
@@ -1072,11 +1074,15 @@ MainWindow::MainWindow(QWidget* parent)
       }
       if (core::parseRecord(line).has_value()) ++d_->compareItemsFound;
     }
-    if (d_->compareItemsFound - d_->compareItemsReported >=
-        kCompareProgressBatch) {
+    const bool batchReady =
+        d_->compareItemsFound - d_->compareItemsReported >= kCompareProgressBatch;
+    const bool timeReady = d_->compareProgressClock.elapsed() >= 250;
+    if (d_->compareItemsFound != d_->compareItemsReported &&
+        (batchReady || timeReady)) {
       d_->compareItemsReported = d_->compareItemsFound;
       d_->progressLabel->setText(
           QStringLiteral("Comparing... %1 item(s) found").arg(d_->compareItemsFound));
+      d_->compareProgressClock.restart();
     }
   });
   // Rsync writes itemized records, progress and the statistics block to the
@@ -1096,8 +1102,11 @@ MainWindow::MainWindow(QWidget* parent)
         if (clean.isEmpty()) continue;
         if (const auto progress = core::parseSyncProgress(clean)) {
           d_->progress->setValue(progress->percent);
-          if (d_->syncing && progress->percent != d_->lastSyncPercent) {
+          const bool changed = progress->percent != d_->lastSyncPercent;
+          const bool timeReady = d_->syncProgressClock.elapsed() >= 250;
+          if (d_->syncing && (changed || timeReady)) {
             d_->lastSyncPercent = progress->percent;
+            d_->syncProgressClock.restart();
             d_->progressLabel->setText(
                 QStringLiteral("Synchronizing... %1% (%2 transferred, %3 remaining)")
                     .arg(progress->percent)
@@ -1303,7 +1312,14 @@ void MainWindow::applyStartupOptions(const app::StartupOptions& options) {
   }
 }
 
-void MainWindow::appendJournalLine(const QString& line) {
+void MainWindow::appendJournalLine(const QString& rawLine) {
+  static const QRegularExpression timestampPrefix(
+      QStringLiteral("^\\d{2}:\\d{2}:\\d{2}\\.\\d\\s"));
+  const QString line = timestampPrefix.match(rawLine).hasMatch()
+                           ? rawLine
+                           : QTime::currentTime().toString(
+                                 QStringLiteral("HH:mm:ss.zz")) +
+                                 QLatin1Char(' ') + rawLine;
   QString colour = QStringLiteral("#9CA3AF");
   if (line.contains(QStringLiteral("fail"), Qt::CaseInsensitive) ||
       line.contains(QStringLiteral("error"), Qt::CaseInsensitive) ||
@@ -1328,6 +1344,10 @@ void MainWindow::appendJournalLine(const QString& line) {
     auto* bar = journal->verticalScrollBar();
     if (bar != nullptr) bar->setValue(bar->maximum());
   });
+  if (d_->logFile != nullptr && d_->logFile->isOpen()) {
+    d_->logFile->write((line + QLatin1Char('\n')).toUtf8());
+    d_->logFile->flush();
+  }
 }
 
 void MainWindow::setCommandPreview(const core::ProcessSpec& spec) {
@@ -1356,14 +1376,8 @@ void MainWindow::setStatus(const QString& text) {
   d_->status->setToolTip(text);
   d_->status->setText(text);
   d_->status->setCursorPosition(0);
-  const QString time = QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zz"));
-  const QString line = time + QStringLiteral(" ") + text;
-  d_->journalLines.append(line);
-  appendJournalLine(line);
-  if (d_->logFile != nullptr && d_->logFile->isOpen()) {
-    d_->logFile->write((line + '\n').toUtf8());
-    d_->logFile->flush();
-  }
+  d_->journalLines.append(text);
+  appendJournalLine(text);
 }
 
 void MainWindow::startCompare() {
@@ -1406,6 +1420,8 @@ void MainWindow::startCompare() {
   d_->compareItemsFound = 0;
   d_->compareItemsReported = 0;
   d_->lastSyncPercent = -1;
+  d_->compareProgressClock.restart();
+  d_->syncProgressClock.restart();
   d_->progress->setRange(0, 0);
   d_->progress->setValue(0);
   d_->progress->show();
@@ -1695,6 +1711,7 @@ void MainWindow::synchronize() {
   setCommandPreview(spec);
   d_->syncing = true;
   d_->verifying = false;
+  d_->syncProgressClock.restart();
   d_->operationOutput.clear();
   d_->cancel->setEnabled(true);
   d_->progress->show();

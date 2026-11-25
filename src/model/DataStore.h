@@ -87,6 +87,8 @@ struct DataStore {
   std::vector<long long> dir_items;
   std::vector<long long> dir_size;
   std::vector<char> stripe;
+  mutable std::vector<int> cached_tree_order_;
+  mutable bool tree_order_dirty_ = true;
   std::string root_source = "Source";
   std::string root_dest = "Destination";
   std::vector<QString> action_colours;
@@ -242,6 +244,7 @@ struct DataStore {
     for (int i = 0; i < count; ++i) path_to_id[paths[i]] = i;
     derive_range(0, count);
     decision_log.clear();
+    tree_order_dirty_ = true;
     collapsed.assign(paths.size(), 0);
     action_mask = 0;
     pattern.clear();
@@ -277,6 +280,7 @@ struct DataStore {
     folded_paths.resize(count);
     for (int i = start; i < count; ++i) path_to_id[paths[i]] = i;
     derive_range(start, count);
+    tree_order_dirty_ = true;
     collapsed.resize(count, 0);
     visible.resize(count);
     std::iota(visible.begin(), visible.end(), 0);
@@ -305,6 +309,7 @@ struct DataStore {
       else ++it;
     }
     decision_log.clear();
+    tree_order_dirty_ = true;
     visible.resize(count);
     std::iota(visible.begin(), visible.end(), 0);
   }
@@ -391,6 +396,7 @@ struct DataStore {
         dir_has_children[parent] = 1;
       }
     }
+    tree_order_dirty_ = true;
     visible = tree_order();
     row_of_id.assign(count, -1);
     for (int row = 0; row < static_cast<int>(visible.size()); ++row) {
@@ -504,6 +510,8 @@ struct DataStore {
     }
   }
 
+  void invalidate_tree_order() { tree_order_dirty_ = true; }
+
   void set_collapsed(int path_id, bool value) {
     if (path_id >= 0 && path_id < static_cast<int>(collapsed.size())) {
       collapsed[path_id] = value ? 1 : 0;
@@ -594,6 +602,9 @@ struct DataStore {
   }
 
   std::vector<int> tree_order() const {
+    if (!tree_order_dirty_ && cached_tree_order_.size() == paths.size()) {
+      return cached_tree_order_;
+    }
     std::vector<std::vector<int>> children(paths.size());
     for (int i = 0; i < static_cast<int>(paths.size()); ++i) {
       int parent = i < static_cast<int>(parents.size()) ? parents[i] : -1;
@@ -650,7 +661,9 @@ struct DataStore {
         if (!seen[i]) order.push_back(i);
       }
     }
-    return order;
+    cached_tree_order_ = order;
+    tree_order_dirty_ = false;
+    return cached_tree_order_;
   }
 
   void rebuild_visible() {

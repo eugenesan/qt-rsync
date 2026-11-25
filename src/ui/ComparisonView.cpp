@@ -1,6 +1,8 @@
 #include "ui/ComparisonView.h"
 
 #include "core/Filter.h"
+
+#include <algorithm>
 #include "ui/Icons.h"
 #include "ui/TreeDelegate.h"
 
@@ -525,17 +527,36 @@ void ComparisonView::applyDecision(const QString& path, int decision) {
 void ComparisonView::syncDecisionsToStore() {
   // Clear the mirrored decisions first: an undo removes entries, and stale
   // values would otherwise keep the rows hidden.
-  for (int& value : store_.decisions) value = model::Inherit;
+  std::fill(store_.decisions.begin(), store_.decisions.end(), model::Inherit);
   store_.decision_log.clear();
-  store_.compute_aggregates();
-  const auto items = decisions_.explicitItems();
-  for (const auto& item : items) {
-    const std::string key = item.first.toStdString();
-    for (std::size_t id = 0; id < store_.paths.size(); ++id) {
-      const std::string& path = store_.paths[id];
-      if (path != key && path.rfind(key + '/', 0) != 0) continue;
-      if (id < store_.decisions.size()) {
-        store_.decisions[id] = static_cast<int>(item.second);
+  if (decisions_.explicitItems().isEmpty()) return;
+
+  // The old implementation compared every explicit path against every record,
+  // which was O(paths * decisions) on half-million-row comparisons. Build a
+  // child index once and walk each decided subtree instead.
+  std::vector<std::vector<int>> children(store_.paths.size());
+  for (int id = 0; id < static_cast<int>(store_.paths.size()); ++id) {
+    const int parent = id < static_cast<int>(store_.parents.size())
+                           ? store_.parents[id] : -1;
+    if (parent >= 0 && parent < static_cast<int>(children.size())) {
+      children[parent].push_back(id);
+    }
+  }
+  std::vector<int> pending;
+  for (const auto& item : decisions_.explicitItems()) {
+    const auto found = store_.path_to_id.find(item.first.toStdString());
+    if (found == store_.path_to_id.end()) continue;
+    const int decision = static_cast<int>(item.second);
+    pending.clear();
+    pending.push_back(found->second);
+    while (!pending.empty()) {
+      const int id = pending.back();
+      pending.pop_back();
+      if (id >= 0 && id < static_cast<int>(store_.decisions.size())) {
+        store_.decisions[id] = decision;
+      }
+      if (id >= 0 && id < static_cast<int>(children.size())) {
+        for (int child : children[id]) pending.push_back(child);
       }
     }
   }

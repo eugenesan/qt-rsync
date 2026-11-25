@@ -24,6 +24,7 @@
 #include <QPlainTextEdit>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QTableView>
 #include <QTableWidget>
@@ -98,6 +99,7 @@ class UiTest : public QObject {
   void startupOptionsValidateModeAndComparePair();
   void menusAndShortcutsAreWired();
   void compareProgressShowsItemsFound();
+  void journalEntriesHaveTimestamps();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1756,6 +1758,52 @@ void UiTest::compareProgressShowsItemsFound() {
   QVERIFY(progress->isVisible() || progress->maximum() == 0);
   auto* status = window.findChild<QLineEdit*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 8000);
+  qputenv("PATH", oldPath);
+}
+
+void UiTest::journalEntriesHaveTimestamps() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString script = dir.path() + QStringLiteral("/rsync");
+  QFile file(script);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write("#!/bin/sh\n"
+             "case \"$*\" in *--list-only*) exit 0 ;; esac\n"
+             "printf '%s\\n' '>f+++++++++|qpy-rsync|1|qpy-rsync|2026-11-23|qpy-rsync|docs/a.txt'\n");
+  file.close();
+  QVERIFY(QFile::setPermissions(script, QFile::ReadOwner | QFile::WriteOwner |
+                                           QFile::ExeOwner));
+  const QByteArray oldPath = qgetenv("PATH");
+  qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
+
+  ui::MainWindow window;
+  app::StartupOptions options;
+  window.applyStartupOptions(options);
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
+  edits.at(0)->setText(QStringLiteral("/src"));
+  edits.at(1)->setText(QStringLiteral("/dst"));
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
+    if (button->text() == QLatin1String("Compare")) button->click();
+  }
+  auto* status = window.findChild<QLineEdit*>("status-label");
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 8000);
+  QPlainTextEdit* journal = nullptr;
+  for (QPlainTextEdit* edit : window.findChildren<QPlainTextEdit*>()) {
+    if (edit->objectName() != QStringLiteral("command-preview-label")) {
+      journal = edit;
+    }
+  }
+  QVERIFY(journal != nullptr);
+  const QRegularExpression stamped(QStringLiteral("^\\d{2}:\\d{2}:\\d{2}\\.\\d{1,3} "));
+  const QStringList lines = journal->toPlainText().split('\n');
+  int checked = 0;
+  for (const QString& line : lines) {
+    if (line.trimmed().isEmpty()) continue;
+    QVERIFY2(stamped.match(line).hasMatch(), qPrintable(line));
+    ++checked;
+  }
+  QVERIFY(checked > 4);
   qputenv("PATH", oldPath);
 }
 
