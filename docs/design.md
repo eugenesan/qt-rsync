@@ -67,8 +67,8 @@ Source -> Destination
 ```
 
 The interface makes the direction unambiguous: the direction line above the
-action filters names both sides, and the middle pane carries the action of
-every row. A deliberate swap invalidates the active comparison plan.
+decision filters names both sides, and the middle pane carries the decision
+of every row. A deliberate swap invalidates the active comparison plan.
 
 ### 3.2 Synchronization modes
 

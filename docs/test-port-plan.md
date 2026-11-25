@@ -62,7 +62,7 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 - Action filters: hiding, ancestor retention, keyboard-only focus and separator
   count are covered by new UI cases.
 - Directory decision filters: `directoryFiltersApplyOnlyWhenEnabled` checks
-  that directories ignore the action filters until the toggle is on, and that
+  that directories ignore the decision filters until the toggle is on, and that
   a filtered directory stays as a faded, uncounted parent with visible
   children.
 - Overview totals: `overviewCountsReportedDirectoriesOnly` checks that a

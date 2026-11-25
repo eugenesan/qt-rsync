@@ -15,7 +15,7 @@ Working and verified:
 
 - one Python → native handoff per comparison, with incremental append/truncate
   for unchanged-item transitions;
-- decision checkbox (mouse and Space), action filters, show-excluded, search
+- decision checkbox (mouse and Space), decision filters, show-excluded, search
   including the `dir/` variant, column sorting, folder folding, shared cursors,
   undo/redo, destination metadata, stable cursor/scroll across exclude and undo;
 - full column/row/header context menus, item tooltips, keyboard shortcuts and
