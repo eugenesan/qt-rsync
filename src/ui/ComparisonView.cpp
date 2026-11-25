@@ -325,8 +325,8 @@ void ComparisonView::markDelete(const QString& path) {
 
 void ComparisonView::startDecisionBatch() {
   batching_ = true;
-  batchAnchorPath_ = currentPath();
-  batchAnchorRow_ = currentRow();
+  batchOldVisible_ = store_.visible;
+  batchAffectedPaths_.clear();
   batchBefore_ = decisions_.explicitItemsAsHash();
 }
 
@@ -341,27 +341,10 @@ void ComparisonView::endDecisionBatch() {
   }
   batchBefore_.clear();
   // A batch rebuilds the visible rows after every decision. Restore the
-  // cursor once, next to the row that was selected before the batch.
-  restoreFocusAfterRebuild(batchAnchorPath_, batchAnchorRow_);
-  batchAnchorPath_.clear();
-  batchAnchorRow_ = -1;
-}
-
-QString ComparisonView::currentPath() const {
-  if (views_.isEmpty() || store_.visible.empty()) return {};
-  const QModelIndex current = views_.first()->currentIndex();
-  if (!current.isValid()) return {};
-  const int row = current.row();
-  if (row < 0 || row >= static_cast<int>(store_.visible.size())) return {};
-  const int id = store_.visible[row];
-  if (id < 0 || id >= static_cast<int>(store_.paths.size())) return {};
-  return QString::fromStdString(store_.paths[id]);
-}
-
-int ComparisonView::currentRow() const {
-  if (views_.isEmpty()) return -1;
-  const QModelIndex current = views_.first()->currentIndex();
-  return current.isValid() ? current.row() : -1;
+  // cursor once, after the whole selection was removed.
+  restoreFocusAfterDecision(batchOldVisible_, batchAffectedPaths_);
+  batchOldVisible_.clear();
+  batchAffectedPaths_.clear();
 }
 
 void ComparisonView::selectRow(int row) {
@@ -378,27 +361,70 @@ void ComparisonView::selectRow(int row) {
   selecting_ = false;
 }
 
-void ComparisonView::restoreFocusAfterRebuild(const QString& anchorPath,
-                                              int anchorRow) {
+void ComparisonView::restoreFocusAfterDecision(
+    const std::vector<int>& oldVisible, const QStringList& affectedPaths) {
   if (store_.visible.empty()) return;
-  int row = -1;
-  if (!anchorPath.isEmpty()) {
-    const auto found = store_.path_to_id.find(anchorPath.toStdString());
-    if (found != store_.path_to_id.end() &&
-        found->second < static_cast<int>(store_.row_of_id.size())) {
-      row = store_.row_of_id[found->second];
+
+  // Row ids are stable; their positions are not. Build the old positions so
+  // the cursor can follow the item *after* the last excluded row instead of
+  // whatever happens to occupy the same row number after the rebuild.
+  QHash<int, int> oldIndex;
+  for (int index = 0; index < static_cast<int>(oldVisible.size()); ++index) {
+    oldIndex.insert(oldVisible[index], index);
+  }
+  int lastOldIndex = -1;
+  QVector<int> affectedRows;
+  bool anyHidden = false;
+  for (const QString& path : affectedPaths) {
+    const auto found = store_.path_to_id.find(path.toStdString());
+    if (found == store_.path_to_id.end()) continue;
+    const int id = found->second;
+    const auto position = oldIndex.constFind(id);
+    if (position != oldIndex.cend()) {
+      lastOldIndex = qMax(lastOldIndex, position.value());
+    }
+    const int row = id < static_cast<int>(store_.row_of_id.size())
+                        ? store_.row_of_id[id] : -1;
+    if (row >= 0) {
+      affectedRows.append(row);
+    } else {
+      anyHidden = true;
     }
   }
-  if (row < 0) {
-    // The anchor was excluded: choose the row that took its place, which is
-    // the next visible item, or the last row when nothing follows. With every
-    // item gone this is the always-visible root row.
-    row = anchorRow < 0 ? 0 : anchorRow;
-    if (row >= static_cast<int>(store_.visible.size())) {
-      row = static_cast<int>(store_.visible.size()) - 1;
+  if (!anyHidden && !affectedRows.isEmpty()) {
+    // Include and delete decisions keep the affected row visible.
+    selectRow(affectedRows.first());
+    return;
+  }
+
+  int nextRow = -1;
+  int previousRow = -1;
+  for (int row = 0; row < static_cast<int>(store_.visible.size()); ++row) {
+    const auto position = oldIndex.constFind(store_.visible[row]);
+    if (position == oldIndex.cend()) continue;
+    if (lastOldIndex >= 0 && position.value() > lastOldIndex && nextRow < 0) {
+      nextRow = row;
+    }
+    if (lastOldIndex >= 0 && position.value() < lastOldIndex) {
+      previousRow = row;
     }
   }
-  selectRow(row);
+  if (nextRow >= 0) {
+    selectRow(nextRow);
+    return;
+  }
+  if (previousRow >= 0) {
+    selectRow(previousRow);
+    return;
+  }
+  // Hidden rows that became visible again are not in the old positions.
+  if (!affectedRows.isEmpty()) {
+    selectRow(affectedRows.first());
+    return;
+  }
+  // The compared folder is always visible; with no other row left it is the
+  // only safe target.
+  selectRow(0);
 }
 
 bool ComparisonView::undoDecision() {
@@ -439,8 +465,9 @@ void ComparisonView::applyDecision(const QString& path, int decision) {
   const core::Decision value = static_cast<core::Decision>(decision);
   if (decisions_.explicitDecision(path) == value) return;
   const bool single = !batching_;
-  const QString anchorPath = single ? currentPath() : QString();
-  const int anchorRow = single ? currentRow() : -1;
+  std::vector<int> oldVisible;
+  if (single) oldVisible = store_.visible;
+  if (batching_) batchAffectedPaths_.append(path);
   if (!batching_) {
     decisionHistory_.append(decisions_.explicitItemsAsHash());
     if (decisionHistory_.size() > 100) decisionHistory_.removeFirst();
@@ -449,7 +476,7 @@ void ComparisonView::applyDecision(const QString& path, int decision) {
   syncDecisionsToStore();
   store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
-  if (single) restoreFocusAfterRebuild(anchorPath, anchorRow);
+  if (single) restoreFocusAfterDecision(oldVisible, {path});
   redoHistory_.clear();
   emit redoAvailable(false);
   emit decisionChanged();

@@ -78,6 +78,7 @@ class UiTest : public QObject {
   void overviewFolderActivationEmitsPath();
   void activatePathRevealsAndFocusesFolder();
   void excludeKeepsFocusOnNearestRow();
+  void excludeBatchFocusesAfterLastExcluded();
   void rootHasNoExcludeDecision();
 };
 
@@ -1236,6 +1237,39 @@ void UiTest::excludeKeepsFocusOnNearestRow() {
   view.selectPath(QStringLiteral("a.txt"));
   view.applyDecision(QStringLiteral("a.txt"),
                      static_cast<int>(core::Decision::Exclude));
+  QCOMPARE(currentComparisonPath(view), root);
+}
+
+void UiTest::excludeBatchFocusesAfterLastExcluded() {
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("a.txt"), QStringLiteral("b.txt"),
+                               QStringLiteral("c.txt"), QStringLiteral("d.txt")}));
+  const QString root = QString::fromStdString(model::DataStore::root_path());
+  // Keep the cursor on an item before the batch: the focus still follows the
+  // last excluded item, not the remembered row number.
+  view.selectPath(QStringLiteral("a.txt"));
+  QVERIFY(QMetaObject::invokeMethod(&view, "startDecisionBatch"));
+  view.applyDecision(QStringLiteral("b.txt"),
+                     static_cast<int>(core::Decision::Exclude));
+  view.applyDecision(QStringLiteral("c.txt"),
+                     static_cast<int>(core::Decision::Exclude));
+  QVERIFY(QMetaObject::invokeMethod(&view, "endDecisionBatch"));
+  QCOMPARE(currentComparisonPath(view), QStringLiteral("d.txt"));
+
+  // Nothing after the batch: use the item before the first excluded row.
+  QVERIFY(QMetaObject::invokeMethod(&view, "startDecisionBatch"));
+  view.applyDecision(QStringLiteral("c.txt"),
+                     static_cast<int>(core::Decision::Exclude));
+  view.applyDecision(QStringLiteral("d.txt"),
+                     static_cast<int>(core::Decision::Exclude));
+  QVERIFY(QMetaObject::invokeMethod(&view, "endDecisionBatch"));
+  QCOMPARE(currentComparisonPath(view), QStringLiteral("a.txt"));
+
+  // Everything gone: the root row remains selected.
+  QVERIFY(QMetaObject::invokeMethod(&view, "startDecisionBatch"));
+  view.applyDecision(QStringLiteral("a.txt"),
+                     static_cast<int>(core::Decision::Exclude));
+  QVERIFY(QMetaObject::invokeMethod(&view, "endDecisionBatch"));
   QCOMPARE(currentComparisonPath(view), root);
 }
 

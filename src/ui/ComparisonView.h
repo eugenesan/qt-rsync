@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QVector>
+
+#include <vector>
 #include <QWidget>
 
 #include "core/Change.h"
@@ -61,6 +63,8 @@ class ComparisonView : public QWidget {
   void openDirectoryRequested(int pane, const QString& path);
 
  private slots:
+  void startDecisionBatch();
+  void endDecisionBatch();
 
  private:
   void syncDecisionsToStore();
@@ -69,17 +73,13 @@ class ComparisonView : public QWidget {
   void showContextMenu(int pane, const QPoint& position);
   void showHeaderMenu(int pane, const QPoint& position);
 
-  void startDecisionBatch();
-  void endDecisionBatch();
-
-  [[nodiscard]] QString currentPath() const;
-  [[nodiscard]] int currentRow() const;
   void selectRow(int row);
-  void restoreFocusAfterRebuild(const QString& anchorPath, int anchorRow);
+  void restoreFocusAfterDecision(const std::vector<int>& oldVisible,
+                                 const QStringList& affectedPaths);
 
   bool batching_ = false;
-  QString batchAnchorPath_;
-  int batchAnchorRow_ = -1;
+  std::vector<int> batchOldVisible_;
+  QStringList batchAffectedPaths_;
   QHash<QString, core::Decision> batchBefore_;
   bool sorting_ = false;
   bool selecting_ = false;
