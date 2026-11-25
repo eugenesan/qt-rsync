@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 460 pytest cases. qt-rsync has 90 QtTest cases
-(45 core, 45 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 460 pytest cases. qt-rsync has 91 QtTest cases
+(45 core, 46 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
