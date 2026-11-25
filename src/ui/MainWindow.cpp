@@ -219,8 +219,23 @@ MainWindow::MainWindow(QWidget* parent)
                      "existing items."));
   connect(d_->mode, qOverload<int>(&QComboBox::currentIndexChanged), this,
           [this](int index) {
-            d_->profile.transfer.mode =
+            const auto mode =
                 static_cast<core::SyncMode>(d_->mode->itemData(index).toInt());
+            d_->profile.transfer.mode = mode;
+            if (!d_->changes.isEmpty()) {
+              d_->stale = true;
+              d_->verified = false;
+              d_->sync->setEnabled(false);
+              d_->verify->setEnabled(false);
+              updateStateIcons();
+              setStatus(QStringLiteral(
+                  "Stale comparison: synchronization mode changed. Compare "
+                  "again to refresh results."));
+            } else if (mode == core::SyncMode::Mirror) {
+              setStatus(QStringLiteral(
+                  "Mirror can delete items that exist only in Destination. "
+                  "Click Compare and review deletions."));
+            }
           });
   toolbarLayout->addWidget(d_->mode);
 

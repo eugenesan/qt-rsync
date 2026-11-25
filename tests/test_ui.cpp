@@ -118,6 +118,8 @@ void UiTest::compareRendersFakeRsyncOutput() {
   auto* progress = window.findChild<QProgressBar*>();
   QVERIFY(progress != nullptr);
   QVERIFY(progress->isHidden());
+  mode->setCurrentIndex(1);  // Mirror
+  QVERIFY(status->text().contains(QStringLiteral("Stale comparison")));
   qputenv("PATH", oldPath);
 }
 
