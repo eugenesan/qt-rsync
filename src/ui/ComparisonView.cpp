@@ -406,13 +406,9 @@ void ComparisonView::restoreFocusAfterDecision(
     const std::vector<int>& oldVisible, const QStringList& affectedPaths) {
   if (store_.visible.empty()) return;
 
-  // Row ids are stable; their positions are not. Build the old positions so
-  // the cursor can follow the item *after* the last excluded row instead of
-  // whatever happens to occupy the same row number after the rebuild.
-  QHash<int, int> oldIndex;
-  for (int index = 0; index < static_cast<int>(oldVisible.size()); ++index) {
-    oldIndex.insert(oldVisible[index], index);
-  }
+  // Row ids are stable; their positions are not. Only the old position of
+  // the affected rows is needed; a full id -> row hash over half a million
+  // rows made every single decision unnecessarily expensive.
   int lastOldIndex = -1;
   QVector<int> affectedRows;
   bool anyHidden = false;
@@ -420,9 +416,11 @@ void ComparisonView::restoreFocusAfterDecision(
     const auto found = store_.path_to_id.find(path.toStdString());
     if (found == store_.path_to_id.end()) continue;
     const int id = found->second;
-    const auto position = oldIndex.constFind(id);
-    if (position != oldIndex.cend()) {
-      lastOldIndex = qMax(lastOldIndex, position.value());
+    for (int index = 0; index < static_cast<int>(oldVisible.size()); ++index) {
+      if (oldVisible[index] == id) {
+        lastOldIndex = qMax(lastOldIndex, index);
+        break;
+      }
     }
     const int row = id < static_cast<int>(store_.row_of_id.size())
                         ? store_.row_of_id[id] : -1;
@@ -438,25 +436,27 @@ void ComparisonView::restoreFocusAfterDecision(
     return;
   }
 
-  int nextRow = -1;
-  int previousRow = -1;
-  for (int row = 0; row < static_cast<int>(store_.visible.size()); ++row) {
-    const auto position = oldIndex.constFind(store_.visible[row]);
-    if (position == oldIndex.cend()) continue;
-    if (lastOldIndex >= 0 && position.value() > lastOldIndex && nextRow < 0) {
-      nextRow = row;
+  // Walk the old visible order around the affected row and pick the nearest
+  // neighbour that survived the rebuild. The new row is a constant-time
+  // lookup, so this stops almost immediately in the common case.
+  if (lastOldIndex >= 0) {
+    for (int index = lastOldIndex + 1; index < static_cast<int>(oldVisible.size());
+         ++index) {
+      const int id = oldVisible[index];
+      if (id >= 0 && id < static_cast<int>(store_.row_of_id.size()) &&
+          store_.row_of_id[id] >= 0) {
+        selectRow(store_.row_of_id[id]);
+        return;
+      }
     }
-    if (lastOldIndex >= 0 && position.value() < lastOldIndex) {
-      previousRow = row;
+    for (int index = lastOldIndex - 1; index >= 0; --index) {
+      const int id = oldVisible[index];
+      if (id >= 0 && id < static_cast<int>(store_.row_of_id.size()) &&
+          store_.row_of_id[id] >= 0) {
+        selectRow(store_.row_of_id[id]);
+        return;
+      }
     }
-  }
-  if (nextRow >= 0) {
-    selectRow(nextRow);
-    return;
-  }
-  if (previousRow >= 0) {
-    selectRow(previousRow);
-    return;
   }
   // Hidden rows that became visible again are not in the old positions.
   if (!affectedRows.isEmpty()) {
@@ -532,16 +532,9 @@ void ComparisonView::syncDecisionsToStore() {
   if (decisions_.explicitItems().isEmpty()) return;
 
   // The old implementation compared every explicit path against every record,
-  // which was O(paths * decisions) on half-million-row comparisons. Build a
-  // child index once and walk each decided subtree instead.
-  std::vector<std::vector<int>> children(store_.paths.size());
-  for (int id = 0; id < static_cast<int>(store_.paths.size()); ++id) {
-    const int parent = id < static_cast<int>(store_.parents.size())
-                           ? store_.parents[id] : -1;
-    if (parent >= 0 && parent < static_cast<int>(children.size())) {
-      children[parent].push_back(id);
-    }
-  }
+  // which was O(paths * decisions) on half-million-row comparisons. Walk each
+  // decided subtree through the store's cached child index instead.
+  const std::vector<std::vector<int>>& children = store_.children();
   std::vector<int> pending;
   for (const auto& item : decisions_.explicitItems()) {
     const auto found = store_.path_to_id.find(item.first.toStdString());

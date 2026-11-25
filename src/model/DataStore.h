@@ -89,6 +89,8 @@ struct DataStore {
   std::vector<char> stripe;
   mutable std::vector<int> cached_tree_order_;
   mutable bool tree_order_dirty_ = true;
+  mutable std::vector<std::vector<int>> cached_children_;
+  mutable bool children_dirty_ = true;
   std::string root_source = "Source";
   std::string root_dest = "Destination";
   std::vector<QString> action_colours;
@@ -245,6 +247,7 @@ struct DataStore {
     derive_range(0, count);
     decision_log.clear();
     tree_order_dirty_ = true;
+    children_dirty_ = true;
     collapsed.assign(paths.size(), 0);
     action_mask = 0;
     pattern.clear();
@@ -281,6 +284,7 @@ struct DataStore {
     for (int i = start; i < count; ++i) path_to_id[paths[i]] = i;
     derive_range(start, count);
     tree_order_dirty_ = true;
+    children_dirty_ = true;
     collapsed.resize(count, 0);
     visible.resize(count);
     std::iota(visible.begin(), visible.end(), 0);
@@ -310,6 +314,7 @@ struct DataStore {
     }
     decision_log.clear();
     tree_order_dirty_ = true;
+    children_dirty_ = true;
     visible.resize(count);
     std::iota(visible.begin(), visible.end(), 0);
   }
@@ -397,6 +402,7 @@ struct DataStore {
       }
     }
     tree_order_dirty_ = true;
+    children_dirty_ = true;
     visible = tree_order();
     row_of_id.assign(count, -1);
     for (int row = 0; row < static_cast<int>(visible.size()); ++row) {
@@ -510,7 +516,25 @@ struct DataStore {
     }
   }
 
-  void invalidate_tree_order() { tree_order_dirty_ = true; }
+  const std::vector<std::vector<int>>& children() const {
+    if (children_dirty_ || cached_children_.size() != paths.size()) {
+      cached_children_.assign(paths.size(), {});
+      for (int i = 0; i < static_cast<int>(paths.size()); ++i) {
+        const int parent = i < static_cast<int>(parents.size()) ? parents[i] : -1;
+        if (parent >= 0 && parent < static_cast<int>(cached_children_.size())) {
+          cached_children_[parent].push_back(i);
+        }
+      }
+      children_dirty_ = false;
+    }
+    return cached_children_;
+  }
+
+  void invalidate_tree_order() {
+    tree_order_dirty_ = true;
+    children_dirty_ = true;
+    children_dirty_ = true;
+  }
 
   void set_collapsed(int path_id, bool value) {
     if (path_id >= 0 && path_id < static_cast<int>(collapsed.size())) {
@@ -1229,6 +1253,10 @@ class OverviewModel : public QAbstractItemModel {
     // Build the same hierarchy as the Python overview: folders nested by
     // path, with a "Files" child holding the direct files of each folder.
     std::unordered_map<std::string, OverviewNode*> folders;
+    // Every item previously scanned its folder's children to find "Files",
+    // which was quadratic in the number of files per folder. Keep a direct
+    // pointer instead.
+    std::unordered_map<OverviewNode*, OverviewNode*> files_nodes;
     auto add_child = [&](OverviewNode* parent, const std::string& name,
                          const std::string& path) {
       auto* node = new OverviewNode{name, path, 0, 0, 0, 0, parent, {}};
@@ -1275,10 +1303,13 @@ class OverviewModel : public QAbstractItemModel {
       if (dir_row) ensure_folder(path);
       OverviewNode* folder = folder_path.empty() ? total : ensure_folder(folder_path);
       OverviewNode* files = nullptr;
-      for (OverviewNode* child : folder->children) {
-        if (child->name == "Files") { files = child; break; }
+      auto filesIt = files_nodes.find(folder);
+      if (filesIt != files_nodes.end()) {
+        files = filesIt->second;
+      } else {
+        files = add_child(folder, "Files", "");
+        files_nodes.emplace(folder, files);
       }
-      if (files == nullptr) files = add_child(folder, "Files", "");
       ++files->count;
       if (!dir_row) {
         files->size += i < static_cast<int>(store.sizes.size()) ? store.sizes[i] : 0;

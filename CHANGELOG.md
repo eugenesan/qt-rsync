@@ -79,6 +79,14 @@ and refreshed documentation and packaging.
   instead of scanning the whole metadata table per directory.
 - Comparison journal timings now report real wall-clock values (including the
   total "Comparison ready in" time) instead of hard-coded zeroes.
+- The overview no longer scans every folder's children for "Files" for every
+  item, the decision child index is cached, and `buildDefaults` skips a whole
+  pass. A fresh 640k-item comparison now spends about 1.2 s building the view
+  instead of roughly 10 s.
+- Decision edits use a summary-only plan update and defer the expensive
+  fingerprints until Sync/Verify, and focus restoration no longer builds a
+  half-million-entry hash. Excluding one item dropped from about 700 ms to
+  roughly 150 ms on the same comparison.
 - External tools support qpy's placeholder expansion; the diff command uses
   the configured command with `%a`/`%A` and quoted paths stay one argument.
 

@@ -36,6 +36,7 @@ class CoreTest : public QObject {
   void rsyncProgressDerivedFromCounters();
   void externalToolPlaceholders();
   void liveRecordCheckMatchesParser();
+  void quickPlanSummaryMatchesFullPlan();
   // Decisions (ported from qpy-rsync tests/unit/test_changes.py)
   void changeProperties();
   void inheritedExclusionAndChildOverride();
@@ -863,6 +864,34 @@ void CoreTest::liveRecordCheckMatchesParser() {
       "*deleting   |qpy-rsync|0|qpy-rsync|2026-11-23|qpy-rsync|docs/old/");
   QVERIFY(looksLikeItemizedRecord(deletion));
   QVERIFY(parseRecord(deletion).has_value());
+}
+
+void CoreTest::quickPlanSummaryMatchesFullPlan() {
+  const QVector<Change> changes{
+      makeChange("new.txt", Action::Create, Kind::File, 100),
+      makeChange("old.txt", Action::UpdateMetadata, Kind::File, 0),
+      makeChange("gone.txt", Action::Delete, Kind::File, 20),
+      makeChange("dest.txt", Action::DestinationOnly, Kind::File, 30),
+      makeChange("skip.txt", Action::Create, Kind::File, 40),
+  };
+  Decisions decisions;
+  decisions.set(QStringLiteral("skip.txt"), Decision::Exclude);
+  decisions.set(QStringLiteral("gone.txt"), Decision::Include);
+
+  const auto full = buildExecutionPlan(testProfile(), changes, decisions);
+  const auto quick = buildPlanSummary(testProfile(), changes, decisions);
+  QCOMPARE(quick.included, full.summary.included);
+  QCOMPARE(quick.excluded, full.summary.excluded);
+  QCOMPARE(quick.creates, full.summary.creates);
+  QCOMPARE(quick.updates, full.summary.updates);
+  QCOMPARE(quick.metadata, full.summary.metadata);
+  QCOMPARE(quick.deletions, full.summary.deletions);
+  QCOMPARE(quick.destructive, full.summary.destructive);
+  QCOMPARE(quick.includedSize, full.summary.includedSize);
+  QCOMPARE(quick.totalSize, full.summary.totalSize);
+  QCOMPARE(quick.modified, full.summary.modified);
+  QCOMPARE(quick.retainedDestinationOnly, full.summary.retainedDestinationOnly);
+  QCOMPARE(quick.backupEnabled, full.summary.backupEnabled);
 }
 
 QTEST_MAIN(CoreTest)

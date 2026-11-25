@@ -44,7 +44,7 @@ class MainWindow : public QMainWindow {
   void synchronize();
   void onOperationFinished(int exitCode, QProcess::ExitStatus status);
   void onOperationError(QProcess::ProcessError error);
-  void refreshPlan();
+  void refreshPlan(bool quick = false);
   void addFilterPattern(const QString& pattern, const QString& path);
   void setStatus(const QString& text);
   void appendJournalLine(const QString& line);

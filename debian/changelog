@@ -18,9 +18,10 @@ qt-rsync (0.2.0-0) resolute; urgency=medium
     becomes stale after sync with a root-row marker, Ctrl+Tab layout cycling
     works again, startup options are validated, compare progress is live and
     batched, external tool placeholders are supported, journal lines are
-    timestamped, decision filtering is much faster, destination metadata is
-    gathered in parallel and timings report real wall-clock values; example
-    profile installed under /usr/share/doc/qt-rsync/examples.
+    timestamped, decision filtering and overview building are much faster,
+    destination metadata is gathered in parallel and timings report real
+    wall-clock values; example profile installed under
+    /usr/share/doc/qt-rsync/examples.
 
  -- Eugene San (eugenesan) <eugenesan@gmail.com>  Tue, 24 Nov 2026 18:40:00 -0700
 

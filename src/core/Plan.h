@@ -83,7 +83,13 @@ QString comparisonSignature(const QVector<Change>& changes,
 ExecutionPlan buildExecutionPlan(const SyncProfile& profile,
                                  const QVector<Change>& changes,
                                  const Decisions& decisions,
-                                 const DestinationMetadata& metadata = {});
+                                 const DestinationMetadata& metadata = {},
+                                 bool computeSignatures = true);
+// Counts only, without materializing half a million PlanItems. Used while
+// editing decisions; the full plan is rebuilt before it is executed.
+PlanSummary buildPlanSummary(const SyncProfile& profile,
+                             const QVector<Change>& changes,
+                             const Decisions& decisions);
 QStringList decisionFilterLines(const ExecutionPlan& plan);
 QString decisionFilterText(const ExecutionPlan& plan);
 PlanMismatch comparePlanToChanges(const ExecutionPlan& plan,

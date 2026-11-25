@@ -1212,7 +1212,10 @@ MainWindow::MainWindow(QWidget* parent)
   });
   connect(d_->comparison, &ComparisonView::decisionChanged, this, [this]() {
     d_->verified = false;
-    refreshPlan();
+    // Signatures are needed only when the plan is executed or shown in the
+    // sync dialog. Recomputing them for every decision was the bulk of the
+    // cost of excluding a single item on a large comparison.
+    refreshPlan(true);
     d_->filterBar->setExcludedCount(
         d_->comparison->decisions().excludedPaths().size());
     d_->overview->rebuild(d_->comparison->store());
@@ -1731,16 +1734,26 @@ void MainWindow::finishComparison() {
   d_->progress->hide();
 }
 
-void MainWindow::refreshPlan() {
-  d_->plan = core::buildExecutionPlan(d_->profile, d_->changes,
-                                      d_->comparison->decisions());
+void MainWindow::refreshPlan(bool quick) {
+  if (quick) {
+    d_->plan.summary = core::buildPlanSummary(d_->profile, d_->changes,
+                                              d_->comparison->decisions());
+    // The item vector and signatures belong to the last full build. An empty
+    // signature forces verify/sync to rebuild before using the plan.
+    d_->plan.itemsFingerprint.clear();
+    d_->plan.decisionSignature.clear();
+    d_->plan.comparisonSignature.clear();
+  } else {
+    d_->plan = core::buildExecutionPlan(d_->profile, d_->changes,
+                                        d_->comparison->decisions());
+  }
   const bool actionable = d_->plan.summary.included > 0;
   d_->verify->setEnabled(actionable);
   d_->sync->setEnabled(actionable);
 }
 
 void MainWindow::verifyPlan() {
-  if (d_->plan.items.isEmpty()) refreshPlan();
+  if (d_->plan.items.isEmpty() || d_->plan.comparisonSignature.isEmpty()) refreshPlan();
   d_->filterFile = new QTemporaryFile(
       QDir::tempPath() + QStringLiteral("/qt-rsync-plan-XXXXXX.rules"), this);
   if (!d_->filterFile->open()) {
@@ -1762,7 +1775,9 @@ void MainWindow::verifyPlan() {
 }
 
 void MainWindow::synchronize() {
-  if (d_->plan.items.isEmpty() || d_->stale) refreshPlan();
+  if (d_->plan.items.isEmpty() || d_->stale || d_->plan.comparisonSignature.isEmpty()) {
+    refreshPlan();
+  }
   d_->filterFile = new QTemporaryFile(
       QDir::tempPath() + QStringLiteral("/qt-rsync-plan-XXXXXX.rules"), this);
   if (!d_->filterFile->open()) {

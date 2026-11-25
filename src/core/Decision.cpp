@@ -201,26 +201,25 @@ int Decisions::acceptDefaultsForConflicts() {
 QHash<QString, Decision> Decisions::buildDefaults(
     const QHash<QString, QPair<Action, Kind>>& current) {
   QHash<QString, Decision> defaults;
-  QSet<QString> nonDestination;
+  defaults.reserve(current.size());
+  // An ancestor of any non-destination-only object is Include; everything
+  // else is Exclude. Marking those ancestors in the first pass makes the
+  // separate nonDestination set unnecessary.
   for (auto it = current.cbegin(); it != current.cend(); ++it) {
     const bool destinationOnly = it.value().first == Action::DestinationOnly;
     defaults.insert(it.key(), destinationOnly ? Decision::Exclude : Decision::Include);
     if (!destinationOnly) {
-      QString ancestor = it.key();
+      QString ancestor = parentOf(it.key());
       while (!ancestor.isEmpty()) {
-        nonDestination.insert(ancestor);
+        if (!defaults.contains(ancestor)) defaults.insert(ancestor, Decision::Include);
         ancestor = parentOf(ancestor);
       }
     }
   }
   for (auto it = current.cbegin(); it != current.cend(); ++it) {
     QString ancestor = parentOf(it.key());
-    while (!ancestor.isEmpty()) {
-      if (!defaults.contains(ancestor)) {
-        defaults.insert(ancestor, nonDestination.contains(ancestor)
-                                      ? Decision::Include
-                                      : Decision::Exclude);
-      }
+    while (!ancestor.isEmpty() && !defaults.contains(ancestor)) {
+      defaults.insert(ancestor, Decision::Exclude);
       ancestor = parentOf(ancestor);
     }
   }
@@ -236,6 +235,14 @@ int Decisions::reconcile(const QVector<Change>& changes, bool preserve,
   const QStringList currentPaths = current.keys();
   conflicts_.clear();
   QSet<QString> stale;
+
+  if (explicit_.isEmpty()) {
+    // The common case after a fresh comparison: nothing to reconcile or
+    // inherit. Avoid building the ancestor/default indexes at all.
+    identities_.swap(current);
+    defaults_.clear();
+    return 0;
+  }
 
   // One pass over the paths builds the set of all ancestor folders. The old
   // code rescanned every path for every explicit decision, which made a

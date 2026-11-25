@@ -152,7 +152,8 @@ QString comparisonSignature(const QVector<Change>& changes,
 ExecutionPlan buildExecutionPlan(const SyncProfile& profile,
                                  const QVector<Change>& changes,
                                  const Decisions& decisions,
-                                 const DestinationMetadata& metadata) {
+                                 const DestinationMetadata& metadata,
+                                 bool computeSignatures) {
   ExecutionPlan plan;
   const bool hasExplicit = decisions.hasExplicit();
   QHash<QString, Kind> deleteKinds;
@@ -233,17 +234,69 @@ ExecutionPlan buildExecutionPlan(const SyncProfile& profile,
 
   plan.summary.modified = decisions.modifiedCount(changes);
   plan.summary.backupEnabled = !profile.backup.directory.isEmpty();
-  plan.itemsFingerprint = planItemsFingerprint(plan.items);
-  plan.decisionSignature = decisionSignature(decisions);
+  if (computeSignatures) {
+    plan.itemsFingerprint = planItemsFingerprint(plan.items);
+    plan.decisionSignature = decisionSignature(decisions);
+    QSet<QString> syntheticPaths;
+    for (const PlanItem& item : plan.items) {
+      if (item.syntheticDelete) syntheticPaths.insert(item.path);
+    }
+    plan.comparisonSignature = comparisonSignature(changes, syntheticPaths);
+  }
   plan.profileFingerprint = profile.fingerprint();
   plan.sourceOperand = profile.source.rsyncOperand();
   plan.destinationOperand = profile.destination.rsyncOperand();
-  QSet<QString> syntheticPaths;
-  for (const PlanItem& item : plan.items) {
-    if (item.syntheticDelete) syntheticPaths.insert(item.path);
-  }
-  plan.comparisonSignature = comparisonSignature(changes, syntheticPaths);
   return plan;
+}
+
+PlanSummary buildPlanSummary(const SyncProfile& profile,
+                             const QVector<Change>& changes,
+                             const Decisions& decisions) {
+  PlanSummary summary;
+  const bool hasExplicit = decisions.hasExplicit();
+  for (const Change& change : changes) {
+    const Action action = change.action;
+    std::optional<Decision> decision;
+    if (hasExplicit) decision = decisions.effective(change);
+    const bool deleteDecision = decision == Decision::Delete;
+    if ((action == Action::NoChange || action == Action::Message) &&
+        !deleteDecision) {
+      continue;
+    }
+    Action effective;
+    bool included;
+    if (deleteDecision) {
+      included = true;
+      effective = Action::Delete;
+    } else {
+      included = hasExplicit ? *decision != Decision::Exclude
+                             : action != Action::DestinationOnly;
+      effective = (action == Action::DestinationOnly && included)
+                      ? Action::Delete : action;
+    }
+    if (!included) {
+      if (action == Action::DestinationOnly) ++summary.retainedDestinationOnly;
+      else ++summary.excluded;
+      continue;
+    }
+    ++summary.included;
+    if (effective == Action::Delete) ++summary.destructive;
+    const std::int64_t size = change.size.value_or(0);
+    summary.includedSize += size;
+    if (effective == Action::Create || effective == Action::UpdateContent) {
+      summary.totalSize += size;
+    }
+    switch (effective) {
+      case Action::Create: ++summary.creates; break;
+      case Action::UpdateContent: ++summary.updates; break;
+      case Action::UpdateMetadata: ++summary.metadata; break;
+      case Action::Delete: ++summary.deletions; break;
+      default: break;
+    }
+  }
+  summary.modified = decisions.modifiedCount(changes);
+  summary.backupEnabled = !profile.backup.directory.isEmpty();
+  return summary;
 }
 
 QStringList decisionFilterLines(const ExecutionPlan& plan) {
