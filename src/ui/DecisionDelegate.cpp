@@ -1,5 +1,7 @@
 #include "ui/DecisionDelegate.h"
 
+#include "model/DataStore.h"
+
 #include <QApplication>
 #include <QKeyEvent>
 #include <QSet>
@@ -123,10 +125,17 @@ bool DecisionKeyFilter::eventFilter(QObject* watched, QEvent* event) {
   }
   if (view == nullptr) return false;
   QSet<QString> paths;
+  const QString root = QString::fromStdString(model::DataStore::root_path());
   if (view->selectionModel() != nullptr) {
     for (const QModelIndex& index : view->selectionModel()->selectedRows()) {
       const QString path = index.data(Qt::UserRole).toString();
-      if (!path.isEmpty()) paths.insert(path);
+      if (path.isEmpty() || path == root) continue;
+      const int row = index.row();
+      if (row < 0) continue;
+      const QVariant decision =
+          view->model()->data(view->model()->index(row, 0), Qt::UserRole + 24);
+      if (decision.toInt() == model::DeleteRequest) continue;
+      paths.insert(path);
     }
   }
   if (!paths.isEmpty()) emit batchStarted();

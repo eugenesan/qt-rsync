@@ -72,7 +72,14 @@ class ComparisonView : public QWidget {
   void startDecisionBatch();
   void endDecisionBatch();
 
+  [[nodiscard]] QString currentPath() const;
+  [[nodiscard]] int currentRow() const;
+  void selectRow(int row);
+  void restoreFocusAfterRebuild(const QString& anchorPath, int anchorRow);
+
   bool batching_ = false;
+  QString batchAnchorPath_;
+  int batchAnchorRow_ = -1;
   QHash<QString, core::Decision> batchBefore_;
   bool sorting_ = false;
   bool selecting_ = false;

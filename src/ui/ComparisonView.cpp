@@ -9,6 +9,7 @@
 #include <QHash>
 #include <QKeyEvent>
 #include <QHeaderView>
+#include <QItemSelectionModel>
 #include <QMenu>
 #include <QPainter>
 #include <QRegularExpression>
@@ -324,6 +325,8 @@ void ComparisonView::markDelete(const QString& path) {
 
 void ComparisonView::startDecisionBatch() {
   batching_ = true;
+  batchAnchorPath_ = currentPath();
+  batchAnchorRow_ = currentRow();
   batchBefore_ = decisions_.explicitItemsAsHash();
 }
 
@@ -337,6 +340,65 @@ void ComparisonView::endDecisionBatch() {
     emit redoAvailable(false);
   }
   batchBefore_.clear();
+  // A batch rebuilds the visible rows after every decision. Restore the
+  // cursor once, next to the row that was selected before the batch.
+  restoreFocusAfterRebuild(batchAnchorPath_, batchAnchorRow_);
+  batchAnchorPath_.clear();
+  batchAnchorRow_ = -1;
+}
+
+QString ComparisonView::currentPath() const {
+  if (views_.isEmpty() || store_.visible.empty()) return {};
+  const QModelIndex current = views_.first()->currentIndex();
+  if (!current.isValid()) return {};
+  const int row = current.row();
+  if (row < 0 || row >= static_cast<int>(store_.visible.size())) return {};
+  const int id = store_.visible[row];
+  if (id < 0 || id >= static_cast<int>(store_.paths.size())) return {};
+  return QString::fromStdString(store_.paths[id]);
+}
+
+int ComparisonView::currentRow() const {
+  if (views_.isEmpty()) return -1;
+  const QModelIndex current = views_.first()->currentIndex();
+  return current.isValid() ? current.row() : -1;
+}
+
+void ComparisonView::selectRow(int row) {
+  if (row < 0 || row >= static_cast<int>(store_.visible.size())) return;
+  selecting_ = true;
+  for (QTableView* view : views_) {
+    if (view == nullptr || view->model() == nullptr) continue;
+    const QModelIndex index = view->model()->index(row, 0);
+    if (!index.isValid()) continue;
+    view->selectionModel()->setCurrentIndex(
+        index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    view->scrollTo(index, QAbstractItemView::EnsureVisible);
+  }
+  selecting_ = false;
+}
+
+void ComparisonView::restoreFocusAfterRebuild(const QString& anchorPath,
+                                              int anchorRow) {
+  if (store_.visible.empty()) return;
+  int row = -1;
+  if (!anchorPath.isEmpty()) {
+    const auto found = store_.path_to_id.find(anchorPath.toStdString());
+    if (found != store_.path_to_id.end() &&
+        found->second < static_cast<int>(store_.row_of_id.size())) {
+      row = store_.row_of_id[found->second];
+    }
+  }
+  if (row < 0) {
+    // The anchor was excluded: choose the row that took its place, which is
+    // the next visible item, or the last row when nothing follows. With every
+    // item gone this is the always-visible root row.
+    row = anchorRow < 0 ? 0 : anchorRow;
+    if (row >= static_cast<int>(store_.visible.size())) {
+      row = static_cast<int>(store_.visible.size()) - 1;
+    }
+  }
+  selectRow(row);
 }
 
 bool ComparisonView::undoDecision() {
@@ -368,8 +430,17 @@ bool ComparisonView::redoDecision() {
 }
 
 void ComparisonView::applyDecision(const QString& path, int decision) {
+  // The compared folder is the container, not a decidable row. Keep its row
+  // and the whole comparison always reachable.
+  if (path.isEmpty() ||
+      path == QString::fromStdString(model::DataStore::root_path())) {
+    return;
+  }
   const core::Decision value = static_cast<core::Decision>(decision);
   if (decisions_.explicitDecision(path) == value) return;
+  const bool single = !batching_;
+  const QString anchorPath = single ? currentPath() : QString();
+  const int anchorRow = single ? currentRow() : -1;
   if (!batching_) {
     decisionHistory_.append(decisions_.explicitItemsAsHash());
     if (decisionHistory_.size() > 100) decisionHistory_.removeFirst();
@@ -378,6 +449,7 @@ void ComparisonView::applyDecision(const QString& path, int decision) {
   syncDecisionsToStore();
   store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
+  if (single) restoreFocusAfterRebuild(anchorPath, anchorRow);
   redoHistory_.clear();
   emit redoAvailable(false);
   emit decisionChanged();

@@ -26,6 +26,10 @@ and refreshed documentation and packaging.
   clicks keep the default select/expand behaviour.
 - A folder that does not exist on one side is blank in that pane, without a
   fold chevron, folder icon or name.
+- Excluding items keeps the cursor in the list: it moves to the next visible
+  row, the previous row when nothing follows, or the root row when no items
+  remain. The compared folder no longer has an exclude checkbox and ignores
+  Space.
 
 ### Changed
 

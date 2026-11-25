@@ -40,6 +40,12 @@ bool NativeDelegate::editorEvent(QEvent* event, QAbstractItemModel*,
   const int id = store_->visible[row];
 
   if (pane_ == 1 && index.column() == 4) {
+    // The root row and delete decisions carry no checkbox. Consume the click
+    // so it cannot turn into an exclude decision.
+    if (store_->paths[id] == DataStore::root_path() ||
+        !index.data(Qt::CheckStateRole).isValid()) {
+      return true;
+    }
     const int start = option.rect.left() +
                       qMax(0, (option.rect.width() - (16 + 8 + 16)) / 2);
     const QRect indicator(start, option.rect.center().y() - 8, 16, 16);
@@ -184,11 +190,13 @@ void NativeDelegate::paintCheck(QPainter* painter, const QStyleOptionViewItem& o
   initStyleOption(&opt, index);
   paintBackground(painter, option, false);
   const bool deleteRequest = store_->decisions[id] == DeleteRequest;
+  const bool hasCheckbox = index.data(Qt::CheckStateRole).isValid() &&
+                           !deleteRequest;
   const bool checked = index.data(Qt::CheckStateRole).toInt() == Qt::Checked;
-  const int groupWidth = deleteRequest ? 16 : 16 + 8 + 16;
+  const int groupWidth = hasCheckbox ? 16 + 8 + 16 : 16;
   const int start = opt.rect.left() + qMax(0, (opt.rect.width() - groupWidth) / 2);
   QRect box(start, opt.rect.center().y() - 8, 16, 16);
-  if (!deleteRequest) {
+  if (hasCheckbox) {
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, true);
     if (checked) {
@@ -216,7 +224,7 @@ void NativeDelegate::paintCheck(QPainter* painter, const QStyleOptionViewItem& o
   if (deleteRequest) action = Delete;
   const QIcon icon = icons::actionIcon(action);
   if (!icon.isNull()) {
-    icon.paint(painter, QRect(deleteRequest ? start : start + 24,
+    icon.paint(painter, QRect(hasCheckbox ? start + 24 : start,
                               opt.rect.center().y() - 8, 16, 16));
   }
 }

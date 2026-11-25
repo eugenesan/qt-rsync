@@ -1,6 +1,7 @@
 #include <QtTest>
 
 #include <QAction>
+#include <QApplication>
 #include <QFile>
 #include <QFrame>
 #include <QHeaderView>
@@ -32,6 +33,7 @@
 #include "app/StartupOptions.h"
 #include "model/DataStore.h"
 #include "ui/ComparisonView.h"
+#include "ui/DecisionDelegate.h"
 #include "ui/FilterEditorWidget.h"
 #include "ui/NativeDelegate.h"
 #include "ui/OverviewPane.h"
@@ -75,6 +77,8 @@ class UiTest : public QObject {
   void createdDirectoriesAreBlankOnDestination();
   void overviewFolderActivationEmitsPath();
   void activatePathRevealsAndFocusesFolder();
+  void excludeKeepsFocusOnNearestRow();
+  void rootHasNoExcludeDecision();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1185,6 +1189,89 @@ void UiTest::activatePathRevealsAndFocusesFolder() {
   QVERIFY(!store.is_collapsed(docs->second));
   QTRY_VERIFY(panes.first()->hasFocus());
   view.close();
+}
+
+namespace {
+QString currentComparisonPath(ui::ComparisonView& view) {
+  const auto panes = view.findChildren<QTableView*>();
+  if (panes.isEmpty()) return {};
+  const QModelIndex current = panes.first()->currentIndex();
+  if (!current.isValid()) return {};
+  const int row = current.row();
+  auto& store = view.store();
+  if (row < 0 || row >= static_cast<int>(store.visible.size())) return {};
+  return QString::fromStdString(store.paths[store.visible[row]]);
+}
+
+QVector<core::Change> fileChanges(const QStringList& paths) {
+  QVector<core::Change> changes;
+  for (const QString& path : paths) {
+    core::Change change;
+    change.path = path;
+    change.action = core::Action::Create;
+    change.kind = core::Kind::File;
+    change.size = 1;
+    changes << change;
+  }
+  return changes;
+}
+}  // namespace
+
+void UiTest::excludeKeepsFocusOnNearestRow() {
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("a.txt"), QStringLiteral("b.txt"),
+                               QStringLiteral("c.txt")}));
+  const QString root = QString::fromStdString(model::DataStore::root_path());
+
+  view.selectPath(QStringLiteral("b.txt"));
+  view.applyDecision(QStringLiteral("b.txt"),
+                     static_cast<int>(core::Decision::Exclude));
+  QCOMPARE(currentComparisonPath(view), QStringLiteral("c.txt"));
+
+  view.selectPath(QStringLiteral("c.txt"));
+  view.applyDecision(QStringLiteral("c.txt"),
+                     static_cast<int>(core::Decision::Exclude));
+  QCOMPARE(currentComparisonPath(view), QStringLiteral("a.txt"));
+
+  view.selectPath(QStringLiteral("a.txt"));
+  view.applyDecision(QStringLiteral("a.txt"),
+                     static_cast<int>(core::Decision::Exclude));
+  QCOMPARE(currentComparisonPath(view), root);
+}
+
+void UiTest::rootHasNoExcludeDecision() {
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("a.txt"), QStringLiteral("b.txt")}));
+  auto& store = view.store();
+  const QString root = QString::fromStdString(model::DataStore::root_path());
+  const auto rootId = store.path_to_id.find(root.toStdString());
+  QVERIFY(rootId != store.path_to_id.end());
+  const int row = store.row_of_id.at(rootId->second);
+  QVERIFY(row >= 0);
+  model::TableModel decisions(&store, 1);
+  const QModelIndex index = decisions.index(row, 4);
+  QVERIFY(!decisions.data(index, Qt::CheckStateRole).isValid());
+  QVERIFY(!(decisions.flags(index) & Qt::ItemIsUserCheckable));
+  QVERIFY(!decisions.setData(index, Qt::Checked, Qt::CheckStateRole));
+
+  view.selectPath(root);
+  auto* filter = view.findChild<ui::DecisionKeyFilter*>();
+  QVERIFY(filter != nullptr);
+  int toggles = 0;
+  connect(filter, &ui::DecisionKeyFilter::decisionToggled,
+          [&toggles](const QString&, int) { ++toggles; });
+  auto* source = view.findChildren<QTableView*>().first();
+  QKeyEvent space(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
+  QApplication::sendEvent(source->viewport(), &space);
+  QCOMPARE(toggles, 0);
+  QVERIFY(store.row_of_id.at(rootId->second) >= 0);
+  QVERIFY(view.decisions().explicitItems().isEmpty());
+
+  const QString beforeFocus = root;
+  QCOMPARE(currentComparisonPath(view), beforeFocus);
+  view.applyDecision(root, static_cast<int>(core::Decision::Exclude));
+  QCOMPARE(view.decisions().explicitItems().size(), 0);
+  QCOMPARE(store.visible.size(), static_cast<std::size_t>(3));
 }
 
 QTEST_MAIN(UiTest)
