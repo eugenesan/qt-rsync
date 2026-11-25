@@ -35,6 +35,10 @@ and refreshed documentation and packaging.
 - Overview folders can be excluded with Space or the context menu, restored
   from their subtree, and excluded by an rsync filter from the same menu.
   Adding a filter from the overview marks the comparison stale.
+- The completion-sound setting now plays a sound: a comparison plays the
+  desktop success sound after its destination metadata finishes, and a
+  synchronization plays success or error. It uses canberra, then pw-play or
+  paplay with the freedesktop/Oxygen files, and the terminal bell as fallback.
 
 ### Changed
 

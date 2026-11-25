@@ -73,6 +73,7 @@ class MainWindow : public QMainWindow {
   void updateVerificationVisibility();
   void updateStateIcons();
   void applyLayoutMode(const QString& mode);
+  void playCompletionSound(const QString& kind);
   void restoreWindowState();
   void saveWindowState();
   void filterUnchangedAgainstDestination();

@@ -1,6 +1,8 @@
 #include "ui/MainWindow.h"
 
+#include <QApplication>
 #include <QCloseEvent>
+#include <QStandardPaths>
 #include <QDialogButtonBox>
 #include <QDebug>
 #include <QDir>
@@ -73,6 +75,64 @@ QFrame* verticalSeparator(QWidget* parent) {
   line->setFixedWidth(1);
   line->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
   return line;
+}
+
+void playCompletionSoundNow(const QString& kind) {
+  // Prefer the desktop's freedesktop sound. canberra needs the sound theme;
+  // when it is absent, play the same files through a lightweight backend.
+  QStringList names;
+  if (kind == QLatin1String("error")) {
+    names = {QStringLiteral("dialog-error"), QStringLiteral("bell")};
+  } else if (kind == QLatin1String("warning")) {
+    names = {QStringLiteral("dialog-warning"), QStringLiteral("bell")};
+  } else {
+    names = {QStringLiteral("complete"), QStringLiteral("ok"),
+             QStringLiteral("bell")};
+  }
+  const QString canberra =
+      QStandardPaths::findExecutable(QStringLiteral("canberra-gtk-play"));
+  if (!canberra.isEmpty()) {
+    for (const QString& name : names) {
+      if (QProcess::startDetached(canberra, {QStringLiteral("-i"), name})) {
+        return;
+      }
+    }
+  }
+
+  const QString player = [] {
+    for (const char* name : {"pw-play", "paplay"}) {
+      const QString path = QStandardPaths::findExecutable(
+          QString::fromLatin1(name));
+      if (!path.isEmpty()) return path;
+    }
+    return QString();
+  }();
+  if (!player.isEmpty()) {
+    const QStringList directories = {
+        QStringLiteral("/usr/share/sounds/freedesktop/stereo"),
+        QStringLiteral("/usr/share/sounds/ocean/stereo"),
+        QStringLiteral("/usr/share/sounds/oxygen/stereo")};
+    QStringList files;
+    if (kind == QLatin1String("error")) {
+      files = {QStringLiteral("dialog-error.oga"),
+               QStringLiteral("dialog-error.ogg"),
+               QStringLiteral("bell.oga"), QStringLiteral("bell.ogg")};
+    } else {
+      files = {QStringLiteral("complete.oga"), QStringLiteral("complete.ogg"),
+               QStringLiteral("complete-media-burn.ogg"),
+               QStringLiteral("bell.oga"), QStringLiteral("bell.ogg")};
+    }
+    for (const QString& directory : directories) {
+      for (const QString& file : files) {
+        const QString path = directory + QLatin1Char('/') + file;
+        if (QFileInfo::exists(path) &&
+            QProcess::startDetached(player, {path})) {
+          return;
+        }
+      }
+    }
+  }
+  QApplication::beep();
 }
 
 QHash<QString, QPair<qlonglong, QString>> parseListingMetadata(
@@ -172,6 +232,7 @@ class MainWindow::Private {
   bool destinationInventoryForUnchanged = false;
   bool startupAborted = false;
   bool tempProfile = false;
+  bool soundEnabled = true;
   QString profilePath;
   std::unique_ptr<core::storage::FileLock> profileLock;
   QToolButton* profileButton = nullptr;
@@ -183,6 +244,11 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent), d_(new Private) {
   setWindowTitle(QStringLiteral("qt-rsync"));
   resize(1280, 800);
+  {
+    core::storage::Settings settings;
+    d_->soundEnabled =
+        settings.value(QStringLiteral("sound/enabled"), true).toBool();
+  }
 
   auto* root = new QWidget(this);
   setCentralWidget(root);
@@ -410,6 +476,10 @@ MainWindow::MainWindow(QWidget* parent)
                 if (logging) {
                   SettingsDialog dialog(this);
                   if (dialog.exec() == QDialog::Accepted) {
+                    core::storage::Settings settings;
+                    d_->soundEnabled =
+                        settings.value(QStringLiteral("sound/enabled"), true)
+                            .toBool();
                     applyActionColours();
                     updateVerificationVisibility();
                   }
@@ -443,6 +513,9 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->settingsButton, &QAbstractButton::clicked, this, [this]() {
     SettingsDialog dialog(this);
     if (dialog.exec() == QDialog::Accepted) {
+      core::storage::Settings settings;
+      d_->soundEnabled =
+          settings.value(QStringLiteral("sound/enabled"), true).toBool();
       applyActionColours();
       updateVerificationVisibility();
     }
@@ -1469,6 +1542,7 @@ void MainWindow::onDestinationInventoryFinished(int, QProcess::ExitStatus) {
     appendJournalLine(
         QStringLiteral("Comparison ready in %1 s.")
             .arg(d_->lastCompareSeconds, 0, 'f', 2));
+    playCompletionSound(QStringLiteral("success"));
   }
   d_->progress->hide();
 }
@@ -1550,6 +1624,7 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
     if (!ok) {
       setStatus(QStringLiteral("Synchronization failed: %1")
                               .arg(stderr.trimmed()));
+      playCompletionSound(QStringLiteral("error"));
       return;
     }
     // The destination changed: the comparison is stale until the user asks
@@ -1559,6 +1634,7 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
     updateStateIcons();
     setStatus(QStringLiteral(
         "Synchronization complete — click Compare to refresh the comparison."));
+    playCompletionSound(QStringLiteral("success"));
     return;
   }
   d_->verifying = false;
@@ -1593,6 +1669,7 @@ void MainWindow::onOperationError(QProcess::ProcessError error) {
   d_->cancel->setEnabled(false);
   setStatus(QStringLiteral("Operation failed: %1")
                           .arg(d_->operationProcess->errorString()));
+  playCompletionSound(QStringLiteral("error"));
 }
 
 void MainWindow::cancelOperation() {
@@ -1609,6 +1686,11 @@ void MainWindow::cancelOperation() {
   d_->cancel->setEnabled(false);
   setStatus(QStringLiteral("Cancelling..."));
   target->kill();
+}
+
+void MainWindow::playCompletionSound(const QString& kind) {
+  if (!d_->soundEnabled) return;
+  playCompletionSoundNow(kind);
 }
 
 void MainWindow::addFilterPattern(const QString& pattern, const QString& path) {

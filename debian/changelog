@@ -9,7 +9,8 @@ qt-rsync (0.2.0-0) resolute; urgency=medium
     excluding items keeps the cursor on the next visible row after the last
     excluded item, or the previous row, and never uses stale row positions;
     the root row has no exclude checkbox; overview folders can be excluded,
-    restored and filtered from Space or their context menu; example profile
+    restored and filtered from Space or their context menu; completion sounds
+    now play on comparison and synchronization completion; example profile
     installed under /usr/share/doc/qt-rsync/examples.
 
  -- Eugene San (eugenesan) <eugenesan@gmail.com>  Tue, 24 Nov 2026 18:40:00 -0700
