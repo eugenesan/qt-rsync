@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 457 pytest cases. qt-rsync has 66 QtTest cases
-(43 core, 23 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 460 pytest cases. qt-rsync has 85 QtTest cases
+(44 core, 41 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -19,10 +19,10 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 
 | qpy module | cases | qt-rsync status |
 |---|---:|---|
-| `test_main_window_offscreen.py` | 95 | Partial: startup, profile cache, locked profile, compare/verify/sync, settings, closing and several view actions are covered by `test_ui.cpp`. Menu enablement, full journal semantics and every shortcut still need explicit cases. |
-| `test_flat_comparison_view.py` | 49 | Partial: three panes, selection sync, folding and context menus are covered. Remaining: stale visuals, all header context actions, exact tooltips and per-pane local/remote menus. |
+| `test_main_window_offscreen.py` | 95 | Partial: startup, profile cache, locked profile, compare/verify/sync, settings, closing, sync progress/stale state and several view actions are covered. Menu enablement, the full journal and every shortcut still need explicit cases. |
+| `test_flat_comparison_view.py` | 49 | Partial: three panes, selection sync, folding, context menus, navigation keys and stale root visuals are covered. Remaining: all header context actions, exact tooltips and per-pane local/remote menus. |
 | `test_flat_filtering.py` | 31 | Partial: action masks, ancestors, unchanged gate and search matching are covered. Remaining: path/glob filters, directory-only mode, inverse clicks and filter persistence. |
-| `test_action_filters.py` | 19 | Mostly ported: initial state, display-only tooltips, excluded count, focus policy, separators and ancestor retention. Remaining: full Ctrl+click matrix and context-menu actions. |
+| `test_action_filters.py` | 19 | Mostly ported: initial state, display-only tooltips, excluded count, focus policy, separators, ancestor retention, Ctrl+click inversion and the checkbox context menu. Remaining: exhaustive state combinations. |
 | `test_command.py` | 13 | Mostly ported: compare/verify/sync argv, modes, filters, delete timing and remote shell. Remaining: exhaustive option combinations. |
 | `test_app_startup_options.py` | 12 | Partial: CLI surface exists; add one case per option and failure path. |
 | `test_external_tools.py` | 11 | Storage/editor fields ported; placeholder expansion and warnings still open. |
@@ -68,13 +68,26 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 - Overview totals: `overviewCountsReportedDirectoriesOnly` checks that a
   reported directory counts as one item of its parent, synthesized folders do
   not, and the overview Total equals the root row's Items.
+- Action filters: `actionFilterHidesUnrelatedDirectories` checks that filtering
+  to Create keeps only real ancestors and that unrelated folders are neither
+  visible nor counted.
+- Navigation: Home/End, Ctrl+Up/Down and Left/Right are covered by
+  `homeEndJumpToTheVisibleEdges`, `ctrlUpDownWalkTheHierarchy` and
+  `leftRightFoldAndNavigateFolders`; `layoutShortcutCyclesModes` covers
+  Ctrl+Tab.
+- Decision filters: `filterCheckboxesSupportInvertedClicks` and
+  `resetExclusionsKeepsOtherDecisions` cover Ctrl+click and exclusion-only
+  reset.
+- Sync output: `rsyncProgressDerivedFromCounters` covers progress derived from
+  rsync counters; UI cases cover the stale state after sync and the concise
+  journal.
 
 ## Next conversion batches
 
-1. `test_action_filters.py` remaining Ctrl+click/context-menu cases.
+1. `test_action_filters.py` exhaustive inversion state combinations.
 2. `test_flat_filtering.py` path/glob patterns and directory-only mode.
-3. `test_main_window_offscreen.py` menu/shortcut enablement and journal states.
-4. `test_flat_comparison_view.py` stale visuals, per-pane menus and tooltips.
+3. `test_main_window_offscreen.py` menu enablement and full journal states.
+4. `test_flat_comparison_view.py` per-pane menus and exact tooltips.
 5. `test_settings_dialog.py` and `test_profile_editor.py` widget round-trips.
 6. `test_external_tools.py` placeholder expansion/warnings.
 7. `test_sync_confirmation.py` per-field dialog assertions.
