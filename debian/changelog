@@ -5,7 +5,8 @@ qt-rsync (0.2.0-0) resolute; urgency=medium
     Decisions; directory decision filters and directory-aware Items counts;
     overview Files row, size-based Share, collapsed folder rows and totals
     that match the root row; overview rebuild keeps sort and folded totals;
-    go-jump overview icon; folders absent from one side stay blank there.
+    go-jump overview icon; folders absent from one side stay blank there;
+    example profile installed under /usr/share/doc/qt-rsync/examples.
 
  -- Eugene San (eugenesan) <eugenesan@gmail.com>  Tue, 24 Nov 2026 18:40:00 -0700
 

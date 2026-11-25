@@ -42,6 +42,9 @@ and refreshed documentation and packaging.
 
 - The Debian package is `0.2.0-0` and installs the refreshed desktop entry,
   icon and launcher.
+- The shared example profile is packaged as
+  `/usr/share/doc/qt-rsync/examples/profile.json` and is also available as
+  `examples/profile.json` in the checkout.
 
 ## 0.1.0 — 2026-11-24
 
