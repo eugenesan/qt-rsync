@@ -64,7 +64,13 @@ and refreshed documentation and packaging.
 - Compare progress is visible again: the dry run streams its itemized records
   into a live "N item(s) found" label with an indeterminate bar. The label is
   updated every 1000 records, like qpy, instead of once per rsync line.
-  Synchronization progress updates only when the percentage changes.
+  Synchronization progress updates only when the percentage changes, with a
+  250 ms pacing fallback so partial batches still update during long runs.
+- Every journal line now carries a timestamp, including rsync summaries and
+  state markers, and is written to the session log.
+- Decision mirroring walks decided subtrees through a child index instead of
+  scanning every path for every decision, and the folder tree order is cached
+  between filter rebuilds, removing the UI stall on large comparisons.
 - External tools support qpy's placeholder expansion; the diff command uses
   the configured command with `%a`/`%A` and quoted paths stay one argument.
 

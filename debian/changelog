@@ -17,8 +17,9 @@ qt-rsync (0.2.0-0) resolute; urgency=medium
     from rsync counters, the journal keeps only summaries, the comparison
     becomes stale after sync with a root-row marker, Ctrl+Tab layout cycling
     works again, startup options are validated, compare progress is live and
-    batched, external tool placeholders are supported; example profile installed under
-    /usr/share/doc/qt-rsync/examples.
+    batched, external tool placeholders are supported, journal lines are
+    timestamped and decision filtering is much faster; example profile installed
+    under /usr/share/doc/qt-rsync/examples.
 
  -- Eugene San (eugenesan) <eugenesan@gmail.com>  Tue, 24 Nov 2026 18:40:00 -0700
 

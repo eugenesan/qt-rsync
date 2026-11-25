@@ -80,7 +80,8 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
   reset.
 - Sync output: `rsyncProgressDerivedFromCounters` covers progress derived from
   rsync counters; UI cases cover the stale state after sync and the concise
-  journal.
+  journal. `journalEntriesHaveTimestamps` checks that every journal line has a
+  timestamp.
 - CLI: `startupOptionsParseAllOptions` and
   `startupOptionsValidateModeAndComparePair` cover the qpy startup-option
   cases that apply to the C++ executable, including forwarding Qt-only
