@@ -1,8 +1,11 @@
 #pragma once
 
+#include <QHash>
 #include <QWidget>
 
 class QCheckBox;
+class QEvent;
+class QPoint;
 class QToolButton;
 
 namespace qt_rsync::ui {
@@ -27,6 +30,8 @@ class ActionFilterBar : public QWidget {
   void setFilterDirectories(bool enabled);
   void setUndoEnabled(bool enabled);
 
+  bool eventFilter(QObject* watched, QEvent* event) override;
+
  signals:
   void filterChanged();
   void resetExclusionsRequested();
@@ -34,12 +39,21 @@ class ActionFilterBar : public QWidget {
   void unchangedToggled(bool enabled);
 
  private:
+  QVector<QCheckBox*> allBoxes() const;
+  void applyInverse(QCheckBox* box);
+  void setStates(const QHash<QCheckBox*, bool>& wanted);
+  void resetDefaults();
+  void showBoxMenu(QCheckBox* box, const QPoint& point);
+  void showExcludedMenu(const QPoint& point);
+
   QCheckBox* excluded_ = nullptr;
   QCheckBox* directories_ = nullptr;
   QVector<QCheckBox*> actions_;
   QCheckBox* unchanged_ = nullptr;
   QCheckBox* conflicts_ = nullptr;
   QToolButton* undo_ = nullptr;
+  QCheckBox* inverseClick_ = nullptr;
+  int excludedCount_ = 0;
 };
 
 }  // namespace qt_rsync::ui

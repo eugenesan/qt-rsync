@@ -81,6 +81,11 @@ class UiTest : public QObject {
   void excludeBatchFocusesAfterLastExcluded();
   void rootHasNoExcludeDecision();
   void overviewSpaceExcludesTheSelectedFolder();
+  void homeEndJumpToTheVisibleEdges();
+  void ctrlUpDownWalkTheHierarchy();
+  void leftRightFoldAndNavigateFolders();
+  void filterCheckboxesSupportInvertedClicks();
+  void resetExclusionsKeepsOtherDecisions();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1346,6 +1351,148 @@ void UiTest::overviewSpaceExcludesTheSelectedFolder() {
   QApplication::sendEvent(tree, &space);
   QCOMPARE(spy.count(), 0);
   overview.close();
+}
+
+void UiTest::homeEndJumpToTheVisibleEdges() {
+  ui::ComparisonView view;
+  QVector<core::Change> changes;
+  for (int index = 0; index < 5; ++index) {
+    core::Change change;
+    change.path = QStringLiteral("d/f%1.txt").arg(index);
+    change.action = core::Action::Create;
+    change.kind = core::Kind::File;
+    change.size = 1;
+    changes << change;
+  }
+  view.setChanges(changes);
+  view.show();
+  QTest::qWait(1);
+  auto* source = view.findChildren<QTableView*>().first();
+  view.selectPath(QStringLiteral("d/f2.txt"));
+  QTest::keyClick(source, Qt::Key_Home);
+  QCOMPARE(currentComparisonPath(view), QStringLiteral("d/f0.txt"));
+  QTest::keyClick(source, Qt::Key_End);
+  QCOMPARE(currentComparisonPath(view), QStringLiteral("d/f4.txt"));
+  view.close();
+}
+
+void UiTest::ctrlUpDownWalkTheHierarchy() {
+  ui::ComparisonView view;
+  QVector<core::Change> changes;
+  for (const QString& path : {QStringLiteral("d1/a.txt"),
+                              QStringLiteral("d1/sub/b.txt"),
+                              QStringLiteral("d2/c.txt")}) {
+    core::Change change;
+    change.path = path;
+    change.action = core::Action::Create;
+    change.kind = core::Kind::File;
+    change.size = 1;
+    changes << change;
+  }
+  view.setChanges(changes);
+  view.show();
+  QTest::qWait(1);
+  auto* source = view.findChildren<QTableView*>().first();
+  view.selectPath(QStringLiteral("d1/sub/b.txt"));
+  QTest::keyClick(source, Qt::Key_Up, Qt::ControlModifier);
+  QCOMPARE(currentComparisonPath(view), QStringLiteral("d1/sub"));
+  QTest::keyClick(source, Qt::Key_Up, Qt::ControlModifier);
+  QCOMPARE(currentComparisonPath(view), QStringLiteral("d1"));
+  QTest::keyClick(source, Qt::Key_Down, Qt::ControlModifier);
+  QCOMPARE(currentComparisonPath(view), QStringLiteral("d1/a.txt"));
+  view.close();
+}
+
+void UiTest::leftRightFoldAndNavigateFolders() {
+  ui::ComparisonView view;
+  core::Change folder;
+  folder.path = QStringLiteral("docs");
+  folder.action = core::Action::UpdateMetadata;
+  folder.kind = core::Kind::Directory;
+  core::Change first;
+  first.path = QStringLiteral("docs/a.txt");
+  first.action = core::Action::Create;
+  first.kind = core::Kind::File;
+  first.size = 1;
+  core::Change second;
+  second.path = QStringLiteral("docs/b.txt");
+  second.action = core::Action::Create;
+  second.kind = core::Kind::File;
+  second.size = 1;
+  view.setChanges({folder, first, second});
+  view.show();
+  QTest::qWait(1);
+  auto* source = view.findChildren<QTableView*>().first();
+  const auto docsId = view.store().path_to_id.find("docs");
+  QVERIFY(docsId != view.store().path_to_id.end());
+
+  view.selectPath(QStringLiteral("docs/a.txt"));
+  QTest::keyClick(source, Qt::Key_Left);
+  QCOMPARE(currentComparisonPath(view), QStringLiteral("docs"));
+
+  QTest::keyClick(source, Qt::Key_Right);
+  QCOMPARE(currentComparisonPath(view), QStringLiteral("docs/a.txt"));
+
+  view.selectPath(QStringLiteral("docs"));
+  QTest::keyClick(source, Qt::Key_Left);
+  QVERIFY(view.store().is_collapsed(docsId->second));
+  QTest::keyClick(source, Qt::Key_Left);
+  QCOMPARE(currentComparisonPath(view),
+           QString::fromStdString(model::DataStore::root_path()));
+
+  QTest::keyClick(source, Qt::Key_Right);
+  QTest::keyClick(source, Qt::Key_Right);
+  QVERIFY(view.store().row_of_id.at(docsId->second) >= 0);
+  view.close();
+}
+
+void UiTest::filterCheckboxesSupportInvertedClicks() {
+  ui::ActionFilterBar bar;
+  auto* create = bar.findChild<QCheckBox*>(QStringLiteral("filter-box-3"));
+  QVERIFY(create != nullptr);
+  QCOMPARE(create->contextMenuPolicy(), Qt::CustomContextMenu);
+  auto* excluded = bar.findChild<QCheckBox*>(QStringLiteral("filter-box-1"));
+  QVERIFY(excluded != nullptr);
+  QCOMPARE(excluded->contextMenuPolicy(), Qt::CustomContextMenu);
+  QVERIFY(bar.actionVisible(0));
+  const auto ctrlClick = [](QCheckBox* box) {
+    QPointF point(5, 5);
+    QMouseEvent press(QEvent::MouseButtonPress, point, point,
+                      Qt::LeftButton, Qt::LeftButton, Qt::ControlModifier);
+    QMouseEvent release(QEvent::MouseButtonRelease, point, point,
+                        Qt::LeftButton, Qt::NoButton, Qt::ControlModifier);
+    QApplication::sendEvent(box, &press);
+    QApplication::sendEvent(box, &release);
+  };
+  ctrlClick(create);
+  QVERIFY(bar.actionVisible(0));
+  for (int action = 1; action < 5; ++action) {
+    QVERIFY(!bar.actionVisible(action));
+  }
+  ctrlClick(create);
+  for (int action = 0; action < 5; ++action) {
+    QVERIFY(bar.actionVisible(action));
+  }
+}
+
+void UiTest::resetExclusionsKeepsOtherDecisions() {
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("a.txt"), QStringLiteral("b.txt"),
+                               QStringLiteral("c.txt")}));
+  view.applyDecision(QStringLiteral("a.txt"),
+                     static_cast<int>(core::Decision::Exclude));
+  view.applyDecision(QStringLiteral("b.txt"),
+                     static_cast<int>(core::Decision::Delete));
+  QVERIFY(view.decisions().explicitDecision(QStringLiteral("a.txt")) ==
+          core::Decision::Exclude);
+  view.resetExclusions();
+  QCOMPARE(view.decisions().explicitDecision(QStringLiteral("a.txt")),
+           core::Decision::Inherit);
+  QCOMPARE(view.decisions().explicitDecision(QStringLiteral("b.txt")),
+           core::Decision::Delete);
+  QCOMPARE(view.store().row_of_id.at(
+               view.store().path_to_id.at("a.txt")),
+           1);
 }
 
 QTEST_MAIN(UiTest)

@@ -20,9 +20,9 @@
 namespace qt_rsync::ui {
 namespace {
 
-class FoldKeyFilter : public QObject {
+class NavigationKeyFilter : public QObject {
  public:
-  FoldKeyFilter(ComparisonView* view, QObject* parent)
+  NavigationKeyFilter(ComparisonView* view, QObject* parent)
       : QObject(parent), view_(view) {}
 
   void watch(QObject* object, int pane) { panes_.insert(object, pane); }
@@ -30,11 +30,24 @@ class FoldKeyFilter : public QObject {
   bool eventFilter(QObject* watched, QEvent* event) override {
     auto* key = dynamic_cast<QKeyEvent*>(event);
     if (key == nullptr || key->type() != QEvent::KeyPress) return false;
-    if (key->key() != Qt::Key_Left && key->key() != Qt::Key_Right) return false;
     auto it = panes_.constFind(watched);
     if (it == panes_.cend()) return false;
-    view_->foldCurrent(it.value(), key->key() == Qt::Key_Left);
-    return true;
+    const int keyValue = key->key();
+    if (keyValue == Qt::Key_Home || keyValue == Qt::Key_End) {
+      view_->jumpToEdge(it.value(), keyValue == Qt::Key_End);
+      return true;
+    }
+    if (key->modifiers() & Qt::ControlModifier) {
+      if (keyValue == Qt::Key_Up || keyValue == Qt::Key_Down) {
+        view_->moveHierarchy(it.value(), keyValue == Qt::Key_Down ? 1 : -1);
+        return true;
+      }
+      return false;
+    }
+    if (keyValue == Qt::Key_Left || keyValue == Qt::Key_Right) {
+      return view_->handleCollapseKey(it.value(), keyValue);
+    }
+    return false;
   }
 
  private:
@@ -145,10 +158,10 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
         QString::fromLatin1("file") + QLatin1String(extension));
   }
 
-  auto* foldFilter = new FoldKeyFilter(this, this);
+  auto* navigationFilter = new NavigationKeyFilter(this, this);
   for (int i = 0; i < 3; ++i) {
-    views_[i]->installEventFilter(foldFilter);
-    foldFilter->watch(views_[i], i);
+    views_[i]->installEventFilter(navigationFilter);
+    navigationFilter->watch(views_[i], i);
   }
 
   for (int pane = 0; pane < 3; ++pane) {
@@ -317,6 +330,26 @@ void ComparisonView::resetAllDecisions() {
   emit redoAvailable(false);
   emit decisionChanged();
   emit undoAvailable(!decisionHistory_.isEmpty());
+}
+
+void ComparisonView::resetExclusions() {
+  const auto before = decisions_.explicitItemsAsHash();
+  bool changed = false;
+  for (const auto& item : decisions_.explicitItems()) {
+    if (item.second != core::Decision::Exclude) continue;
+    decisions_.reset(item.first);
+    changed = true;
+  }
+  if (!changed) return;
+  decisionHistory_.append(before);
+  if (decisionHistory_.size() > 100) decisionHistory_.removeFirst();
+  syncDecisionsToStore();
+  store_.rebuild_visible();
+  for (model::TableModel* model : models_) model->reset();
+  redoHistory_.clear();
+  emit redoAvailable(false);
+  emit decisionChanged();
+  emit undoAvailable(true);
 }
 
 void ComparisonView::markDelete(const QString& path) {
@@ -532,6 +565,122 @@ void ComparisonView::onSortIndicatorChanged(int pane, int section,
   sorting_ = false;
 }
 
+void ComparisonView::jumpToEdge(int pane, bool last) {
+  Q_UNUSED(pane)
+  if (store_.visible.empty()) return;
+  const int count = static_cast<int>(store_.visible.size());
+  for (int offset = 0; offset < count; ++offset) {
+    const int row = last ? count - 1 - offset : offset;
+    const int id = store_.visible[row];
+    if (id < static_cast<int>(store_.is_dir.size()) && store_.is_dir[id]) {
+      continue;
+    }
+    selectRow(row);
+    return;
+  }
+}
+
+void ComparisonView::moveHierarchy(int pane, int direction) {
+  Q_UNUSED(pane)
+  if (views_.isEmpty() || store_.visible.empty()) return;
+  const QModelIndex current = views_.first()->currentIndex();
+  if (!current.isValid()) return;
+  const int row = current.row();
+  if (row < 0 || row >= static_cast<int>(store_.visible.size())) return;
+  const int id = store_.visible[row];
+  if (direction < 0) {
+    int parent = id < static_cast<int>(store_.parents.size())
+                     ? store_.parents[id] : -1;
+    while (parent >= 0 &&
+           (parent >= static_cast<int>(store_.row_of_id.size()) ||
+            store_.row_of_id[parent] < 0)) {
+      parent = parent < static_cast<int>(store_.parents.size())
+                   ? store_.parents[parent] : -1;
+    }
+    if (parent >= 0) selectRow(store_.row_of_id[parent]);
+    return;
+  }
+  for (int candidateRow = row + 1;
+       candidateRow < static_cast<int>(store_.visible.size()); ++candidateRow) {
+    const int candidate = store_.visible[candidateRow];
+    int ancestor = candidate < static_cast<int>(store_.parents.size())
+                       ? store_.parents[candidate] : -1;
+    while (ancestor >= 0 && ancestor != id) {
+      ancestor = ancestor < static_cast<int>(store_.parents.size())
+                     ? store_.parents[ancestor] : -1;
+    }
+    if (ancestor == id) {
+      selectRow(candidateRow);
+      return;
+    }
+  }
+}
+
+bool ComparisonView::handleCollapseKey(int pane, int key) {
+  if (pane < 0 || pane >= views_.size()) return false;
+  const int row = views_.at(pane)->currentIndex().row();
+  if (row < 0 || row >= static_cast<int>(store_.visible.size())) return false;
+  const int id = store_.visible[row];
+  const bool isDir = id < static_cast<int>(store_.is_dir.size()) &&
+                     store_.is_dir[id];
+  const bool isRoot = isDir && store_.paths[id] == model::DataStore::root_path();
+  if (isDir && !isRoot) {
+    const bool collapsed = store_.is_collapsed(id);
+    if (key == Qt::Key_Left) {
+      if (!collapsed) {
+        store_.set_collapsed(id, true);
+        store_.rebuild_visible();
+        for (model::TableModel* model : models_) model->reset();
+        if (id < static_cast<int>(store_.row_of_id.size()) &&
+            store_.row_of_id[id] >= 0) {
+          selectRow(store_.row_of_id[id]);
+        }
+      } else {
+        int parent = id < static_cast<int>(store_.parents.size())
+                         ? store_.parents[id] : -1;
+        while (parent >= 0 &&
+               (parent >= static_cast<int>(store_.row_of_id.size()) ||
+                store_.row_of_id[parent] < 0)) {
+          parent = parent < static_cast<int>(store_.parents.size())
+                       ? store_.parents[parent] : -1;
+        }
+        if (parent >= 0) selectRow(store_.row_of_id[parent]);
+      }
+      return true;
+    }
+    if (key == Qt::Key_Right) {
+      if (collapsed) {
+        store_.set_collapsed(id, false);
+        store_.rebuild_visible();
+        for (model::TableModel* model : models_) model->reset();
+        if (id < static_cast<int>(store_.row_of_id.size()) &&
+            store_.row_of_id[id] >= 0) {
+          selectRow(store_.row_of_id[id]);
+        }
+      } else if (row + 1 < static_cast<int>(store_.visible.size())) {
+        const int candidate = store_.visible[row + 1];
+        const int parent = candidate < static_cast<int>(store_.parents.size())
+                               ? store_.parents[candidate] : -1;
+        if (parent == id) selectRow(row + 1);
+      }
+      return true;
+    }
+  }
+  if (key == Qt::Key_Left && !isDir) {
+    int parent = id < static_cast<int>(store_.parents.size())
+                     ? store_.parents[id] : -1;
+    while (parent >= 0 &&
+           (parent >= static_cast<int>(store_.row_of_id.size()) ||
+            store_.row_of_id[parent] < 0)) {
+      parent = parent < static_cast<int>(store_.parents.size())
+                   ? store_.parents[parent] : -1;
+    }
+    if (parent >= 0) selectRow(store_.row_of_id[parent]);
+    return true;
+  }
+  return isDir || key == Qt::Key_Left;
+}
+
 void ComparisonView::selectPath(const QString& path) {
   const std::string key = path.toStdString();
   int row = -1;
@@ -633,6 +782,7 @@ void ComparisonView::foldCurrent(int pane, bool collapse) {
     return;
   }
   const QString path = QString::fromStdString(store_.paths[id]);
+  if (path == QString::fromStdString(model::DataStore::root_path())) return;
   store_.set_collapsed(id, collapse);
   store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();

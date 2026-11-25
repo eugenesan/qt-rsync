@@ -1031,6 +1031,8 @@ MainWindow::MainWindow(QWidget* parent)
           });
   connect(d_->filterBar, &ActionFilterBar::undoRequested, this,
           [this]() { d_->comparison->undoDecision(); });
+  connect(d_->filterBar, &ActionFilterBar::resetExclusionsRequested, this,
+          [this]() { d_->comparison->resetExclusions(); });
   connect(d_->comparison, &ComparisonView::undoAvailable, d_->filterBar,
           &ActionFilterBar::setUndoEnabled);
   connect(d_->comparison, &ComparisonView::undoAvailable, d_->undoAction,

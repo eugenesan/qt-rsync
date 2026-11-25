@@ -201,7 +201,9 @@ tool that the system offers, with the preference of Git.
 | Ctrl+, | the settings |
 | Ctrl+Z / Ctrl+Shift+Z | undo / redo a decision |
 | Space | exclude the selected item |
-| Left / Right | fold and unfold a folder |
+| Home / End | jump to the first / last visible item |
+| Ctrl+Up / Ctrl+Down | jump to the parent / first child |
+| Left / Right | fold/unfold a folder, then move to its parent / first child |
 | Ctrl+click | invert the decision filter |
 | Ctrl+Q | quit |
 

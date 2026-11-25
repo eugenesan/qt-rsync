@@ -39,6 +39,12 @@ and refreshed documentation and packaging.
   desktop success sound after its destination metadata finishes, and a
   synchronization plays success or error. It uses canberra, then pw-play or
   paplay with the freedesktop/Oxygen files, and the terminal bell as fallback.
+- Restored the qpy keyboard navigation: Home/End jump to the first/last
+  visible item, Ctrl+Up/Down walk the folder hierarchy, and Left/Right
+  fold/unfold a folder and then move to its parent or first child.
+- The decision-filter checkboxes now support Ctrl+click inversion and the
+  right-click menu (Show only this, Show everything but this, Show all, Reset
+  to default). The Excluded toggle offers Reset All Exclusions.
 
 ### Changed
 

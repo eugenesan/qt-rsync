@@ -36,6 +36,9 @@ class ComparisonView : public QWidget {
   // Reveal a folder from the overview: expand its ancestors, keep the row
   // centered in all panes and move the keyboard focus to the list.
   void activatePath(const QString& path);
+  void jumpToEdge(int pane, bool last);
+  void moveHierarchy(int pane, int direction);
+  bool handleCollapseKey(int pane, int key);
   [[nodiscard]] QStringList searchMatches(const QString& text) const;
   void foldCurrent(int pane, bool collapse);
   void foldAll(bool collapse);
@@ -45,6 +48,7 @@ class ComparisonView : public QWidget {
   void resetDecision(const QString& path);
   void resetSubtreeDecisions(const QString& path);
   void resetAllDecisions();
+  void resetExclusions();
   void applyDecision(const QString& path, int decision);
   bool undoDecision();
   bool redoDecision();

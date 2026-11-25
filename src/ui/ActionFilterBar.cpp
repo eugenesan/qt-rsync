@@ -1,5 +1,8 @@
 #include "ui/ActionFilterBar.h"
 
+#include <QMenu>
+#include <QMouseEvent>
+#include <QEvent>
 #include <QCheckBox>
 #include <QToolButton>
 #include <QFrame>
@@ -46,10 +49,7 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
       auto* ctrl = new QShortcut(
           QKeySequence(Qt::CTRL | (Qt::Key_0 + shortcutNumber)), this);
       connect(ctrl, &QShortcut::activated, this, [this, box]() {
-        for (QCheckBox* other : findChildren<QCheckBox*>()) {
-          if (other != box) other->setChecked(false);
-        }
-        box->setChecked(true);
+        applyInverse(box);
       });
     }
     return box;
@@ -138,6 +138,172 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
   // follows the Source panel and before the Excluded toggle.
   layout->insertWidget(0, undo_);
   connect(undo_, &QToolButton::clicked, this, &ActionFilterBar::undoRequested);
+
+  const auto all = allBoxes();
+  for (QCheckBox* box : all) {
+    box->installEventFilter(this);
+    box->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(box, &QWidget::customContextMenuRequested, this,
+            [this, box](const QPoint& point) {
+              if (box == excluded_) {
+                showExcludedMenu(point);
+              } else {
+                showBoxMenu(box, point);
+              }
+            });
+  }
+}
+
+QVector<QCheckBox*> ActionFilterBar::allBoxes() const {
+  QVector<QCheckBox*> boxes = actions_;
+  boxes.append(unchanged_);
+  boxes.append(excluded_);
+  return boxes;
+}
+
+bool ActionFilterBar::eventFilter(QObject* watched, QEvent* event) {
+  auto* box = qobject_cast<QCheckBox*>(watched);
+  if (box == nullptr || !allBoxes().contains(box)) {
+    return QWidget::eventFilter(watched, event);
+  }
+  if (event->type() == QEvent::MouseButtonPress) {
+    auto* mouse = static_cast<QMouseEvent*>(event);
+    if (mouse->button() == Qt::LeftButton &&
+        (mouse->modifiers() & Qt::ControlModifier)) {
+      // Consume both press and release so the checkbox does not toggle
+      // itself after the inverted state has already been applied.
+      inverseClick_ = box;
+      applyInverse(box);
+      return true;
+    }
+  } else if (event->type() == QEvent::MouseButtonRelease) {
+    if (inverseClick_ == box) {
+      inverseClick_ = nullptr;
+      return true;
+    }
+  }
+  return QWidget::eventFilter(watched, event);
+}
+
+void ActionFilterBar::setStates(const QHash<QCheckBox*, bool>& wanted) {
+  bool actionChanged = false;
+  bool unchangedChanged = false;
+  bool excludedChanged = false;
+  for (auto it = wanted.cbegin(); it != wanted.cend(); ++it) {
+    QCheckBox* box = it.key();
+    const bool value = it.value();
+    if (box == nullptr || box->isChecked() == value) continue;
+    box->blockSignals(true);
+    box->setChecked(value);
+    box->blockSignals(false);
+    if (box == excluded_) {
+      excludedChanged = true;
+    } else if (box == unchanged_) {
+      unchangedChanged = true;
+    } else {
+      actionChanged = true;
+    }
+  }
+  if (actionChanged || excludedChanged) emit filterChanged();
+  if (unchangedChanged) emit unchangedToggled(unchanged_->isChecked());
+}
+
+void ActionFilterBar::resetDefaults() {
+  QHash<QCheckBox*, bool> wanted;
+  for (QCheckBox* box : actions_) wanted.insert(box, true);
+  wanted.insert(unchanged_, false);
+  wanted.insert(excluded_, false);
+  setStates(wanted);
+  // The folder toggle is one of the decision filters and returns to off.
+  directories_->setChecked(false);
+}
+
+void ActionFilterBar::applyInverse(QCheckBox* box) {
+  const QVector<QCheckBox*> boxes = allBoxes();
+  if (box == excluded_) {
+    bool allActions = true;
+    for (QCheckBox* action : actions_) {
+      if (!action->isChecked()) allActions = false;
+    }
+    if (box->isChecked() || !allActions) {
+      resetDefaults();
+    } else {
+      QHash<QCheckBox*, bool> wanted;
+      for (QCheckBox* action : actions_) wanted.insert(action, false);
+      wanted.insert(unchanged_, false);
+      wanted.insert(excluded_, true);
+      setStates(wanted);
+    }
+    return;
+  }
+  if (!box->isChecked() && box == unchanged_) {
+    bool allActions = true;
+    for (QCheckBox* action : actions_) {
+      if (!action->isChecked()) allActions = false;
+    }
+    if (allActions) {
+      QHash<QCheckBox*, bool> wanted;
+      wanted.insert(box, true);
+      setStates(wanted);
+      return;
+    }
+  }
+  if (box->isChecked()) {
+    bool anyOther = false;
+    for (QCheckBox* other : boxes) {
+      if (other != box && other->isChecked()) anyOther = true;
+    }
+    if (anyOther) {
+      QHash<QCheckBox*, bool> wanted;
+      for (QCheckBox* other : boxes) wanted.insert(other, other == box);
+      setStates(wanted);
+      return;
+    }
+  }
+  QHash<QCheckBox*, bool> wanted;
+  for (QCheckBox* action : actions_) wanted.insert(action, true);
+  wanted.insert(unchanged_, unchanged_->isChecked());
+  wanted.insert(excluded_, excluded_->isChecked());
+  setStates(wanted);
+}
+
+void ActionFilterBar::showBoxMenu(QCheckBox* box, const QPoint& point) {
+  QMenu menu(this);
+  QAction* only = menu.addAction(QStringLiteral("Show only this"));
+  QAction* others =
+      menu.addAction(QStringLiteral("Show everything but this"));
+  QAction* every = menu.addAction(QStringLiteral("Show all"));
+  menu.addSeparator();
+  QAction* reset = menu.addAction(QStringLiteral("Reset to default"));
+  QAction* chosen = menu.exec(box->mapToGlobal(point));
+  const QVector<QCheckBox*> boxes = allBoxes();
+  if (chosen == only) {
+    QHash<QCheckBox*, bool> wanted;
+    for (QCheckBox* other : boxes) wanted.insert(other, other == box);
+    setStates(wanted);
+  } else if (chosen == others) {
+    QHash<QCheckBox*, bool> wanted;
+    for (QCheckBox* other : boxes) wanted.insert(other, other != box);
+    setStates(wanted);
+  } else if (chosen == every) {
+    QHash<QCheckBox*, bool> wanted;
+    for (QCheckBox* other : boxes) wanted.insert(other, true);
+    setStates(wanted);
+  } else if (chosen == reset) {
+    resetDefaults();
+  }
+}
+
+void ActionFilterBar::showExcludedMenu(const QPoint& point) {
+  QMenu menu(this);
+  QAction* reset = menu.addAction(
+      excludedCount_ > 0
+          ? QStringLiteral("Reset All Exclusions (%1)").arg(excludedCount_)
+          : QStringLiteral("Reset All Exclusions"));
+  reset->setEnabled(excludedCount_ > 0);
+  if (menu.exec(excluded_->mapToGlobal(point)) == reset && excludedCount_ > 0) {
+    emit resetExclusionsRequested();
+  }
 }
 
 bool ActionFilterBar::showExcluded() const { return excluded_->isChecked(); }
@@ -166,6 +332,7 @@ void ActionFilterBar::setActionColours(const QVector<QString>& colours) {
 }
 
 void ActionFilterBar::setExcludedCount(int count) {
+  excludedCount_ = count;
   // qpy puts the count on the Excluded checkbox itself, not in a separate
   // label next to the undo button.
   const QString text = count > 0 ? QString::number(count) : QString();
