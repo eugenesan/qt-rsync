@@ -16,7 +16,7 @@ and refreshed documentation and packaging.
   live in `resources/`.
 - Overview has a Files row under Total for root-level objects, size-based
   Share percentages that add up, and Share as the default sorted/indicated
-  column.
+  column. Only Total starts expanded; folder rows start collapsed.
 - Compare Items and the overview count every displayed item, including a
   reported directory as one item of its parent. Synthesized navigation
   folders and faded filtered-out parents are not counted, so the overview
