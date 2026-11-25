@@ -64,6 +64,10 @@
 namespace qt_rsync::ui {
 namespace {
 
+// qpy updates the item label every thousand parsed records; doing it for
+// every rsync line is visible work in the GUI on a large comparison.
+constexpr int kCompareProgressBatch = 1000;
+
 QString withTrailingSlash(QString path) {
   if (!path.trimmed().isEmpty() && !path.endsWith('/')) path += '/';
   return path;
@@ -228,6 +232,8 @@ class MainWindow::Private {
   QString compareOutput;
   QString compareLineBuffer;
   int compareItemsFound = 0;
+  int compareItemsReported = 0;
+  int lastSyncPercent = -1;
   QElapsedTimer compareClock;
   QElapsedTimer viewClock;
   double lastCompareSeconds = 0.0;
@@ -1066,8 +1072,12 @@ MainWindow::MainWindow(QWidget* parent)
       }
       if (core::parseRecord(line).has_value()) ++d_->compareItemsFound;
     }
-    d_->progressLabel->setText(
-        QStringLiteral("Comparing... %1 item(s) found").arg(d_->compareItemsFound));
+    if (d_->compareItemsFound - d_->compareItemsReported >=
+        kCompareProgressBatch) {
+      d_->compareItemsReported = d_->compareItemsFound;
+      d_->progressLabel->setText(
+          QStringLiteral("Comparing... %1 item(s) found").arg(d_->compareItemsFound));
+    }
   });
   // Rsync writes itemized records, progress and the statistics block to the
   // same stream. Keep every line for the verification diff, but only progress
@@ -1086,7 +1096,8 @@ MainWindow::MainWindow(QWidget* parent)
         if (clean.isEmpty()) continue;
         if (const auto progress = core::parseSyncProgress(clean)) {
           d_->progress->setValue(progress->percent);
-          if (d_->syncing) {
+          if (d_->syncing && progress->percent != d_->lastSyncPercent) {
+            d_->lastSyncPercent = progress->percent;
             d_->progressLabel->setText(
                 QStringLiteral("Synchronizing... %1% (%2 transferred, %3 remaining)")
                     .arg(progress->percent)
@@ -1393,6 +1404,8 @@ void MainWindow::startCompare() {
   d_->compareOutput.clear();
   d_->compareLineBuffer.clear();
   d_->compareItemsFound = 0;
+  d_->compareItemsReported = 0;
+  d_->lastSyncPercent = -1;
   d_->progress->setRange(0, 0);
   d_->progress->setValue(0);
   d_->progress->show();

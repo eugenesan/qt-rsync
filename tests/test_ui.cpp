@@ -1719,9 +1719,11 @@ void UiTest::compareProgressShowsItemsFound() {
   QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
   file.write("#!/bin/sh\n"
              "case \"$*\" in *--list-only*) exit 0 ;; esac\n"
-             "printf '%s\\n' '>f+++++++++|qpy-rsync|1|qpy-rsync|2026-11-23|qpy-rsync|docs/a.txt'\n"
-             "sleep 1\n"
-             "printf '%s\\n' '>f+++++++++|qpy-rsync|1|qpy-rsync|2026-11-23|qpy-rsync|docs/b.txt'\n"
+             "i=0\n"
+             "while [ $i -lt 1000 ]; do\n"
+             "  printf '%s\\n' '>f+++++++++|qpy-rsync|1|qpy-rsync|2026-11-23|qpy-rsync|docs/file$i.txt'\n"
+             "  i=$((i+1))\n"
+             "done\n"
              "sleep 2\n");
   file.close();
   QVERIFY(QFile::setPermissions(script, QFile::ReadOwner | QFile::WriteOwner |
@@ -1750,7 +1752,7 @@ void UiTest::compareProgressShowsItemsFound() {
   auto* progress = window.findChild<QProgressBar*>();
   QVERIFY(progress != nullptr);
   QTRY_VERIFY_WITH_TIMEOUT(!progressText().isEmpty(), 3000);
-  QTRY_VERIFY_WITH_TIMEOUT(progressText().contains(QStringLiteral("2 item(s) found")), 3000);
+  QTRY_VERIFY_WITH_TIMEOUT(progressText().contains(QStringLiteral("1000 item(s) found")), 5000);
   QVERIFY(progress->isVisible() || progress->maximum() == 0);
   auto* status = window.findChild<QLineEdit*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 8000);

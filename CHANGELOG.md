@@ -62,7 +62,9 @@ and refreshed documentation and packaging.
 - Startup options are validated (mode and compare pair) and Qt-only switches
   such as `-style Fusion` are forwarded to QApplication again.
 - Compare progress is visible again: the dry run streams its itemized records
-  into a live "N item(s) found" label with an indeterminate bar.
+  into a live "N item(s) found" label with an indeterminate bar. The label is
+  updated every 1000 records, like qpy, instead of once per rsync line.
+  Synchronization progress updates only when the percentage changes.
 - External tools support qpy's placeholder expansion; the diff command uses
   the configured command with `%a`/`%A` and quoted paths stay one argument.
 

@@ -87,8 +87,8 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
   switches.
 - Menus/shortcuts: `menusAndShortcutsAreWired` asserts the top-level menus,
   layout actions, Undo/Redo actions and the F1-F12 window shortcuts.
-- Compare progress: `compareProgressShowsItemsFound` streams a fake dry run and
-  checks the live "item(s) found" label.
+- Compare progress: `compareProgressShowsItemsFound` streams a fake dry run with
+  1000 records and checks the batched "item(s) found" label.
 - External tools: `externalToolPlaceholders` covers the qpy placeholder cases
   and the diff command now uses the configured placeholder-aware command.
 
