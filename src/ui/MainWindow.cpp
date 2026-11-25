@@ -1046,19 +1046,44 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->inventoryProcess, &QProcess::finished, this, &MainWindow::onInventoryFinished);
   connect(d_->destinationInventoryProcess, &QProcess::finished, this,
           &MainWindow::onDestinationInventoryFinished);
-  connect(d_->operationProcess, &QProcess::readyReadStandardOutput, this, [this]() {
+  // Rsync writes itemized records, progress and the statistics block to the
+  // same stream. Keep every line for the verification diff, but only progress
+  // (as a bar/label) and the summary reach the journal.
+  const auto readOperationOutput = [this](QProcess* process) {
     const QString text = core::cleanQtNoise(
-        QString::fromLocal8Bit(d_->operationProcess->readAllStandardOutput()));
-    d_->operationOutput += text;
-    for (const QString& line : text.split('\r')) {
-      const QString clean = line.trimmed();
-      if (clean.isEmpty()) continue;
-      static const QRegularExpression percent(QStringLiteral("(\\d+)%"));
-      const auto match = percent.match(clean);
-      if (match.hasMatch()) d_->progress->setValue(match.captured(1).toInt());
-      appendJournalLine(clean);
+        QString::fromLocal8Bit(process->readAllStandardOutput()));
+    const QString errorText = core::cleanQtNoise(
+        QString::fromLocal8Bit(process->readAllStandardError()));
+    for (const QString& chunk : {text, errorText}) {
+      if (chunk.isEmpty()) continue;
+      d_->operationOutput += chunk;
+      const auto lines = chunk.split(QRegularExpression(QStringLiteral("[\r\n]+")));
+      for (const QString& line : lines) {
+        const QString clean = line.trimmed();
+        if (clean.isEmpty()) continue;
+        if (const auto progress = core::parseSyncProgress(clean)) {
+          d_->progress->setValue(progress->percent);
+          if (d_->syncing) {
+            d_->progressLabel->setText(
+                QStringLiteral("Synchronizing... %1% (%2 transferred, %3 remaining)")
+                    .arg(progress->percent)
+                    .arg(progress->filesCompleted)
+                    .arg(progress->filesRemaining));
+          }
+          continue;
+        }
+        if (core::isRsyncSummaryLine(clean)) appendJournalLine(clean);
+      }
     }
-  });
+  };
+  connect(d_->operationProcess, &QProcess::readyReadStandardOutput, this,
+          [this, readOperationOutput]() {
+            readOperationOutput(d_->operationProcess);
+          });
+  connect(d_->operationProcess, &QProcess::readyReadStandardError, this,
+          [this, readOperationOutput]() {
+            readOperationOutput(d_->operationProcess);
+          });
   // QAction shortcuts in the menu bar are not delivered on this KDE setup
   // (the menu is exported to the global menu). Use window-level QShortcuts
   // for the same keys so the keyboard works on every desktop.
@@ -1320,6 +1345,8 @@ void MainWindow::startCompare() {
   d_->compareClock.start();
   d_->compare->setEnabled(false);
   d_->cancel->setEnabled(true);
+  d_->stateLabel->setText(QStringLiteral("State:"));
+  d_->stateLabel->setStyleSheet(QString());
   setStatus(QStringLiteral("Comparing..."));
   d_->pauseButton->setChecked(false);
   d_->compareProcess->start(spec.program, spec.arguments);
@@ -1634,8 +1661,19 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
     d_->stale = true;
     d_->verified = false;
     updateStateIcons();
+    d_->sync->setEnabled(false);
+    d_->verify->setEnabled(false);
+    d_->stateLabel->setText(
+        QStringLiteral("State: Stale after synchronization"));
+    d_->stateLabel->setStyleSheet(QStringLiteral("color: #EA580C;"));
+    const auto& summary = d_->plan.summary;
+    appendJournalLine(
+        QStringLiteral("Synchronized: %1 item(s), %2")
+            .arg(summary.included)
+            .arg(model::qpy_format_size(summary.includedSize)));
     setStatus(QStringLiteral(
-        "Synchronization complete — click Compare to refresh the comparison."));
+        "Synchronization complete. Stale comparison: click Compare to "
+        "refresh results."));
     playCompletionSound(QStringLiteral("success"));
     return;
   }

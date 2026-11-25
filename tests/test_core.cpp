@@ -32,6 +32,7 @@ class CoreTest : public QObject {
   Q_OBJECT
 
  private slots:
+  void rsyncProgressDerivedFromCounters();
   // Decisions (ported from qpy-rsync tests/unit/test_changes.py)
   void changeProperties();
   void inheritedExclusionAndChildOverride();
@@ -737,6 +738,20 @@ void CoreTest::planMismatchReportsMissingAndUnexpected() {
            actionName(Action::UpdateContent) + QChar('\x1f') + kindName(Kind::File);
   }()));
   QCOMPARE(mismatch.unexpected.size(), 1);
+}
+
+void CoreTest::rsyncProgressDerivedFromCounters() {
+  const auto progress = parseSyncProgress(
+      QStringLiteral("  8 100%    0.00kB/s    0:00:00 (xfr#2, to-chk=3/10)"));
+  QVERIFY(progress.has_value());
+  QCOMPARE(progress->filesCompleted, 2);
+  QCOMPARE(progress->filesRemaining, 3);
+  QCOMPARE(progress->filesTotal, 10);
+  QCOMPARE(progress->percent, 70);
+  QVERIFY(!parseSyncProgress(QStringLiteral(">f+++++++++ file.txt")).has_value());
+  QVERIFY(isRsyncSummaryLine(QStringLiteral("Number of files: 10")));
+  QVERIFY(!isRsyncSummaryLine(
+      QStringLiteral(">f+++++++++ file.txt")));
 }
 
 QTEST_MAIN(CoreTest)

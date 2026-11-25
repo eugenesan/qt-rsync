@@ -13,8 +13,10 @@ qt-rsync (0.2.0-0) resolute; urgency=medium
     now play on comparison and synchronization completion; restored qpy
     keyboard navigation (Home/End, Ctrl+Up/Down, Left/Right); decision-filter
     checkboxes support Ctrl+click and their context menu; action filters hide
-    unrelated directories and count only visible folders; example profile
-    installed under /usr/share/doc/qt-rsync/examples.
+    unrelated directories and count only visible folders; sync progress comes
+    from rsync counters, the journal keeps only summaries and the comparison
+    becomes stale after sync; example profile installed under
+    /usr/share/doc/qt-rsync/examples.
 
  -- Eugene San (eugenesan) <eugenesan@gmail.com>  Tue, 24 Nov 2026 18:40:00 -0700
 

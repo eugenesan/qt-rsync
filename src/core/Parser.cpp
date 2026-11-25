@@ -2,6 +2,8 @@
 
 #include <QRegularExpression>
 
+#include <cmath>
+
 namespace qt_rsync::core {
 namespace {
 
@@ -24,7 +26,69 @@ bool isItemizedCode(const QString& code) {
   return code.startsWith(QLatin1String("*deleting")) || code.size() == 11;
 }
 
+const QStringList kSummaryPrefixes{
+    QStringLiteral("Number of files"),
+    QStringLiteral("Number of created files"),
+    QStringLiteral("Number of deleted files"),
+    QStringLiteral("Number of regular files transferred"),
+    QStringLiteral("Total file size:"),
+    QStringLiteral("Total transferred file size:"),
+    QStringLiteral("Literal data:"),
+    QStringLiteral("Matched data:"),
+    QStringLiteral("File list size:"),
+    QStringLiteral("File list generation time:"),
+    QStringLiteral("File list transfer time:"),
+    QStringLiteral("Total bytes sent:"),
+    QStringLiteral("Total bytes received:"),
+    QStringLiteral("sent "),
+    QStringLiteral("received "),
+    QStringLiteral("Speedup is"),
+    QStringLiteral("sending incremental file list"),
+};
+
 }  // namespace
+
+std::optional<SyncProgress> parseSyncProgress(const QString& rawLine) {
+  const QString line = rawLine.trimmed();
+  if (!line.contains(QLatin1String("to-chk=")) &&
+      !line.contains(QLatin1String("ir-chk="))) {
+    return std::nullopt;
+  }
+  static const QRegularExpression counter(
+      QStringLiteral(R"((?:xfr#(\d+),\s*)?(?:ir-chk|to-chk)=(\d+)/(\d+))"));
+  const QRegularExpressionMatch match = counter.match(line);
+  if (!match.hasMatch()) return std::nullopt;
+  SyncProgress result;
+  result.filesCompleted = match.captured(1).toInt();
+  result.filesRemaining = match.captured(2).toInt();
+  result.filesTotal = match.captured(3).toInt();
+  if (result.filesTotal > 0) {
+    result.percent = static_cast<int>(
+        std::round(100.0 * (result.filesTotal - result.filesRemaining) /
+                   result.filesTotal));
+  } else {
+    const int denominator = result.filesCompleted + result.filesRemaining;
+    result.percent = denominator > 0
+                         ? static_cast<int>(std::round(
+                               100.0 * result.filesCompleted / denominator))
+                         : 0;
+  }
+  result.percent = qBound(0, result.percent, 100);
+  return result;
+}
+
+bool isRsyncSummaryLine(const QString& rawLine) {
+  const QString line = rawLine.trimmed();
+  if (line.contains(QLatin1String("error"), Qt::CaseInsensitive) ||
+      line.contains(QLatin1String("failed"), Qt::CaseInsensitive) ||
+      line.contains(QLatin1String("warning"), Qt::CaseInsensitive)) {
+    return true;
+  }
+  for (const QString& prefix : kSummaryPrefixes) {
+    if (line.startsWith(prefix)) return true;
+  }
+  return false;
+}
 
 QString describeItemized(const QString& code) {
   if (code.startsWith(QLatin1String("*deleting"))) {

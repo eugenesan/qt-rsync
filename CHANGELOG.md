@@ -49,6 +49,12 @@ and refreshed documentation and packaging.
   filtered and that contain no visible rows. Only real ancestors of visible
   items remain, and only visible reported folders are counted in Items and the
   overview.
+- Synchronization progress is derived from rsync's to-chk/ir-chk counters and
+  shown on the progress bar instead of relying on rsync's byte percentage.
+- Synchronization output is filtered like Compare: progress and itemized
+  records no longer flood the journal, which keeps only the summary and
+  problems. After a sync the comparison is stale, the state and status turn
+  orange, and Sync/Verify stay disabled until a new comparison.
 
 ### Changed
 
