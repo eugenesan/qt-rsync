@@ -245,6 +245,12 @@ void ComparisonView::setFilterBar(ActionFilterBar* bar) {
   }
 }
 
+void ComparisonView::setStale(bool stale) {
+  if (store_.stale == stale) return;
+  store_.stale = stale;
+  for (model::TableModel* model : models_) model->reset();
+}
+
 void ComparisonView::applyFilters() {
   if (filterBar_ == nullptr) return;
   int mask = 0;

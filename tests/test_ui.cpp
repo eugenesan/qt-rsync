@@ -28,6 +28,8 @@
 #include <QTableView>
 #include <QTableWidget>
 #include <QTreeView>
+#include <QImage>
+#include <QShortcut>
 
 #include "ui/MainWindow.h"
 #include "app/StartupOptions.h"
@@ -87,6 +89,8 @@ class UiTest : public QObject {
   void filterCheckboxesSupportInvertedClicks();
   void resetExclusionsKeepsOtherDecisions();
   void actionFilterHidesUnrelatedDirectories();
+  void staleRootIsMarkedInTheComparison();
+  void layoutShortcutCyclesModes();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1547,6 +1551,65 @@ void UiTest::actionFilterHidesUnrelatedDirectories() {
   QCOMPARE(store.dir_items.at(root->second), 4LL);
   QCOMPARE(store.dir_items.at(store.path_to_id.at("meta")), 1LL);
   QCOMPARE(store.dir_items.at(store.path_to_id.at("newdir")), 1LL);
+}
+
+void UiTest::staleRootIsMarkedInTheComparison() {
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("a.txt"), QStringLiteral("b.txt")}));
+  auto& store = view.store();
+  const auto root = store.path_to_id.find(model::DataStore::root_path());
+  QVERIFY(root != store.path_to_id.end());
+  const int row = store.row_of_id.at(root->second);
+  QVERIFY(row >= 0);
+  const auto tables = view.findChildren<QTableView*>();
+  const QModelIndex index = tables.first()->model()->index(row, 0);
+  ui::NativeDelegate delegate(&store, 0);
+  QStyleOptionViewItem option;
+  option.rect = QRect(0, 0, 320, 22);
+  option.state = QStyle::State_Enabled;
+  option.palette = QApplication::palette();
+  const auto paint = [&]() {
+    QPixmap pixmap(320, 22);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    delegate.paint(&painter, option, index);
+    painter.end();
+    return pixmap.toImage();
+  };
+  const QImage fresh = paint();
+  view.setStale(true);
+  QVERIFY(store.stale);
+  const QImage stale = paint();
+  QVERIFY(stale != fresh);
+  view.setStale(false);
+  QVERIFY(!store.stale);
+}
+
+void UiTest::layoutShortcutCyclesModes() {
+  ui::MainWindow window;
+  window.show();
+  QTest::qWait(20);
+  QShortcut* next = nullptr;
+  QShortcut* previous = nullptr;
+  for (QShortcut* shortcut : window.findChildren<QShortcut*>()) {
+    if (shortcut->key() == QKeySequence(QStringLiteral("Ctrl+Tab"))) {
+      next = shortcut;
+    }
+    if (shortcut->key() == QKeySequence(QStringLiteral("Ctrl+Shift+Tab"))) {
+      previous = shortcut;
+    }
+  }
+  QVERIFY(next != nullptr);
+  QVERIFY(previous != nullptr);
+  auto* overview = window.findChild<ui::OverviewPane*>();
+  QVERIFY(overview != nullptr);
+  const bool initial = overview->isVisible();
+  next->activated();
+  QTest::qWait(10);
+  QVERIFY(overview->isVisible() != initial);
+  previous->activated();
+  QTest::qWait(10);
+  QCOMPARE(overview->isVisible(), initial);
 }
 
 QTEST_MAIN(UiTest)

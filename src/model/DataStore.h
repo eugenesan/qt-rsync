@@ -81,6 +81,7 @@ struct DataStore {
   bool show_excluded = false;
   bool show_unchanged = false;
   bool filter_directories = false;
+  bool stale = false;
   std::vector<char> faded;
   // Folder aggregates and per-visible-row striping owned by native.
   std::vector<long long> dir_items;

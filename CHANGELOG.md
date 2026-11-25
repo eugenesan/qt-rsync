@@ -53,8 +53,12 @@ and refreshed documentation and packaging.
   shown on the progress bar instead of relying on rsync's byte percentage.
 - Synchronization output is filtered like Compare: progress and itemized
   records no longer flood the journal, which keeps only the summary and
-  problems. After a sync the comparison is stale, the state and status turn
-  orange, and Sync/Verify stay disabled until a new comparison.
+  problems. After a sync the comparison is stale, the root row shows a stale
+  suffix like qpy, the state turns orange, the single status message is no
+  longer duplicated, progress resets to a completed label and Sync/Verify stay
+  disabled until a new comparison.
+- Ctrl+Tab / Ctrl+Shift+Tab cycle the compare layouts again; the navigation
+  filter no longer swallows the shortcut.
 
 ### Changed
 

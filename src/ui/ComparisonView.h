@@ -30,6 +30,7 @@ class ComparisonView : public QWidget {
   [[nodiscard]] core::Decisions& decisions() { return decisions_; }
   void setChanges(const QVector<core::Change>& changes);
   void setShowUnchanged(bool show);
+  void setStale(bool stale);
   void setActionColours(const QVector<QString>& colours);
   void setRootNames(const QString& source, const QString& destination);
   void selectPath(const QString& path);

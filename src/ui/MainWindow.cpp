@@ -1117,6 +1117,17 @@ MainWindow::MainWindow(QWidget* parent)
     d_->mode->setCurrentIndex((d_->mode->currentIndex() + 1) %
                               d_->mode->count());
   });
+  const auto cycleLayout = [this](int direction) {
+    const QStringList modes{QStringLiteral("normal"), QStringLiteral("focus"),
+                            QStringLiteral("wide")};
+    const int index = modes.indexOf(d_->layoutMode);
+    const int next = (index + direction + modes.size()) % modes.size();
+    applyLayoutMode(modes.at(next));
+  };
+  addKey(QKeySequence(QStringLiteral("Ctrl+Tab")),
+         [cycleLayout]() { cycleLayout(1); });
+  addKey(QKeySequence(QStringLiteral("Ctrl+Shift+Tab")),
+         [cycleLayout]() { cycleLayout(-1); });
   addKey(QKeySequence::Undo, [this]() {
     d_->comparison->undoDecision();
   });
@@ -1642,6 +1653,7 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
     d_->syncing = false;
     d_->verifying = false;
     d_->progress->hide();
+    d_->progressLabel->setText(QStringLiteral("Operation cancelled"));
     setStatus(QStringLiteral("Operation cancelled"));
     return;
   }
@@ -1651,6 +1663,7 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
   if (d_->syncing) {
     d_->syncing = false;
     if (!ok) {
+      d_->progressLabel->setText(QStringLiteral("Synchronization failed"));
       setStatus(QStringLiteral("Synchronization failed: %1")
                               .arg(stderr.trimmed()));
       playCompletionSound(QStringLiteral("error"));
@@ -1671,13 +1684,14 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
         QStringLiteral("Synchronized: %1 item(s), %2")
             .arg(summary.included)
             .arg(model::qpy_format_size(summary.includedSize)));
+    d_->progressLabel->setText(QStringLiteral("Synchronization completed"));
     setStatus(QStringLiteral(
-        "Synchronization complete. Stale comparison: click Compare to "
-        "refresh results."));
+        "Synchronization complete: click Compare to refresh results."));
     playCompletionSound(QStringLiteral("success"));
     return;
   }
   d_->verifying = false;
+  d_->progressLabel->setText(QStringLiteral("Verification finished"));
   if (!ok) {
     d_->verified = false;
     setStatus(QStringLiteral("Verification failed: %1").arg(stderr.trimmed()));
@@ -2077,6 +2091,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 }
 
 void MainWindow::updateStateIcons() {
+  if (d_->comparison != nullptr) d_->comparison->setStale(d_->stale);
   const QColor info(QStringLiteral("#0891B2"));
   const QColor warning(QStringLiteral("#f59e0b"));
   QIcon compare = icons::toolbarIcon(QStringLiteral("compare"));

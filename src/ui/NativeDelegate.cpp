@@ -92,6 +92,9 @@ void NativeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
     return;
   }
 
+  static const QString staleSuffix = QStringLiteral("  [stale comparison]");
+  const bool rootRow = store_->paths[id] == DataStore::root_path();
+  const bool staleRoot = rootRow && store_->stale;
   const bool nameColumn = col == 0 || col == 5;
   QStyleOptionViewItem opt(option);
   initStyleOption(&opt, index);
@@ -120,7 +123,6 @@ void NativeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
                        opt.fontMetrics.ascent() / 2 - 1;
   painter->save();
 
-  const bool rootRow = store_->paths[id] == DataStore::root_path();
   if (rootRow) {
     if (!store_->root_icon.isNull()) {
       store_->root_icon.paint(painter, QRect(x, mid - 8, 16, 16));
@@ -177,10 +179,18 @@ void NativeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
   }
 
   painter->setPen(colour);
-  const int available = opt.rect.right() - x - 4;
+  const int suffixWidth = staleRoot
+                              ? opt.fontMetrics.horizontalAdvance(staleSuffix)
+                              : 0;
+  const int available = opt.rect.right() - x - 4 - suffixWidth;
+  const QString name = index.data(Qt::DisplayRole).toString();
   painter->drawText(x, baseline,
-                    opt.fontMetrics.elidedText(index.data(Qt::DisplayRole).toString(),
-                                               Qt::ElideRight, available));
+                    opt.fontMetrics.elidedText(name, Qt::ElideRight, available));
+  if (staleRoot) {
+    painter->setPen(QColor(QStringLiteral("#EA580C")));
+    painter->drawText(x + opt.fontMetrics.horizontalAdvance(name), baseline,
+                      staleSuffix);
+  }
   painter->restore();
 }
 
