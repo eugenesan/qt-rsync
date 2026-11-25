@@ -26,6 +26,7 @@
 #include <QTemporaryDir>
 #include <QTableView>
 #include <QTableWidget>
+#include <QTreeView>
 
 #include "ui/MainWindow.h"
 #include "app/StartupOptions.h"
@@ -71,6 +72,9 @@ class UiTest : public QObject {
   void sortIndicatorsAndRowsAreLinked();
   void directoryFiltersApplyOnlyWhenEnabled();
   void overviewCountsReportedDirectoriesOnly();
+  void createdDirectoriesAreBlankOnDestination();
+  void overviewFolderActivationEmitsPath();
+  void activatePathRevealsAndFocusesFolder();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1051,6 +1055,136 @@ void UiTest::overviewCountsReportedDirectoriesOnly() {
   const QModelIndex plain = findChild(total, QStringLiteral("plain"));
   QVERIFY(plain.isValid());
   QCOMPARE(overview.data(plain.siblingAtColumn(2)).toLongLong(), 1LL);
+}
+
+void UiTest::createdDirectoriesAreBlankOnDestination() {
+  ui::ComparisonView view;
+  core::Change folder;
+  folder.path = QStringLiteral("newdir");
+  folder.action = core::Action::Create;
+  folder.kind = core::Kind::Directory;
+  core::Change child;
+  child.path = QStringLiteral("newdir/a.txt");
+  child.action = core::Action::Create;
+  child.kind = core::Kind::File;
+  child.size = 1;
+  view.setChanges({folder, child});
+  auto& store = view.store();
+  const auto found = store.path_to_id.find("newdir");
+  QVERIFY(found != store.path_to_id.end());
+  const int id = found->second;
+  QVERIFY(store.present_on_pane(id, 0));
+  QVERIFY(!store.present_on_pane(id, 2));
+  QVERIFY(store.row_of_id.at(id) >= 0);
+  const int row = store.row_of_id.at(id);
+  model::TableModel destination(&store, 2);
+  QCOMPARE(destination.data(destination.index(row, 5), Qt::DisplayRole).toString(),
+           QString());
+  QVERIFY(!destination.data(destination.index(row, 5), Qt::DecorationRole).isValid());
+
+  // Painting must not draw the collapse chevron or the folder icon on the
+  // side where the directory does not exist.
+  ui::NativeDelegate delegate(&store, 2);
+  QStyleOptionViewItem option;
+  option.rect = QRect(0, 0, 240, 22);
+  option.state = QStyle::State_Enabled;
+  option.palette = QApplication::palette();
+  QPixmap pixmap(240, 22);
+  pixmap.fill(Qt::transparent);
+  QPainter painter(&pixmap);
+  delegate.paint(&painter, option, destination.index(row, 5));
+  painter.end();
+  const QImage image = pixmap.toImage();
+  const QColor background = image.pixelColor(200, 11);
+  for (int x = 4; x < 80; ++x) {
+    QVERIFY2(image.pixelColor(x, 11) == background,
+             qPrintable(QStringLiteral("icon pixel at %1").arg(x)));
+  }
+}
+
+void UiTest::overviewFolderActivationEmitsPath() {
+  ui::ComparisonView view;
+  core::Change first;
+  first.path = QStringLiteral("docs/a.txt");
+  first.action = core::Action::Create;
+  first.kind = core::Kind::File;
+  first.size = 1;
+  core::Change second;
+  second.path = QStringLiteral("docs/sub/b.txt");
+  second.action = core::Action::Create;
+  second.kind = core::Kind::File;
+  second.size = 1;
+  view.setChanges({first, second});
+
+  ui::OverviewPane overview;
+  overview.rebuild(view.store());
+  auto* tree = overview.findChild<QTreeView*>();
+  QVERIFY(tree != nullptr);
+  QAbstractItemModel* model = tree->model();
+  QVERIFY(model != nullptr);
+  const QModelIndex total = model->index(0, 0);
+  QVERIFY(total.isValid());
+  QModelIndex docs;
+  for (int row = 0; row < model->rowCount(total); ++row) {
+    const QModelIndex index = model->index(row, 0, total);
+    if (model->data(index).toString() == QStringLiteral("docs")) {
+      docs = index;
+      break;
+    }
+  }
+  QVERIFY(docs.isValid());
+  overview.resize(520, 260);
+  overview.show();
+  QTest::qWait(1);
+  QSignalSpy spy(&overview, &ui::OverviewPane::folderActivated);
+  const QRect row = tree->visualRect(docs);
+  QVERIFY(row.isValid());
+  // Only the jump icon in the branch gutter reveals the folder.
+  QTest::mouseClick(tree->viewport(), Qt::LeftButton, Qt::NoModifier,
+                    QPoint(9, row.center().y()));
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.takeFirst().at(0).toString(), QStringLiteral("docs"));
+  // Clicking the folder name keeps the default select/expand behaviour.
+  QTest::mouseClick(tree->viewport(), Qt::LeftButton, Qt::NoModifier,
+                    QPoint(row.center().x(), row.center().y()));
+  QCOMPARE(spy.count(), 0);
+  overview.close();
+}
+
+void UiTest::activatePathRevealsAndFocusesFolder() {
+  ui::ComparisonView view;
+  core::Change first;
+  first.path = QStringLiteral("docs/a.txt");
+  first.action = core::Action::Create;
+  first.kind = core::Kind::File;
+  first.size = 1;
+  core::Change second;
+  second.path = QStringLiteral("docs/sub/b.txt");
+  second.action = core::Action::Create;
+  second.kind = core::Kind::File;
+  second.size = 1;
+  view.setChanges({first, second});
+  auto& store = view.store();
+  const auto docs = store.path_to_id.find("docs");
+  QVERIFY(docs != store.path_to_id.end());
+  store.set_collapsed(docs->second, true);
+  store.rebuild_visible();
+  view.show();
+  QTest::qWait(1);
+  view.activatePath(QStringLiteral("docs/sub"));
+  const auto panes = view.findChildren<QTableView*>();
+  QCOMPARE(panes.size(), 3);
+  for (QTableView* pane : panes) {
+    const QModelIndex current = pane->currentIndex();
+    QVERIFY(current.isValid());
+    const int row = current.row();
+    QVERIFY(row >= 0 && row < static_cast<int>(store.visible.size()));
+    QCOMPARE(QString::fromStdString(store.paths[store.visible[row]]),
+             QStringLiteral("docs/sub"));
+  }
+  QVERIFY(!store.is_collapsed(docs->second));
+  QTRY_VERIFY(panes.first()->hasFocus());
+  view.close();
 }
 
 QTEST_MAIN(UiTest)

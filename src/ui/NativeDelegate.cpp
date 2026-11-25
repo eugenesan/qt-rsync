@@ -75,12 +75,11 @@ void NativeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
     return;
   }
 
-  const int action = id < static_cast<int>(store_->actions.size())
-                         ? store_->actions[id] : NoChange;
-  const bool sourcePresent = action != DestOnly && action != Delete;
-  const bool destPresent = action != Create;
   const bool dirRow = id < static_cast<int>(store_->is_dir.size()) && store_->is_dir[id];
-  if (!dirRow && ((pane_ == 0 && !sourcePresent) || (pane_ == 2 && !destPresent))) {
+  // An item is only drawn on the side where it exists. A new directory has no
+  // destination row (no chevron, no folder icon, no name), and a deleted or
+  // destination-only directory has no source row.
+  if (!store_->present_on_pane(id, pane_)) {
     QStyleOptionViewItem blank(option);
     initStyleOption(&blank, index);
     paintBackground(painter, option, false);

@@ -175,6 +175,9 @@ QIcon toolbarIcon(const QString& name) {
   if (name == QLatin1String("swap")) {
     return themed({"swap-panels-symbolic", "swap-panels"}, QStyle::SP_BrowserReload);
   }
+  if (name == QLatin1String("go-jump")) {
+    return themed({"go-jump-symbolic", "go-jump"}, QStyle::SP_ArrowForward);
+  }
   if (name == QLatin1String("excluded")) {
     // Eye with a slash, the marker qpy uses on the Excluded toggle.
     return makeGrid([](QPainter& p) {

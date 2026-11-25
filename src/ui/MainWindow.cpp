@@ -898,6 +898,10 @@ MainWindow::MainWindow(QWidget* parent)
   logColumnLayout->addWidget(d_->journal, 1);
   logSplitter->addWidget(logColumn);
   d_->overview = new OverviewPane(logSplitter);
+  connect(d_->overview, &OverviewPane::folderActivated, this,
+          [this](const QString& path) {
+            d_->comparison->activatePath(path);
+          });
   logSplitter->setStretchFactor(0, 1);
   logSplitter->setStretchFactor(1, 0);
   logSplitter->setSizes({680, 620});

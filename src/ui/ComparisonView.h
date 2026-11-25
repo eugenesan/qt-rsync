@@ -31,6 +31,9 @@ class ComparisonView : public QWidget {
   void setActionColours(const QVector<QString>& colours);
   void setRootNames(const QString& source, const QString& destination);
   void selectPath(const QString& path);
+  // Reveal a folder from the overview: expand its ancestors, keep the row
+  // centered in all panes and move the keyboard focus to the list.
+  void activatePath(const QString& path);
   [[nodiscard]] QStringList searchMatches(const QString& text) const;
   void foldCurrent(int pane, bool collapse);
   void foldAll(bool collapse);

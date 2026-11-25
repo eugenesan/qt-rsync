@@ -512,6 +512,15 @@ struct DataStore {
     return bit >= 0 && bit < 32 && (action_mask & (1 << bit)) != 0;
   }
 
+  // Whether an item exists on the source (0) or destination (2) side.
+  bool present_on_pane(int id, int pane) const {
+    const int action = id >= 0 && id < static_cast<int>(actions.size())
+                           ? actions[id] : NoChange;
+    if (pane == 0) return action != DestOnly && action != Delete;
+    if (pane == 2) return action != Create;
+    return true;
+  }
+
   bool matches(int id) const {
     // NoChange files are inventory-only and stay hidden until the user turns
     // on the Unchanged toggle. Directories remain as navigation rows.
@@ -949,14 +958,7 @@ class TableModel : public QAbstractTableModel {
     }
     if (role == Qt::DecorationRole) {
       if (index.column() != 0 && index.column() != 5) return {};
-      const int row_action = id < static_cast<int>(store_->actions.size())
-                                 ? store_->actions[id] : NoChange;
-      const bool source_present = row_action != DestOnly && row_action != Delete;
-      const bool dest_present = row_action != Create;
-      if ((pane_ == 0 && !source_present) ||
-          (pane_ == 2 && !dest_present)) {
-        return {};
-      }
+      if (!store_->present_on_pane(id, pane_)) return {};
       const std::string& path = store_->paths[id];
       if (path == DataStore::root_path()) return store_->root_icon;
       if (id < static_cast<int>(store_->is_dir.size()) && store_->is_dir[id]) {
@@ -1013,11 +1015,7 @@ class TableModel : public QAbstractTableModel {
     const int column = index.column();
     const int action = id < static_cast<int>(store_->actions.size())
                            ? store_->actions[id] : NoChange;
-    const bool source_present = action != DestOnly && action != Delete;
-    const bool dest_present = action != Create;
-    if ((pane_ == 0 && !source_present) || (pane_ == 2 && !dest_present)) {
-      return {};
-    }
+    if (!store_->present_on_pane(id, pane_)) return {};
     const std::string& path = store_->paths[id];
     const std::string time = id < static_cast<int>(store_->times.size())
                                  ? store_->times[id] : std::string();

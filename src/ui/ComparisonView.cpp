@@ -448,6 +448,41 @@ void ComparisonView::selectPath(const QString& path) {
   }
 }
 
+void ComparisonView::activatePath(const QString& path) {
+  const auto found = store_.path_to_id.find(path.toStdString());
+  if (found == store_.path_to_id.end()) return;
+  const int id = found->second;
+  bool expanded = false;
+  int parent = id < static_cast<int>(store_.parents.size())
+                   ? store_.parents[id] : -1;
+  while (parent >= 0) {
+    if (parent < static_cast<int>(store_.collapsed.size()) &&
+        store_.collapsed[parent]) {
+      store_.collapsed[parent] = 0;
+      expanded = true;
+    }
+    parent = parent < static_cast<int>(store_.parents.size())
+                 ? store_.parents[parent] : -1;
+  }
+  if (expanded) {
+    store_.rebuild_visible();
+    for (model::TableModel* model : models_) model->reset();
+  }
+  const int row = id < static_cast<int>(store_.row_of_id.size())
+                      ? store_.row_of_id[id] : -1;
+  if (row < 0) return;
+  for (QTableView* view : views_) {
+    if (view == nullptr || view->model() == nullptr) continue;
+    const QModelIndex index = view->model()->index(row, 0);
+    if (!index.isValid()) continue;
+    view->setCurrentIndex(index);
+    view->scrollTo(index, QAbstractItemView::PositionAtCenter);
+  }
+  if (!views_.isEmpty() && views_.first() != nullptr) {
+    views_.first()->setFocus();
+  }
+}
+
 QStringList ComparisonView::searchMatches(const QString& text) const {
   // qpy's Find rules: a trailing slash matches directories only, a slash
   // inside the pattern searches the path, and * ? [ ] are globs. Matching

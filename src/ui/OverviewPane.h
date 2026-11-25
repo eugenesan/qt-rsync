@@ -19,6 +19,9 @@ class OverviewPane : public QWidget {
   void rebuild(const model::DataStore& store);
   void setActionColours(const QVector<QString>& colours);
 
+ signals:
+  void folderActivated(const QString& path);
+
  private:
   QTreeView* tree_;
   model::OverviewModel* model_;

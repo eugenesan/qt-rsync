@@ -21,6 +21,11 @@ and refreshed documentation and packaging.
   reported directory as one item of its parent. Synthesized navigation
   folders and faded filtered-out parents are not counted, so the overview
   Total equals the root row's Items.
+- Every overview folder has a go-jump icon left of the tree line. Clicking it
+  reveals and centers the folder in the comparison panes; single and double
+  clicks keep the default select/expand behaviour.
+- A folder that does not exist on one side is blank in that pane, without a
+  fold chevron, folder icon or name.
 
 ### Changed
 

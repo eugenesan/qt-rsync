@@ -2,6 +2,7 @@
 
 #include <QApplication>
 #include <QHeaderView>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QStyledItemDelegate>
 #include <QTreeView>
@@ -9,8 +10,55 @@
 #include <functional>
 #include <QVBoxLayout>
 
+#include "ui/Icons.h"
+
 namespace qt_rsync::ui {
 namespace {
+
+class OverviewTree : public QTreeView {
+ public:
+  explicit OverviewTree(QWidget* parent = nullptr) : QTreeView(parent) {}
+
+  std::function<void(const QString&)> jumpCallback;
+
+  QRect jumpRect(const QModelIndex& index) const {
+    const QRect row = visualRect(index);
+    return QRect(2, row.top() + 4, 14, qMax(0, row.height() - 8));
+  }
+
+ protected:
+  void drawBranches(QPainter* painter, const QRect& rect,
+                    const QModelIndex& index) const override {
+    QTreeView::drawBranches(painter, rect, index);
+    const QString path = index.data(Qt::UserRole).toString();
+    if (path.isEmpty()) return;
+    const QIcon icon = icons::toolbarIcon(QStringLiteral("go-jump"));
+    if (icon.isNull()) return;
+    QRect target = jumpRect(index);
+    target.moveLeft(rect.left() + 2);
+    icon.paint(painter, target, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+  }
+
+  void mousePressEvent(QMouseEvent* event) override {
+    const QModelIndex index = indexAt(event->pos());
+    if (index.isValid() && !index.data(Qt::UserRole).toString().isEmpty() &&
+        jumpRect(index).contains(event->pos())) {
+      if (jumpCallback) jumpCallback(index.data(Qt::UserRole).toString());
+      event->accept();
+      return;
+    }
+    QTreeView::mousePressEvent(event);
+  }
+
+  void mouseMoveEvent(QMouseEvent* event) override {
+    const QModelIndex index = indexAt(event->pos());
+    const bool overJump =
+        index.isValid() && !index.data(Qt::UserRole).toString().isEmpty() &&
+        jumpRect(index).contains(event->pos());
+    setCursor(overJump ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    QTreeView::mouseMoveEvent(event);
+  }
+};
 
 class ShareDelegate : public QStyledItemDelegate {
  public:
@@ -52,10 +100,14 @@ class ShareDelegate : public QStyledItemDelegate {
 }  // namespace
 
 OverviewPane::OverviewPane(QWidget* parent)
-    : QWidget(parent), tree_(new QTreeView(this)),
+    : QWidget(parent), tree_(new OverviewTree(this)),
       model_(new model::OverviewModel(this)), stats_(new StatsBar(this)) {
   auto* layout = new QVBoxLayout(this);
   layout->setContentsMargins(0, 0, 0, 0);
+  auto* overviewTree = static_cast<OverviewTree*>(tree_);
+  overviewTree->jumpCallback = [this](const QString& path) {
+    emit folderActivated(path);
+  };
   tree_->setModel(model_);
   tree_->setUniformRowHeights(true);
   tree_->setAlternatingRowColors(true);

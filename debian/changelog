@@ -4,7 +4,8 @@ qt-rsync (0.2.0-0) resolute; urgency=medium
     desktop entry live in resources/; obsolete Actions labels renamed to
     Decisions; directory decision filters and directory-aware Items counts;
     overview totals and Files row; overview rebuild keeps sort and folded
-    totals.
+    totals; go-jump overview icon; folders absent from one side stay blank
+    there.
 
  -- Eugene San (eugenesan) <eugenesan@gmail.com>  Tue, 24 Nov 2026 18:40:00 -0700
 
