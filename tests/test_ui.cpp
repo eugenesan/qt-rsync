@@ -86,6 +86,7 @@ class UiTest : public QObject {
   void leftRightFoldAndNavigateFolders();
   void filterCheckboxesSupportInvertedClicks();
   void resetExclusionsKeepsOtherDecisions();
+  void actionFilterHidesUnrelatedDirectories();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -997,13 +998,17 @@ void UiTest::directoryFiltersApplyOnlyWhenEnabled() {
   QVERIFY(metadataBox != nullptr);
   metadataBox->setChecked(false);
   QTest::qWait(1);
-  // Directories ignore action filters until the directory toggle is on.
-  QVERIFY(visible().contains(QStringLiteral("empty")));
+  // A directory with no visible children disappears even when the
+  // directory toggle is off. docs stays as the ancestor of its create item.
+  QVERIFY(!visible().contains(QStringLiteral("empty")));
   QVERIFY(visible().contains(QStringLiteral("docs")));
+  const auto docsId = view.store().path_to_id.find("docs");
+  QVERIFY(docsId != view.store().path_to_id.end());
+  QVERIFY(view.store().faded.at(docsId->second) == 0);
 
   bar.setFilterDirectories(true);
   QTest::qWait(1);
-  // The empty metadata directory disappears; docs stays as a faded parent.
+  // The same ancestor remains, now faded and uncounted.
   QVERIFY(!visible().contains(QStringLiteral("empty")));
   QVERIFY(visible().contains(QStringLiteral("docs")));
   const auto found = view.store().path_to_id.find("docs");
@@ -1493,6 +1498,55 @@ void UiTest::resetExclusionsKeepsOtherDecisions() {
   QCOMPARE(view.store().row_of_id.at(
                view.store().path_to_id.at("a.txt")),
            1);
+}
+
+void UiTest::actionFilterHidesUnrelatedDirectories() {
+  ui::ComparisonView view;
+  auto makeChange = [](const QString& path, core::Action action,
+                       core::Kind kind) {
+    core::Change change;
+    change.path = path;
+    change.action = action;
+    change.kind = kind;
+    change.size = 1;
+    return change;
+  };
+  view.setChanges({
+      makeChange(QStringLiteral("meta"), core::Action::UpdateMetadata,
+                 core::Kind::Directory),
+      makeChange(QStringLiteral("meta/new.txt"), core::Action::Create,
+                 core::Kind::File),
+      makeChange(QStringLiteral("unrelated"), core::Action::UpdateContent,
+                 core::Kind::Directory),
+      makeChange(QStringLiteral("unrelated/old.txt"), core::Action::UpdateContent,
+                 core::Kind::File),
+      makeChange(QStringLiteral("newdir"), core::Action::Create,
+                 core::Kind::Directory),
+      makeChange(QStringLiteral("newdir/file.txt"), core::Action::Create,
+                 core::Kind::File),
+  });
+  auto& store = view.store();
+  store.action_mask = 1 << static_cast<int>(model::Create);
+  store.rebuild_visible();
+
+  QSet<QString> visible;
+  for (int id : store.visible) {
+    visible.insert(QString::fromStdString(store.paths[id]));
+  }
+  QVERIFY(visible.contains(QStringLiteral("meta")));
+  QVERIFY(visible.contains(QStringLiteral("meta/new.txt")));
+  QVERIFY(visible.contains(QStringLiteral("newdir")));
+  QVERIFY(visible.contains(QStringLiteral("newdir/file.txt")));
+  QVERIFY(!visible.contains(QStringLiteral("unrelated")));
+  QVERIFY(!visible.contains(QStringLiteral("unrelated/old.txt")));
+
+  const auto root = store.path_to_id.find(model::DataStore::root_path());
+  QVERIFY(root != store.path_to_id.end());
+  // meta + meta/new.txt + newdir + newdir/file.txt; the unrelated subtree is
+  // not an ancestor of anything visible and must not be counted.
+  QCOMPARE(store.dir_items.at(root->second), 4LL);
+  QCOMPARE(store.dir_items.at(store.path_to_id.at("meta")), 1LL);
+  QCOMPARE(store.dir_items.at(store.path_to_id.at("newdir")), 1LL);
 }
 
 QTEST_MAIN(UiTest)

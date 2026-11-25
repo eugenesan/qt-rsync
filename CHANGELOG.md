@@ -45,6 +45,10 @@ and refreshed documentation and packaging.
 - The decision-filter checkboxes now support Ctrl+click inversion and the
   right-click menu (Show only this, Show everything but this, Show all, Reset
   to default). The Excluded toggle offers Reset All Exclusions.
+- “Show only this” and the action filters hide directories whose own action is
+  filtered and that contain no visible rows. Only real ancestors of visible
+  items remain, and only visible reported folders are counted in Items and the
+  overview.
 
 ### Changed
 

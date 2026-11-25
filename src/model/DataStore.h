@@ -390,12 +390,13 @@ struct DataStore {
         dir_has_children[parent] = 1;
       }
     }
-    compute_aggregates();
     visible = tree_order();
     row_of_id.assign(count, -1);
     for (int row = 0; row < static_cast<int>(visible.size()); ++row) {
       row_of_id[visible[row]] = row;
     }
+    faded.assign(count, 0);
+    compute_aggregates();
     compute_stripes();
   }
 
@@ -407,14 +408,21 @@ struct DataStore {
     const bool directory =
         i < static_cast<int>(is_dir.size()) && is_dir[i] != 0;
     if (directory) {
+      // A directory is an item only when it is a real reported folder and is
+      // visible. Synthetic navigation folders never count; a filtered-out
+      // directory stays visible only as an ancestor and is not counted when
+      // the directory filter fades it.
       if (i < static_cast<int>(synthetic.size()) && synthetic[i]) return false;
-      const int action = i < static_cast<int>(actions.size()) ? actions[i] : NoChange;
-      if (!show_unchanged && action == NoChange) return false;
+      if (i >= static_cast<int>(row_of_id.size()) || row_of_id[i] < 0) {
+        return false;
+      }
+      if (i < static_cast<int>(faded.size()) && faded[i]) return false;
     }
     if (i < static_cast<int>(decisions.size()) &&
         decisions[i] == Exclude) {
       return false;
     }
+    if (directory) return true;
     return matches(i);
   }
 
@@ -536,11 +544,10 @@ struct DataStore {
              decisions[id] == Exclude;
     }
     if (action_mask != 0 && id < static_cast<int>(actions.size())) {
-      const bool directory =
-          id >= 0 && id < static_cast<int>(is_dir.size()) && is_dir[id];
-      if (!(directory && !filter_directories) && !action_allowed(id)) {
-        return false;
-      }
+      // Directories are filtered too. Those whose own action is filtered out
+      // still stay as ancestors of visible rows through keep_ancestor(); an
+      // unrelated directory is not kept just because it is a directory.
+      if (!action_allowed(id)) return false;
     }
     if (dirs_only && (id >= static_cast<int>(is_dir.size()) || !is_dir[id])) {
       return false;
@@ -648,6 +655,7 @@ struct DataStore {
   void rebuild_visible() {
     visible.clear();
     row_of_id.assign(paths.size(), -1);
+    faded.assign(paths.size(), 0);
     std::vector<int> order = tree_order();
     std::vector<char> matched(paths.size(), 0);
     // Keep the ancestor directories of every row that passes the action
