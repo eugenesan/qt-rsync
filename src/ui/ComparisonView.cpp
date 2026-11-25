@@ -239,7 +239,8 @@ void ComparisonView::applyFilters() {
   }
   store_.action_mask = (mask == 0x1F) ? 0 : mask;
   store_.show_excluded = filterBar_->showExcluded();
-  store_.dirs_only = filterBar_->filterDirectories();
+  store_.filter_directories = filterBar_->filterDirectories();
+  store_.dirs_only = false;
   store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
   emit viewChanged();

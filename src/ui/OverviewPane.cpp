@@ -61,7 +61,8 @@ OverviewPane::OverviewPane(QWidget* parent)
   tree_->setAlternatingRowColors(true);
   tree_->setRootIsDecorated(true);
   tree_->setSortingEnabled(true);
-  tree_->sortByColumn(3, Qt::DescendingOrder);
+  // Share is the default order; its indicator is shown on the Share header.
+  tree_->sortByColumn(1, Qt::DescendingOrder);
   tree_->setItemDelegateForColumn(1, new ShareDelegate(tree_));
   tree_->header()->setStretchLastSection(false);
   tree_->header()->setSectionsClickable(true);
@@ -75,7 +76,7 @@ OverviewPane::OverviewPane(QWidget* parent)
   }
   tree_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   tree_->header()->setFixedHeight(qMax(16, tree_->fontMetrics().height() + 2));
-  tree_->header()->resizeSection(1, 56);
+  tree_->header()->resizeSection(1, 96);
   tree_->header()->resizeSection(2, 64);
   tree_->header()->resizeSection(3, 84);
   layout->addWidget(tree_);

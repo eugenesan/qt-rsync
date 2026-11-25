@@ -144,6 +144,10 @@ bool ActionFilterBar::showExcluded() const { return excluded_->isChecked(); }
 bool ActionFilterBar::filterDirectories() const {
   return directories_->isChecked();
 }
+
+void ActionFilterBar::setFilterDirectories(bool enabled) {
+  directories_->setChecked(enabled);
+}
 bool ActionFilterBar::actionVisible(int action) const {
   return action >= 0 && action < actions_.size() &&
          actions_.at(action)->isChecked();

@@ -237,6 +237,10 @@ void NativeDelegate::paintBackground(QPainter* painter,
 
 QColor NativeDelegate::textColor(const QStyleOptionViewItem& option, int id) const {
   if (option.state & QStyle::State_Selected) return {};
+  if (id >= 0 && id < static_cast<int>(store_->faded.size()) &&
+      store_->faded[id]) {
+    return QColor(QStringLiteral("#9CA3AF"));
+  }
   const int action = id < static_cast<int>(store_->actions.size())
                          ? store_->actions[id] : NoChange;
   if (action >= 0 && action < 6) {

@@ -60,6 +60,14 @@ KDE dark-theme and final UI parity pass.
 - Sorting any comparison column sorts the shared data and updates the
   indicators on all three panes.
 - Overview directories start collapsed; only the synthetic Total row is open.
+- Overview now has a Files row under Total for root-level objects, size-based
+  Share percentages that add up, and Share as the default sorted/indicated
+  column.
+- Compare directory Items count only the child files that are displayed; faded
+  unchanged parents are not counted.
+- “Apply the action filters to directories” now follows qpy semantics: off by
+  default so directory rows ignore action filters, on makes a directory a
+  faded, uncounted parent when its own action is filtered out.
 - `--version` includes the checkout commit hash.
 - Layout modes now work: Normal, Compare only and Compare with overview.
 - Overview statistics use labels instead of painter text, so entries cannot

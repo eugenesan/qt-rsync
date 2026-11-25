@@ -1000,6 +1000,18 @@ MainWindow::MainWindow(QWidget* parent)
   addKey(QKeySequence(QStringLiteral("Ctrl+,")), [this]() {
     d_->settingsButton->click();
   });
+  {
+    core::storage::Settings settings;
+    d_->filterBar->setFilterDirectories(
+        settings.value(QStringLiteral("comparison/filter-directories"), false)
+            .toBool());
+  }
+  connect(d_->filterBar, &ActionFilterBar::filterChanged, this, [this]() {
+    core::storage::Settings settings;
+    settings.setValue(QStringLiteral("comparison/filter-directories"),
+                      d_->filterBar->filterDirectories());
+    settings.sync();
+  });
   applyActionColours();
   updateVerificationVisibility();
   updateStateIcons();

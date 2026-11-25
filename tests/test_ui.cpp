@@ -69,6 +69,7 @@ class UiTest : public QObject {
   void filterCheckboxesOnlyTakeKeyboardFocus();
   void actionFilterBarSeparatesEveryPair();
   void sortIndicatorsAndRowsAreLinked();
+  void directoryFiltersApplyOnlyWhenEnabled();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -944,6 +945,52 @@ void UiTest::sortIndicatorsAndRowsAreLinked() {
   QCOMPARE(sourceHeader->sortIndicatorSection(), 1);
   QCOMPARE(destinationHeader->sortIndicatorSection(), 6);
   QCOMPARE(sourceHeader->sortIndicatorOrder(), Qt::AscendingOrder);
+}
+
+void UiTest::directoryFiltersApplyOnlyWhenEnabled() {
+  ui::ComparisonView view;
+  ui::ActionFilterBar bar;
+  view.setFilterBar(&bar);
+  QVector<core::Change> changes;
+  core::Change metadataDir;
+  metadataDir.path = QStringLiteral("empty");
+  metadataDir.action = core::Action::UpdateMetadata;
+  metadataDir.kind = core::Kind::Directory;
+  core::Change docs;
+  docs.path = QStringLiteral("docs");
+  docs.action = core::Action::UpdateMetadata;
+  docs.kind = core::Kind::Directory;
+  core::Change child;
+  child.path = QStringLiteral("docs/a.txt");
+  child.action = core::Action::Create;
+  child.kind = core::Kind::File;
+  child.size = 1;
+  changes << metadataDir << docs << child;
+  view.setChanges(changes);
+  const auto visible = [&view]() {
+    QSet<QString> paths;
+    for (int id : view.store().visible) {
+      paths.insert(QString::fromStdString(view.store().paths[id]));
+    }
+    return paths;
+  };
+  // Turn the Metadata action filter off.
+  auto* metadataBox = bar.findChild<QCheckBox*>(QStringLiteral("filter-box-5"));
+  QVERIFY(metadataBox != nullptr);
+  metadataBox->setChecked(false);
+  QTest::qWait(1);
+  // Directories ignore action filters until the directory toggle is on.
+  QVERIFY(visible().contains(QStringLiteral("empty")));
+  QVERIFY(visible().contains(QStringLiteral("docs")));
+
+  bar.setFilterDirectories(true);
+  QTest::qWait(1);
+  // The empty metadata directory disappears; docs stays as a faded parent.
+  QVERIFY(!visible().contains(QStringLiteral("empty")));
+  QVERIFY(visible().contains(QStringLiteral("docs")));
+  const auto found = view.store().path_to_id.find("docs");
+  QVERIFY(found != view.store().path_to_id.end());
+  QVERIFY(view.store().faded.at(found->second) != 0);
 }
 
 QTEST_MAIN(UiTest)

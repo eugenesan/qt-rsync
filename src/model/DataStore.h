@@ -77,6 +77,8 @@ struct DataStore {
   std::vector<int> row_of_id;
   bool show_excluded = false;
   bool show_unchanged = false;
+  bool filter_directories = false;
+  std::vector<char> faded;
   // Folder aggregates and per-visible-row striping owned by native.
   std::vector<long long> dir_items;
   std::vector<long long> dir_size;
@@ -393,10 +395,11 @@ struct DataStore {
       const int action = i < static_cast<int>(actions.size()) ? actions[i] : NoChange;
       if (action == Create) continue;
       if (i < static_cast<int>(decisions.size()) && decisions[i] == Exclude) continue;
-      int parent = i < static_cast<int>(parents.size()) ? parents[i] : -1;
+      if (!matches(i)) continue;
+      int parent = parents[i];
       while (parent >= 0) {
         dest_items[parent] += 1;
-        parent = parent < static_cast<int>(parents.size()) ? parents[parent] : -1;
+        parent = parents[parent];
       }
     }
   }
@@ -435,16 +438,24 @@ struct DataStore {
   }
 
   void compute_aggregates() {
+    // Count only the rows that pass the current filters and are not excluded.
+    // Unchanged folders that merely keep a changed child reachable are not
+    // counted, and folded subtrees still keep their aggregate counts.
     dir_items.assign(paths.size(), 0);
     dir_size.assign(paths.size(), 0);
     for (int i = 0; i < static_cast<int>(paths.size()); ++i) {
       if (i < static_cast<int>(is_dir.size()) && is_dir[i]) continue;
-      long long size = i < static_cast<int>(sizes.size()) ? sizes[i] : 0;
-      int parent = i < static_cast<int>(parents.size()) ? parents[i] : -1;
+      if (i < static_cast<int>(decisions.size()) &&
+          decisions[i] == Exclude) {
+        continue;
+      }
+      if (!matches(i)) continue;
+      const long long size = i < static_cast<int>(sizes.size()) ? sizes[i] : 0;
+      int parent = parents[i];
       while (parent >= 0) {
         dir_items[parent] += 1;
         dir_size[parent] += size;
-        parent = parent < static_cast<int>(parents.size()) ? parents[parent] : -1;
+        parent = parents[parent];
       }
     }
   }
@@ -468,6 +479,13 @@ struct DataStore {
     return id >= 0 && id < static_cast<int>(collapsed.size()) && collapsed[id] != 0;
   }
 
+  bool action_allowed(int id) const {
+    if (action_mask == 0) return true;
+    if (id < 0 || id >= static_cast<int>(actions.size())) return true;
+    const int bit = actions[id];
+    return bit >= 0 && bit < 32 && (action_mask & (1 << bit)) != 0;
+  }
+
   bool matches(int id) const {
     // NoChange files are inventory-only and stay hidden until the user turns
     // on the Unchanged toggle. Directories remain as navigation rows.
@@ -483,8 +501,11 @@ struct DataStore {
              decisions[id] == Exclude;
     }
     if (action_mask != 0 && id < static_cast<int>(actions.size())) {
-      int bit = actions[id];
-      if (bit < 0 || bit >= 32 || (action_mask & (1 << bit)) == 0) return false;
+      const bool directory =
+          id >= 0 && id < static_cast<int>(is_dir.size()) && is_dir[id];
+      if (!(directory && !filter_directories) && !action_allowed(id)) {
+        return false;
+      }
     }
     if (dirs_only && (id >= static_cast<int>(is_dir.size()) || !is_dir[id])) {
       return false;
@@ -650,6 +671,8 @@ struct DataStore {
       for (int row = 0; row < static_cast<int>(visible.size()); ++row) {
         row_of_id[visible[row]] = row;
       }
+      compute_aggregates();
+      compute_destination_counts();
       compute_stripes();
       return;
     }
@@ -687,6 +710,19 @@ struct DataStore {
     for (int row = 0; row < static_cast<int>(visible.size()); ++row) {
       row_of_id[visible[row]] = row;
     }
+    faded.assign(paths.size(), 0);
+    if (filter_directories) {
+      for (int id : visible) {
+        if (id < 0 || id >= static_cast<int>(is_dir.size()) || !is_dir[id]) {
+          continue;
+        }
+        if (id >= static_cast<int>(actions.size()) || actions[id] == NoChange) {
+          continue;
+        }
+        if (!action_allowed(id)) faded[id] = 1;
+      }
+    }
+    compute_aggregates();
     compute_destination_counts();
     compute_stripes();
   }
@@ -1156,7 +1192,7 @@ class OverviewModel : public QAbstractItemModel {
     auto ensure_folder = [&](const std::string& path) {
       auto found = folders.find(path);
       if (found != folders.end()) return found->second;
-      OverviewNode* parent = root_;
+      OverviewNode* parent = total;
       std::string prefix;
       std::size_t begin = 0;
       while (begin < path.size()) {
@@ -1190,9 +1226,9 @@ class OverviewModel : public QAbstractItemModel {
       const std::size_t slash = path.rfind('/');
       const std::string folder_path = slash == std::string::npos
                                           ? "" : path.substr(0, slash);
-      OverviewNode* folder = folder_path.empty() ? root_ : ensure_folder(folder_path);
+      OverviewNode* folder = folder_path.empty() ? total : ensure_folder(folder_path);
       OverviewNode* target = folder;
-      if (!dir_row && !folder_path.empty()) {
+      if (!dir_row) {
         OverviewNode* files = nullptr;
         for (OverviewNode* child : folder->children) {
           if (child->name == "Files") { files = child; break; }
@@ -1217,16 +1253,6 @@ class OverviewModel : public QAbstractItemModel {
       for (OverviewNode* child : node->children) sort_children(child);
     };
     sort_children(root_);
-    auto total_it = std::find(root_->children.begin(), root_->children.end(), total);
-    if (total_it != root_->children.end()) {
-      root_->children.erase(total_it);
-      root_->children.insert(root_->children.begin(), total);
-    }
-    std::sort(root_->children.begin() + 1, root_->children.end(),
-              [](const OverviewNode* a, const OverviewNode* b) {
-                if (a->size != b->size) return a->size > b->size;
-                return a->name < b->name;
-              });
     compute_totals(root_);
     // The Total row carries the aggregate of the whole comparison.
     total->total_count = root_->total_count;
@@ -1239,38 +1265,38 @@ class OverviewModel : public QAbstractItemModel {
     const bool descending = order == Qt::DescendingOrder;
     if (root_ == nullptr || root_->children.empty()) return;
     layoutAboutToBeChanged();
-    // The first child is the synthetic Total row; keep it pinned.
-    OverviewNode* total = root_->children.front();
-    std::vector<OverviewNode*> rest(root_->children.begin() + 1,
-                                    root_->children.end());
-    std::stable_sort(rest.begin(), rest.end(),
-                     [column, descending](OverviewNode* a, OverviewNode* b) {
-                       int comparison = 0;
-                       switch (column) {
-                         case 0:
-                           comparison = QString::fromStdString(a->name)
-                                            .compare(QString::fromStdString(b->name),
-                                                    Qt::CaseInsensitive);
-                           break;
-                         case 2:
-                           comparison = (a->total_count > b->total_count) -
-                                        (a->total_count < b->total_count);
-                           break;
-                         case 3:
-                           comparison = (a->total_size > b->total_size) -
-                                        (a->total_size < b->total_size);
-                           break;
-                         default: break;
-                       }
-                       if (comparison == 0) {
-                         comparison = QString::fromStdString(a->name).compare(
-                             QString::fromStdString(b->name), Qt::CaseInsensitive);
-                       }
-                       return descending ? comparison > 0 : comparison < 0;
-                     });
-    root_->children.clear();
-    root_->children.push_back(total);
-    root_->children.insert(root_->children.end(), rest.begin(), rest.end());
+    std::function<void(OverviewNode*)> sort_children = [&](OverviewNode* node) {
+      std::stable_sort(node->children.begin(), node->children.end(),
+                       [column, descending](OverviewNode* a, OverviewNode* b) {
+                         int comparison = 0;
+                         switch (column) {
+                           case 0:
+                             comparison = QString::fromStdString(a->name)
+                                              .compare(QString::fromStdString(b->name),
+                                                      Qt::CaseInsensitive);
+                             break;
+                           case 1:
+                           case 3:
+                             comparison = (a->total_size > b->total_size) -
+                                          (a->total_size < b->total_size);
+                             break;
+                           case 2:
+                             comparison = (a->total_count > b->total_count) -
+                                          (a->total_count < b->total_count);
+                             break;
+                           default:
+                             break;
+                         }
+                         if (comparison == 0) {
+                           comparison = QString::fromStdString(a->name).compare(
+                               QString::fromStdString(b->name),
+                               Qt::CaseInsensitive);
+                         }
+                         return descending ? comparison > 0 : comparison < 0;
+                       });
+      for (OverviewNode* child : node->children) sort_children(child);
+    };
+    sort_children(root_);
     layoutChanged();
   }
 
@@ -1350,9 +1376,17 @@ class OverviewModel : public QAbstractItemModel {
     switch (index.column()) {
       case 0: return QString::fromStdString(item->name);
       case 1: {
-        int share = static_cast<int>(
-            item->total_count * 100.0 / static_cast<double>(grand_total_) + 0.5);
-        return QString::number(share) + "%";
+        long long siblings = 0;
+        if (item->parent != nullptr) {
+          for (OverviewNode* child : item->parent->children) {
+            siblings += child->total_size;
+          }
+        }
+        const double share = siblings > 0
+                                 ? static_cast<double>(item->total_size) /
+                                       static_cast<double>(siblings)
+                                 : 0.0;
+        return QString::number(static_cast<int>(share * 100.0 + 0.5)) + "%";
       }
       case 2: return QVariant(static_cast<qlonglong>(item->total_count));
       case 3: return qpy_format_size(item->total_size);

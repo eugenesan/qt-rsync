@@ -24,6 +24,7 @@ class ActionFilterBar : public QWidget {
   void setExcludedCount(int count);
   void toggleUnchanged();
   bool showUnchanged() const;
+  void setFilterDirectories(bool enabled);
   void setUndoEnabled(bool enabled);
 
  signals:
