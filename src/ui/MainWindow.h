@@ -45,6 +45,8 @@ class MainWindow : public QMainWindow {
   void onOperationFinished(int exitCode, QProcess::ExitStatus status);
   void onOperationError(QProcess::ProcessError error);
   void refreshPlan(bool quick = false);
+  void setSyncEnabled(bool enabled);
+  void setVerifyEnabled(bool enabled);
   void queueSetting(const QString& key, const QVariant& value);
   void flushSettings();
   void refreshDiagnosticsSettings();

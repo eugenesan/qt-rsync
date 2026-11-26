@@ -93,7 +93,8 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
   `liveRecordCheckMatchesParser` guards the cheap counter used while streaming.
 - New feature: `shortenFilterPrefixes` covers filter prefix rewriting and
   the two `useAsLocation...` tests cover the dialog choice and the stale
-  profile state.
+  profile state; `syncIsDisabledOnStartup` covers the initial button/action
+  state.
 - Performance instrumentation: Settings > Advanced > timing/debug writes
   per-phase milliseconds to the session log; no code runs when it is off.
 - Compare performance: `metadataListingStartsBeforeViewBuild` checks that the

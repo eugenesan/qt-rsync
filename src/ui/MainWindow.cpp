@@ -196,6 +196,7 @@ class MainWindow::Private {
   QAction* undoAction = nullptr;
   QAction* redoAction = nullptr;
   QAction* verifyAction = nullptr;
+  QAction* syncAction = nullptr;
   QComboBox* mode = nullptr;
   QLineEdit* search = nullptr;
   QLabel* searchStatus = nullptr;
@@ -227,6 +228,8 @@ class MainWindow::Private {
   QHash<QString, QPair<qlonglong, QString>> destinationListingCache;
   QTemporaryFile* filterFile = nullptr;
   core::SyncProfile profile;
+  core::SyncProfile baselineProfile;
+  bool hasBaseline = false;
   QVector<core::Change> changes;
   core::ExecutionPlan plan;
   bool verified = false;
@@ -310,8 +313,8 @@ MainWindow::MainWindow(QWidget* parent)
             if (!d_->changes.isEmpty()) {
               d_->stale = true;
               d_->verified = false;
-              d_->sync->setEnabled(false);
-              d_->verify->setEnabled(false);
+              setSyncEnabled(false);
+              setVerifyEnabled(false);
               updateStateIcons();
               setStatus(QStringLiteral(
                   "Stale comparison: synchronization mode changed. Compare "
@@ -397,6 +400,8 @@ MainWindow::MainWindow(QWidget* parent)
           "decision rules and counts before writing. Verification is an "
           "optional diagnostic and is not required to synchronize.\n\n"
           "Shortcut: F9"));
+  d_->verify->setEnabled(false);
+  d_->sync->setEnabled(false);
   addTool(d_->cancel, QStringLiteral("Cancel"), QStringLiteral("cancel"),
           QStringLiteral(
               "Cancel the running operation\n\nShortcut: F10"));
@@ -758,9 +763,12 @@ MainWindow::MainWindow(QWidget* parent)
   connect(filtersAction, &QAction::triggered, d_->filtersButton,
           &QAbstractButton::click);
   d_->verifyAction = actionsMenu->addAction(QStringLiteral("Verify Decisions"));
+  d_->verifyAction->setEnabled(false);
   d_->verifyAction->setShortcut(QKeySequence(Qt::Key_F8));
   connect(d_->verifyAction, &QAction::triggered, this, &MainWindow::verifyPlan);
   auto* syncAction = actionsMenu->addAction(QStringLiteral("Synchronize"));
+  syncAction->setEnabled(false);
+  d_->syncAction = syncAction;
   syncAction->setShortcut(QKeySequence(Qt::Key_F9));
   connect(syncAction, &QAction::triggered, this, &MainWindow::synchronize);
   auto* cancelAction = actionsMenu->addAction(QStringLiteral("Cancel"));
@@ -1555,8 +1563,8 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
           .arg(planClock.elapsed() / 1000.0, 0, 'f', 2));
   // The comparison is not complete until the destination metadata listing
   // finishes. Keep Compare disabled and Sync/Verify unavailable meanwhile.
-  d_->sync->setEnabled(false);
-  d_->verify->setEnabled(false);
+  setSyncEnabled(false);
+  setVerifyEnabled(false);
   d_->lastCompareSeconds = compareSeconds;
   d_->pendingCompareChanges = parsed.changes.size();
   const auto& summary = d_->plan.summary;
@@ -1731,8 +1739,8 @@ void MainWindow::finishComparison() {
     // rebuilding it here only repeated the same work a second time. Restore
     // the controls from the existing summary instead.
     const bool actionable = d_->plan.summary.included > 0;
-    d_->verify->setEnabled(actionable);
-    d_->sync->setEnabled(actionable);
+    setVerifyEnabled(actionable);
+    setSyncEnabled(actionable);
     d_->compare->setEnabled(true);
     d_->cancel->setEnabled(false);
     d_->progress->hide();
@@ -1748,6 +1756,18 @@ void MainWindow::finishComparison() {
     playCompletionSound(QStringLiteral("success"));
   }
   d_->progress->hide();
+}
+
+void MainWindow::setSyncEnabled(bool enabled) {
+  d_->sync->setEnabled(enabled);
+  if (d_->syncAction != nullptr) d_->syncAction->setEnabled(enabled);
+}
+
+void MainWindow::setVerifyEnabled(bool enabled) {
+  d_->verify->setEnabled(enabled);
+  if (d_->verifyAction != nullptr) {
+    d_->verifyAction->setEnabled(enabled && d_->verifyAction->isVisible());
+  }
 }
 
 void MainWindow::refreshPlan(bool quick) {
@@ -1767,8 +1787,8 @@ void MainWindow::refreshPlan(bool quick) {
   d_->comparison->store().modified_decisions = d_->plan.summary.modified;
   d_->comparison->refreshDecisionHeader();
   const bool actionable = d_->plan.summary.included > 0;
-  d_->verify->setEnabled(actionable);
-  d_->sync->setEnabled(actionable);
+  setVerifyEnabled(actionable);
+  setSyncEnabled(actionable);
 }
 
 void MainWindow::verifyPlan() {
@@ -1857,8 +1877,8 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
     d_->stale = true;
     d_->verified = false;
     updateStateIcons();
-    d_->sync->setEnabled(false);
-    d_->verify->setEnabled(false);
+    setSyncEnabled(false);
+    setVerifyEnabled(false);
     d_->stateLabel->setText(
         QStringLiteral("State: Stale after synchronization"));
     d_->stateLabel->setStyleSheet(QStringLiteral("color: #EA580C;"));
@@ -1943,8 +1963,8 @@ void MainWindow::addFilterPattern(const QString& pattern, const QString& path) {
     // plan be synchronized with a filter the user has not compared yet.
     d_->stale = true;
     d_->verified = false;
-    d_->sync->setEnabled(false);
-    d_->verify->setEnabled(false);
+    setSyncEnabled(false);
+    setVerifyEnabled(false);
     updateStateIcons();
     setStatus(QStringLiteral(
         "Stale comparison: added the filter %1. Compare again to refresh "
@@ -1980,8 +2000,8 @@ void MainWindow::useAsLocation(const QString& path) {
 
   d_->stale = true;
   d_->verified = false;
-  d_->sync->setEnabled(false);
-  d_->verify->setEnabled(false);
+  setSyncEnabled(false);
+  setVerifyEnabled(false);
   updateStateIcons();
   appendJournalLine(QStringLiteral("STATE stale (locations changed to %1)")
                         .arg(relative));
@@ -2046,6 +2066,8 @@ void MainWindow::promoteTempProfile(const QString& newName) {
   d_->profileLock.reset();
   d_->tempProfile = false;
   openSessionLog(newName);
+  d_->baselineProfile = d_->profile;
+  d_->hasBaseline = true;
 }
 
 void MainWindow::discardTempProfile() {
@@ -2076,6 +2098,8 @@ void MainWindow::loadProfileFile(const QString& path) {
   d_->source->setText(d_->profile.source.rsyncOperand());
   d_->destination->setText(d_->profile.destination.rsyncOperand());
   setProfilePath(path);
+  d_->baselineProfile = d_->profile;
+  d_->hasBaseline = true;
   setStatus(QStringLiteral("Profile loaded: %1").arg(QFileInfo(path).fileName()));
 }
 
@@ -2197,6 +2221,7 @@ void MainWindow::loadProfile() {
 }
 
 void MainWindow::resetProfile() {
+  d_->hasBaseline = false;
   discardTempProfile();
   closeSessionLog();
   d_->profileLock.reset();
@@ -2339,6 +2364,43 @@ void MainWindow::flushSettings() {
 void MainWindow::closeEvent(QCloseEvent* event) {
   flushSettings();
   saveWindowState();
+  if (!d_->tempProfile && d_->hasBaseline &&
+      qgetenv("QT_QPA_PLATFORM") != "offscreen" &&
+      core::storage::profileToJson(d_->profile) !=
+          core::storage::profileToJson(d_->baselineProfile)) {
+    QStringList changed;
+    if (d_->profile.source.rsyncOperand() != d_->baselineProfile.source.rsyncOperand() ||
+        d_->profile.destination.rsyncOperand() !=
+            d_->baselineProfile.destination.rsyncOperand()) {
+      changed << QStringLiteral("Source/Destination");
+    }
+    if (d_->profile.filterText != d_->baselineProfile.filterText) {
+      changed << QStringLiteral("Filters");
+    }
+    if (d_->profile.transfer.mode != d_->baselineProfile.transfer.mode) {
+      changed << QStringLiteral("Transfer mode");
+    }
+    if (d_->profile.backup.directory != d_->baselineProfile.backup.directory) {
+      changed << QStringLiteral("Backup");
+    }
+    const QString reason = changed.isEmpty()
+                               ? QStringLiteral("Profile settings changed.")
+                               : QStringLiteral("Changed: %1")
+                                     .arg(changed.join(QStringLiteral(", ")));
+    const QString question =
+        d_->profilePath.isEmpty()
+            ? reason + QStringLiteral("\n\nNo profile file is associated "
+                                      "with these settings. Save them as a "
+                                      "new profile?")
+            : reason + QStringLiteral("\n\nSave the changes to %1?")
+                           .arg(QFileInfo(d_->profilePath).fileName());
+    if (QMessageBox::question(
+            this, QStringLiteral("Save profile"), question,
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) ==
+        QMessageBox::Yes) {
+      saveCurrentProfile();
+    }
+  }
   QMainWindow::closeEvent(event);
 }
 
@@ -2387,7 +2449,7 @@ void MainWindow::updateVerificationVisibility() {
   if (d_->verify != nullptr) d_->verify->setVisible(enabled);
   if (d_->verifyAction != nullptr) {
     d_->verifyAction->setVisible(enabled);
-    d_->verifyAction->setEnabled(enabled);
+    d_->verifyAction->setEnabled(enabled && d_->verify->isEnabled());
   }
 }
 

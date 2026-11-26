@@ -126,6 +126,10 @@ and refreshed documentation and packaging.
 - Fixed the drawing artefact where the Decisions column kept a framed,
   striped area below the last row after the journal was repainted: the table
   views now use NoFrame and the custom full-height border painting is gone.
+- Sync and Verify start disabled until a comparison makes them actionable;
+  both the toolbar buttons and the menu actions follow the plan state.
+- On exit, a profile that differs from the one loaded (for example after
+  "Use as Source/Destination...") prompts to save, naming the changed fields.
 - New "Use as Source/Destination..." context action on directory rows. It
   dives into the folder on both sides (Use as Both / Cancel), optionally
   shortens the permanent filter rules by the eliminated directory prefix, and

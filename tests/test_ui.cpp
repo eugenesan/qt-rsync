@@ -107,6 +107,7 @@ class UiTest : public QObject {
   void decisionsTooltipIsInformative();
   void useAsLocationDialogChoices();
   void useAsLocationMakesComparisonStale();
+  void syncIsDisabledOnStartup();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -2016,6 +2017,24 @@ void UiTest::useAsLocationMakesComparisonStale() {
   QCOMPARE(edits.at(1)->text(), QStringLiteral("/dst/docs/"));
   auto* status = window.findChild<QLineEdit*>("status-label");
   QVERIFY(status->text().startsWith(QStringLiteral("Stale comparison")));
+}
+
+void UiTest::syncIsDisabledOnStartup() {
+  ui::MainWindow window;
+  window.show();
+  QTest::qWait(10);
+  QAbstractButton* syncButton = nullptr;
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
+    if (button->text() == QStringLiteral("Synchronize")) syncButton = button;
+  }
+  QVERIFY(syncButton != nullptr);
+  QVERIFY(!syncButton->isEnabled());
+  QAction* syncAction = nullptr;
+  for (QAction* action : window.findChildren<QAction*>()) {
+    if (action->text() == QStringLiteral("Synchronize")) syncAction = action;
+  }
+  QVERIFY(syncAction != nullptr);
+  QVERIFY(!syncAction->isEnabled());
 }
 
 QTEST_MAIN(UiTest)
