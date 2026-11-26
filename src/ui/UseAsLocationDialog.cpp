@@ -53,27 +53,12 @@ UseAsLocationDialog::UseAsLocationDialog(const QString& relativePath,
   layout->addWidget(note);
 
   auto* buttons = new QDialogButtonBox(this);
-  auto* source = buttons->addButton(QStringLiteral("Use as Source"),
-                                    QDialogButtonBox::AcceptRole);
-  auto* destination = buttons->addButton(QStringLiteral("Use as Destination"),
-                                         QDialogButtonBox::AcceptRole);
   auto* both = buttons->addButton(QStringLiteral("Use as Both"),
                                   QDialogButtonBox::AcceptRole);
   buttons->addButton(QDialogButtonBox::Cancel);
   layout->addWidget(buttons);
 
-  connect(source, &QPushButton::clicked, this, [this]() {
-    target_ = Target::Source;
-    accept();
-  });
-  connect(destination, &QPushButton::clicked, this, [this]() {
-    target_ = Target::Destination;
-    accept();
-  });
-  connect(both, &QPushButton::clicked, this, [this]() {
-    target_ = Target::Both;
-    accept();
-  });
+  connect(both, &QPushButton::clicked, this, &QDialog::accept);
   connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 }
 

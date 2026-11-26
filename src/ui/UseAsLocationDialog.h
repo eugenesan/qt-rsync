@@ -11,18 +11,14 @@ namespace qt_rsync::ui {
 class UseAsLocationDialog : public QDialog {
   Q_OBJECT
  public:
-  enum class Target { Source, Destination, Both };
-
   explicit UseAsLocationDialog(const QString& relativePath,
                                const QString& sourceRoot,
                                const QString& destinationRoot,
                                QWidget* parent = nullptr);
 
-  [[nodiscard]] Target target() const { return target_; }
   [[nodiscard]] bool updateFilters() const;
 
  private:
-  Target target_ = Target::Source;
   QCheckBox* updateFilters_ = nullptr;
 };
 

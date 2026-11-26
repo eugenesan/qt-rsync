@@ -1978,18 +1978,13 @@ void UiTest::useAsLocationDialogChoices() {
   ui::UseAsLocationDialog dialog(QStringLiteral("docs"),
                                  QStringLiteral("/src/"),
                                  QStringLiteral("/dst/"));
-  auto buttonByText = [&dialog](const QString& text) {
-    for (QPushButton* button : dialog.findChildren<QPushButton*>()) {
-      if (button->text() == text) return button;
-    }
-    return static_cast<QPushButton*>(nullptr);
-  };
-  auto* both = buttonByText(QStringLiteral("Use as Both"));
-  auto* source = buttonByText(QStringLiteral("Use as Source"));
-  QVERIFY(both != nullptr);
-  QVERIFY(source != nullptr);
-  source->click();
-  QCOMPARE(dialog.target(), ui::UseAsLocationDialog::Target::Source);
+  auto buttons = dialog.findChildren<QPushButton*>();
+  QStringList labels;
+  for (QPushButton* button : buttons) labels.append(button->text());
+  QVERIFY(labels.contains(QStringLiteral("Use as Both")));
+  QVERIFY(!labels.contains(QStringLiteral("Use as Source")));
+  QVERIFY(!labels.contains(QStringLiteral("Use as Destination")));
+  QVERIFY(labels.contains(QStringLiteral("Cancel")));
   QVERIFY(dialog.updateFilters());
 }
 

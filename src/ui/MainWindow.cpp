@@ -1963,26 +1963,15 @@ void MainWindow::useAsLocation(const QString& path) {
   UseAsLocationDialog dialog(relative, d_->source->text(),
                              d_->destination->text(), this);
   if (dialog.exec() != QDialog::Accepted) return;
-  const bool asSource =
-      dialog.target() == UseAsLocationDialog::Target::Source ||
-      dialog.target() == UseAsLocationDialog::Target::Both;
-  const bool asDestination =
-      dialog.target() == UseAsLocationDialog::Target::Destination ||
-      dialog.target() == UseAsLocationDialog::Target::Both;
-
   const auto joined = [&relative](const QString& text) {
     QString base = text.trimmed();
     while (base.endsWith('/')) base.chop(1);
     return withTrailingSlash(base + QLatin1Char('/') + relative);
   };
-  if (asSource) {
-    d_->source->setText(joined(d_->source->text()));
-    d_->profile.source = core::parseEndpoint(d_->source->text());
-  }
-  if (asDestination) {
-    d_->destination->setText(joined(d_->destination->text()));
-    d_->profile.destination = core::parseEndpoint(d_->destination->text());
-  }
+  d_->source->setText(joined(d_->source->text()));
+  d_->profile.source = core::parseEndpoint(d_->source->text());
+  d_->destination->setText(joined(d_->destination->text()));
+  d_->profile.destination = core::parseEndpoint(d_->destination->text());
   if (dialog.updateFilters()) {
     d_->profile.filterText =
         core::shortenFilterText(d_->profile.filterText, relative);
