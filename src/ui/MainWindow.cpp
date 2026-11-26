@@ -2361,6 +2361,28 @@ void MainWindow::flushSettings() {
   d_->pendingSettings.clear();
 }
 
+MainWindow::SaveChoice MainWindow::askSaveProfile(QWidget* parent,
+                                                  const QString& question,
+                                                  bool hasProfilePath) {
+  QMessageBox prompt(parent);
+  prompt.setIcon(QMessageBox::Question);
+  prompt.setWindowTitle(QStringLiteral("Save profile"));
+  prompt.setText(question);
+  auto* save = prompt.addButton(QStringLiteral("Save"),
+                                QMessageBox::AcceptRole);
+  auto* saveAs = prompt.addButton(QStringLiteral("Save As..."),
+                                  QMessageBox::ActionRole);
+  auto* discard = prompt.addButton(QStringLiteral("Don't Save"),
+                                   QMessageBox::DestructiveRole);
+  if (!hasProfilePath) save->setEnabled(false);
+  prompt.setDefaultButton(hasProfilePath ? save : saveAs);
+  prompt.exec();
+  if (prompt.clickedButton() == save) return SaveChoice::Save;
+  if (prompt.clickedButton() == saveAs) return SaveChoice::SaveAs;
+  Q_UNUSED(discard)
+  return SaveChoice::Discard;
+}
+
 void MainWindow::closeEvent(QCloseEvent* event) {
   flushSettings();
   saveWindowState();
@@ -2394,11 +2416,15 @@ void MainWindow::closeEvent(QCloseEvent* event) {
                                       "new profile?")
             : reason + QStringLiteral("\n\nSave the changes to %1?")
                            .arg(QFileInfo(d_->profilePath).fileName());
-    if (QMessageBox::question(
-            this, QStringLiteral("Save profile"), question,
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) ==
-        QMessageBox::Yes) {
-      saveCurrentProfile();
+    switch (askSaveProfile(this, question, !d_->profilePath.isEmpty())) {
+      case SaveChoice::Save:
+        saveCurrentProfile();
+        break;
+      case SaveChoice::SaveAs:
+        saveProfileAs();
+        break;
+      case SaveChoice::Discard:
+        break;
     }
   }
   QMainWindow::closeEvent(event);

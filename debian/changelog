@@ -23,8 +23,9 @@ qt-rsync (0.2.0-0) resolute; urgency=medium
     passes, journal commands are neutral, tooltips are informative, sizes
     scale to MiB/GiB, decisions and the overview update incrementally, log
     paths and inverted clicks are fixed, directories can become Source or
-    Destination, sync starts disabled, modified profiles prompt to be saved,
-    and timings report real wall-clock values; example profile installed under
+    Destination, sync starts disabled, modified profiles prompt to be saved
+    (Save / Save As... / Don't Save), and timings report real wall-clock values;
+    example profile installed under
     /usr/share/doc/qt-rsync/examples.
 
  -- Eugene San (eugenesan) <eugenesan@gmail.com>  Tue, 24 Nov 2026 18:40:00 -0700

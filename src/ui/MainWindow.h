@@ -23,6 +23,10 @@ namespace qt_rsync::ui {
 class MainWindow : public QMainWindow {
   Q_OBJECT
  public:
+  enum class SaveChoice { Save, SaveAs, Discard };
+  static SaveChoice askSaveProfile(QWidget* parent, const QString& question,
+                                   bool hasProfilePath);
+
   explicit MainWindow(QWidget* parent = nullptr);
   ~MainWindow() override;
 

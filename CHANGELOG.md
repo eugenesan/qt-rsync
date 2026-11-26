@@ -130,6 +130,8 @@ and refreshed documentation and packaging.
   both the toolbar buttons and the menu actions follow the plan state.
 - On exit, a profile that differs from the one loaded (for example after
   "Use as Source/Destination...") prompts to save, naming the changed fields.
+  The prompt offers Save, Save As... and Don't Save, so a modified profile can
+  be stored under a new name.
 - New "Use as Source/Destination..." context action on directory rows. It
   dives into the folder on both sides (Use as Both / Cancel), optionally
   shortens the permanent filter rules by the eliminated directory prefix, and

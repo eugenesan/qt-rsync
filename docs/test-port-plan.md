@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 485 pytest cases. qt-rsync has 108 QtTest cases
-(49 core, 59 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 485 pytest cases. qt-rsync has 109 QtTest cases
+(49 core, 60 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -107,7 +107,8 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 - External tools: `externalToolPlaceholders` covers the qpy placeholder cases
   and the diff command now uses the configured placeholder-aware command.
 - Test-port batches 1-5, 7 and 8 above are complete; see "Batches completed in
-  this pass" for the case names.
+  this pass" for the case names. `exitSavePromptOffersSaveAs` covers the three
+  exit choices.
 
 ## Batches completed in this pass
 

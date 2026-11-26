@@ -32,6 +32,7 @@
 #include <QTableView>
 #include <QTableWidget>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMenuBar>
 #include <QToolButton>
 #include <QTreeView>
@@ -119,6 +120,7 @@ class UiTest : public QObject {
   void staleRootTooltipAndContextMenuActions();
   void dialogRoundTripsCoverPortedFields();
   void goldenScreenshotsAreValidImages();
+  void exitSavePromptOffersSaveAs();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -2332,6 +2334,30 @@ void UiTest::goldenScreenshotsAreValidImages() {
     QVERIFY2(!pixmap.isNull(), qPrintable(path));
     QVERIFY(pixmap.width() > 100 && pixmap.height() > 100);
   }
+}
+
+void UiTest::exitSavePromptOffersSaveAs() {
+  QWidget parent;
+  QStringList labels;
+  QTimer::singleShot(0, [&labels]() {
+    for (QWidget* widget : QApplication::topLevelWidgets()) {
+      auto* box = qobject_cast<QMessageBox*>(widget);
+      if (box == nullptr || !box->isVisible()) continue;
+      for (QAbstractButton* button : box->buttons()) labels.append(button->text());
+      for (QAbstractButton* button : box->buttons()) {
+        if (button->text() == QStringLiteral("Save As...")) {
+          button->click();
+          return;
+        }
+      }
+    }
+  });
+  const auto choice =
+      ui::MainWindow::askSaveProfile(&parent, QStringLiteral("Changed: Filters"), true);
+  QCOMPARE(choice, ui::MainWindow::SaveChoice::SaveAs);
+  QVERIFY(labels.contains(QStringLiteral("Save")));
+  QVERIFY(labels.contains(QStringLiteral("Save As...")));
+  QVERIFY(labels.contains(QStringLiteral("Don't Save")));
 }
 
 QTEST_MAIN(UiTest)
