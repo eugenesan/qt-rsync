@@ -18,6 +18,7 @@ class OverviewPane : public QWidget {
 
   void rebuild(const model::DataStore& store);
   void refreshStats(const model::DataStore& store);
+  void rebuildForDecision(const model::DataStore& store);
   void setActionColours(const QVector<QString>& colours);
 
  signals:
@@ -29,6 +30,7 @@ class OverviewPane : public QWidget {
  private:
   void showFolderMenu(const QString& path, const QPoint& globalPosition);
   void updateStats(const model::DataStore& store);
+  void rebuild(const model::DataStore& store, bool reuseExpanded);
 
   QTreeView* tree_;
   model::OverviewModel* model_;

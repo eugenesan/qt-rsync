@@ -42,6 +42,13 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
     box->setFocusPolicy(Qt::TabFocus);
     layout->addWidget(box);
     connect(box, &QCheckBox::toggled, this, &ActionFilterBar::filterChanged);
+    // The event filter normally consumes Ctrl+press/Ctrl+release. This is a
+    // fallback for platforms where the modifier is only visible on click().
+    connect(box, &QCheckBox::clicked, this, [this, box](bool) {
+      if (QGuiApplication::keyboardModifiers() & Qt::ControlModifier) {
+        applyInverse(box);
+      }
+    });
     if (shortcutNumber > 0) {
       auto* alt = new QShortcut(
           QKeySequence(Qt::ALT | (Qt::Key_0 + shortcutNumber)), this);

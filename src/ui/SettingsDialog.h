@@ -13,7 +13,8 @@ namespace qt_rsync::ui {
 class SettingsDialog : public QDialog {
   Q_OBJECT
  public:
-  explicit SettingsDialog(QWidget* parent = nullptr);
+  explicit SettingsDialog(QWidget* parent = nullptr,
+                          const QString& defaultLogPath = QString());
 
  private slots:
   void save();

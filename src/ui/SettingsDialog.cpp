@@ -127,7 +127,8 @@ class ExternalToolDialog : public QDialog {
 
 }  // namespace
 
-SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
+SettingsDialog::SettingsDialog(QWidget* parent, const QString& defaultLogPath)
+    : QDialog(parent) {
   setWindowTitle(QStringLiteral("Settings"));
   resize(720, 600);
   core::storage::Settings settings;
@@ -218,7 +219,9 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent) {
   logFile_ = new QLineEdit(logging);
   logFile_->setText(
       settings.value(QStringLiteral("logging/file"),
-                     core::paths::appLogPath(QStringLiteral("default")))
+                     defaultLogPath.isEmpty()
+                         ? core::paths::appLogPath(QStringLiteral("default"))
+                         : defaultLogPath)
           .toString());
   loggingForm->addRow(QStringLiteral("Log file"), logFile_);
   logBrowse_ = new QPushButton(QStringLiteral("Browse..."), logging);

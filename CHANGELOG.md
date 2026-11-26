@@ -111,7 +111,11 @@ and refreshed documentation and packaging.
   ~500 ms to ~16 ms and a filter toggle from ~650 ms to ~30 ms.
 - Ctrl+click on Show excluded now reliably selects "only excluded" from any
   other filter state, and the session log path no longer duplicates the
-  application name under XDG_CACHE_HOME.
+  application name under XDG_CACHE_HOME. A legacy "default" log path stored
+  in settings is ignored so the log follows the loaded profile again.
+- The overview updates on every decision again (not just its totals). Its
+  folder nodes are built from stable path ids and the expanded-path scan is
+  skipped for decisions, so a full overview update is ~15-35 ms at 640k rows.
 - External tools support qpy's placeholder expansion; the diff command uses
   the configured command with `%a`/`%A` and quoted paths stay one argument.
 

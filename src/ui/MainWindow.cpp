@@ -492,7 +492,9 @@ MainWindow::MainWindow(QWidget* parent)
                 setStatus(QStringLiteral("Log files cleared."));
               } else if (selected == configure) {
                 if (logging) {
-                  SettingsDialog dialog(this);
+                  SettingsDialog dialog(
+                      this, core::paths::appLogPath(
+                                QFileInfo(d_->profilePath).completeBaseName()));
                   if (dialog.exec() == QDialog::Accepted) {
                     core::storage::Settings settings;
                     d_->soundEnabled =
@@ -530,7 +532,9 @@ MainWindow::MainWindow(QWidget* parent)
   addTool(d_->settingsButton, QStringLiteral("Settings"),
           QStringLiteral("settings"), QStringLiteral("Settings"));
   connect(d_->settingsButton, &QAbstractButton::clicked, this, [this]() {
-    SettingsDialog dialog(this);
+    SettingsDialog dialog(
+          this, core::paths::appLogPath(
+                    QFileInfo(d_->profilePath).completeBaseName()));
     if (dialog.exec() == QDialog::Accepted) {
       core::storage::Settings settings;
       d_->soundEnabled =
@@ -1231,8 +1235,8 @@ MainWindow::MainWindow(QWidget* parent)
     // refreshes the totals; the folder tree is rebuilt on the next full
     // refresh. That keeps exclude/undo interactive on large comparisons.
     {
-      core::ScopedPerf perf("ui.decision.overviewStats");
-      d_->overview->refreshStats(d_->comparison->store());
+      core::ScopedPerf perf("ui.decision.overviewUpdate");
+      d_->overview->rebuildForDecision(d_->comparison->store());
     }
   });
   connect(d_->comparison, &ComparisonView::filterRequested, this,
@@ -1965,8 +1969,13 @@ void MainWindow::openSessionLog(const QString& name) {
   core::storage::Settings settings;
   const QString configured =
       settings.value(QStringLiteral("logging/file")).toString().trimmed();
-  d_->logPath =
-      configured.isEmpty() ? core::paths::appLogPath(name) : configured;
+  // Older settings stored the Settings dialog's "default" placeholder as a
+  // real path; that made every profile write to app-default.log. Ignore it
+  // so the log follows the loaded profile again.
+  d_->logPath = configured.isEmpty() ||
+                        configured == core::paths::appLogPath(QStringLiteral("default"))
+                    ? core::paths::appLogPath(name)
+                    : configured;
   refreshDiagnosticsSettings();
   if (!settings.value(QStringLiteral("logging/enabled"), true).toBool()) {
     return;

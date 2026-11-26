@@ -208,9 +208,19 @@ void OverviewPane::showFolderMenu(const QString& path,
 }
 
 void OverviewPane::rebuild(const model::DataStore& store) {
+  rebuild(store, false);
+}
+
+void OverviewPane::rebuildForDecision(const model::DataStore& store) {
+  // A decision does not change the folder hierarchy, so the expanded-path
+  // scan can be skipped; only counts and totals need to be recomputed.
+  rebuild(store, true);
+}
+
+void OverviewPane::rebuild(const model::DataStore& store, bool reuseExpanded) {
   core::ScopedPerf perf("ui.overviewRebuild");
   // Remember which folders were open; a reset of the model collapses them.
-  if (!firstBuild_) {
+  if (!firstBuild_ && !reuseExpanded) {
     expandedPaths_.clear();
     std::function<void(const QModelIndex&)> walk = [&](const QModelIndex& parent) {
       for (int row = 0; row < model_->rowCount(parent); ++row) {
