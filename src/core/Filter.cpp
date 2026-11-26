@@ -167,6 +167,43 @@ QString exportFilterFile(const QVector<FilterRule>& rules) {
   return filterFileLines(rules).join('\n');
 }
 
+QString shortenFilterRule(const QString& rule, const QString& prefix) {
+  QString clean = prefix.trimmed();
+  while (clean.startsWith('/')) clean.remove(0, 1);
+  while (clean.endsWith('/')) clean.chop(1);
+  if (clean.isEmpty()) return rule;
+
+  const QString line = rule.trimmed();
+  if (line.isEmpty() || line.startsWith('#')) return rule;
+  const auto parsed = parseAdvancedRule(line);
+  const QString token = parsed.has_value() ? parsed->token : QString();
+  QString pattern = parsed.has_value() ? parsed->pattern : line;
+  if (pattern.isEmpty()) return rule;
+
+  const bool rooted = pattern.startsWith('/');
+  QString value = pattern;
+  while (value.startsWith('/')) value.remove(0, 1);
+  if (value != clean && !value.startsWith(clean + QLatin1Char('/'))) return rule;
+  value = value.mid(clean.size());
+  while (value.startsWith('/')) value.remove(0, 1);
+  if (value.isEmpty()) {
+    // A pattern naming exactly the eliminated folder becomes a match for the
+    // new root itself.
+    return token.isEmpty() ? QString() : token + QStringLiteral(" /");
+  }
+  const QString result = (rooted ? QStringLiteral("/") : QString()) + value;
+  return token.isEmpty() ? result : token + QLatin1Char(' ') + result;
+}
+
+QString shortenFilterText(const QString& text, const QString& prefix) {
+  QStringList out;
+  for (const QString& line : text.split('\n')) {
+    const QString shortened = shortenFilterRule(line, prefix);
+    if (!shortened.isEmpty()) out.append(shortened);
+  }
+  return out.join('\n');
+}
+
 QString extensionOf(const QString& path) {
   const QString name = path.trimmed().section('/', -1);
   const int dot = name.lastIndexOf('.');

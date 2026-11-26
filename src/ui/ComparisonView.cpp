@@ -889,6 +889,13 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
         it->second < static_cast<int>(store_.is_dir.size()) &&
         store_.is_dir[it->second] != 0;
 
+    if (isDirectory && path != QString::fromStdString(model::DataStore::root_path())) {
+      menu.addAction(QStringLiteral("Use as Source/Destination..."), [this, path]() {
+        emit useAsLocationRequested(path);
+      });
+      menu.addSeparator();
+    }
+
     auto* excludeMenu = menu.addMenu(QStringLiteral("Exclude via Filter"));
     for (const core::FilterPhrase& phrase : core::phrasesFor(path, isDirectory)) {
       excludeMenu->addAction(phrase.label, [this, phrase, path]() {

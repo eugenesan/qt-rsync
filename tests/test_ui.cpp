@@ -45,6 +45,7 @@
 #include "ui/NativeDelegate.h"
 #include "ui/OverviewPane.h"
 #include "ui/SettingsDialog.h"
+#include "ui/UseAsLocationDialog.h"
 #include "core/Parser.h"
 #include "core/Storage.h"
 #include "core/Paths.h"
@@ -104,6 +105,8 @@ class UiTest : public QObject {
   void metadataListingStartsBeforeViewBuild();
   void journalCommandLinesAreNeutral();
   void decisionsTooltipIsInformative();
+  void useAsLocationDialogChoices();
+  void useAsLocationMakesComparisonStale();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1969,6 +1972,55 @@ void UiTest::decisionsTooltipIsInformative() {
   QVERIFY(decisions.headerData(4, Qt::Horizontal, Qt::ToolTipRole)
               .toString()
               .contains(QStringLiteral("1 modified")));
+}
+
+void UiTest::useAsLocationDialogChoices() {
+  ui::UseAsLocationDialog dialog(QStringLiteral("docs"),
+                                 QStringLiteral("/src/"),
+                                 QStringLiteral("/dst/"));
+  auto buttonByText = [&dialog](const QString& text) {
+    for (QPushButton* button : dialog.findChildren<QPushButton*>()) {
+      if (button->text() == text) return button;
+    }
+    return static_cast<QPushButton*>(nullptr);
+  };
+  auto* both = buttonByText(QStringLiteral("Use as Both"));
+  auto* source = buttonByText(QStringLiteral("Use as Source"));
+  QVERIFY(both != nullptr);
+  QVERIFY(source != nullptr);
+  source->click();
+  QCOMPARE(dialog.target(), ui::UseAsLocationDialog::Target::Source);
+  QVERIFY(dialog.updateFilters());
+}
+
+void UiTest::useAsLocationMakesComparisonStale() {
+  ui::MainWindow window;
+  app::StartupOptions options;
+  window.applyStartupOptions(options);
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
+  edits.at(0)->setText(QStringLiteral("/src/"));
+  edits.at(1)->setText(QStringLiteral("/dst/"));
+
+  QTimer::singleShot(0, [&window]() {
+    auto* dialog = window.findChild<ui::UseAsLocationDialog*>();
+    if (dialog == nullptr) return;
+    QPushButton* both = nullptr;
+    for (QPushButton* button : dialog->findChildren<QPushButton*>()) {
+      if (button->text() == QStringLiteral("Use as Both")) both = button;
+    }
+    if (both == nullptr) return;
+    auto* filters = dialog->findChild<QCheckBox*>();
+    if (filters != nullptr) filters->setChecked(true);
+    both->click();
+  });
+  const bool invoked = QMetaObject::invokeMethod(
+      &window, "useAsLocation", Q_ARG(QString, QStringLiteral("docs")));
+  QVERIFY(invoked);
+  QCOMPARE(edits.at(0)->text(), QStringLiteral("/src/docs/"));
+  QCOMPARE(edits.at(1)->text(), QStringLiteral("/dst/docs/"));
+  auto* status = window.findChild<QLineEdit*>("status-label");
+  QVERIFY(status->text().startsWith(QStringLiteral("Stale comparison")));
 }
 
 QTEST_MAIN(UiTest)

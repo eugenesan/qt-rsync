@@ -59,6 +59,7 @@
 #include "ui/ProfileEditorDialog.h"
 #include "ui/SettingsDialog.h"
 #include "ui/SyncDialog.h"
+#include "ui/UseAsLocationDialog.h"
 #include "ui/LockedProfileDialog.h"
 #include "ui/Icons.h"
 
@@ -1303,6 +1304,8 @@ MainWindow::MainWindow(QWidget* parent)
             appendJournalLine(QStringLiteral("Opened diff for ") + path);
             setStatus(QStringLiteral("Opened diff for %1").arg(path));
           });
+  connect(d_->comparison, &ComparisonView::useAsLocationRequested, this,
+          &MainWindow::useAsLocation);
   connect(d_->comparison, &ComparisonView::openDirectoryRequested, this,
           [this](int pane, const QString&) {
     const QString root = pane == 2 ? d_->profile.destination.path
@@ -1949,6 +1952,54 @@ void MainWindow::addFilterPattern(const QString& pattern, const QString& path) {
   } else {
     setStatus(QStringLiteral("Filter added: %1").arg(pattern));
   }
+}
+
+void MainWindow::useAsLocation(const QString& path) {
+  QString relative = path.trimmed();
+  while (relative.endsWith('/')) relative.chop(1);
+  while (relative.startsWith('/')) relative.remove(0, 1);
+  if (relative.isEmpty() || relative == QLatin1String(".")) return;
+
+  UseAsLocationDialog dialog(relative, d_->source->text(),
+                             d_->destination->text(), this);
+  if (dialog.exec() != QDialog::Accepted) return;
+  const bool asSource =
+      dialog.target() == UseAsLocationDialog::Target::Source ||
+      dialog.target() == UseAsLocationDialog::Target::Both;
+  const bool asDestination =
+      dialog.target() == UseAsLocationDialog::Target::Destination ||
+      dialog.target() == UseAsLocationDialog::Target::Both;
+
+  const auto joined = [&relative](const QString& text) {
+    QString base = text.trimmed();
+    while (base.endsWith('/')) base.chop(1);
+    return withTrailingSlash(base + QLatin1Char('/') + relative);
+  };
+  if (asSource) {
+    d_->source->setText(joined(d_->source->text()));
+    d_->profile.source = core::parseEndpoint(d_->source->text());
+  }
+  if (asDestination) {
+    d_->destination->setText(joined(d_->destination->text()));
+    d_->profile.destination = core::parseEndpoint(d_->destination->text());
+  }
+  if (dialog.updateFilters()) {
+    d_->profile.filterText =
+        core::shortenFilterText(d_->profile.filterText, relative);
+    d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
+  }
+
+  d_->stale = true;
+  d_->verified = false;
+  d_->sync->setEnabled(false);
+  d_->verify->setEnabled(false);
+  updateStateIcons();
+  appendJournalLine(QStringLiteral("STATE stale (locations changed to %1)")
+                        .arg(relative));
+  setStatus(QStringLiteral(
+                "Stale comparison: locations changed to %1. Compare again, "
+                "then Save or Save As to persist the profile.")
+                .arg(relative));
 }
 
 bool MainWindow::startupAborted() const {

@@ -39,6 +39,7 @@ class CoreTest : public QObject {
   void liveRecordCheckMatchesParser();
   void quickPlanSummaryMatchesFullPlan();
   void formatSizeUsesLargeUnits();
+  void shortenFilterPrefixes();
   // Decisions (ported from qpy-rsync tests/unit/test_changes.py)
   void changeProperties();
   void inheritedExclusionAndChildOverride();
@@ -901,6 +902,27 @@ void CoreTest::formatSizeUsesLargeUnits() {
   QVERIFY(qt_rsync::model::qpy_format_size(1536).contains(QStringLiteral("KiB")));
   QVERIFY(qt_rsync::model::qpy_format_size(2LL * 1024 * 1024).contains(QStringLiteral("MiB")));
   QVERIFY(qt_rsync::model::qpy_format_size(3LL * 1024 * 1024 * 1024).contains(QStringLiteral("GiB")));
+}
+
+void CoreTest::shortenFilterPrefixes() {
+  QCOMPARE(shortenFilterRule(QStringLiteral("- /docs/private/"),
+                                   QStringLiteral("docs")),
+           QStringLiteral("- /private/"));
+  QCOMPARE(shortenFilterRule(QStringLiteral("+ /docs/**"),
+                                   QStringLiteral("/docs")),
+           QStringLiteral("+ /**"));
+  QCOMPARE(shortenFilterRule(QStringLiteral("-s /docs/old/"),
+                                   QStringLiteral("docs")),
+           QStringLiteral("-s /old/"));
+  QCOMPARE(shortenFilterRule(QStringLiteral("- /other/"),
+                                   QStringLiteral("docs")),
+           QStringLiteral("- /other/"));
+  QCOMPARE(shortenFilterRule(QStringLiteral("# comment"),
+                                   QStringLiteral("docs")),
+           QStringLiteral("# comment"));
+  const QString text = QStringLiteral("# note\n- /docs/a/\n+ /docs/b/\n- /keep/");
+  QCOMPARE(shortenFilterText(text, QStringLiteral("docs")),
+           QStringLiteral("# note\n- /a/\n+ /b/\n- /keep/"));
 }
 
 QTEST_MAIN(CoreTest)

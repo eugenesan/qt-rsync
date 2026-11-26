@@ -91,6 +91,9 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 - Compare progress: `compareProgressShowsItemsFound` streams a fake dry run with
   1000 records and checks the batched "item(s) found" label.
   `liveRecordCheckMatchesParser` guards the cheap counter used while streaming.
+- New feature: `shortenFilterPrefixes` covers filter prefix rewriting and
+  the two `useAsLocation...` tests cover the dialog choice and the stale
+  profile state.
 - Performance instrumentation: Settings > Advanced > timing/debug writes
   per-phase milliseconds to the session log; no code runs when it is off.
 - Compare performance: `metadataListingStartsBeforeViewBuild` checks that the

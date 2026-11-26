@@ -126,6 +126,10 @@ and refreshed documentation and packaging.
 - Fixed the drawing artefact where the Decisions column kept a framed,
   striped area below the last row after the journal was repainted: the table
   views now use NoFrame and the custom full-height border painting is gone.
+- New "Use as Source/Destination..." context action on directory rows. It
+  offers Source, Destination or Both, optionally shortens the permanent filter
+  rules by the eliminated directory prefix, and marks the comparison stale
+  with a reminder to Compare again and Save/Save As the profile.
 - Folded full paths are computed lazily, saving a full lowercase pass over
   every path during compare. More sub-phase timings are available when timing
   diagnostics are enabled, for further performance analysis.

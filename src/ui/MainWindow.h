@@ -49,6 +49,7 @@ class MainWindow : public QMainWindow {
   void flushSettings();
   void refreshDiagnosticsSettings();
   void addFilterPattern(const QString& pattern, const QString& path);
+  void useAsLocation(const QString& path);
   void setStatus(const QString& text);
   void appendJournalLine(const QString& line);
   void setCommandPreview(const core::ProcessSpec& spec);

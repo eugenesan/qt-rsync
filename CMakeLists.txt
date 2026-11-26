@@ -66,6 +66,7 @@ add_library(qt_rsync_ui
     src/ui/SettingsDialog.cpp
     src/ui/StatsBar.cpp
     src/ui/SyncDialog.cpp
+    src/ui/UseAsLocationDialog.cpp
     src/ui/ProfileEditorDialog.cpp
     src/ui/LockedProfileDialog.cpp
     src/ui/Icons.cpp

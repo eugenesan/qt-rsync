@@ -67,6 +67,7 @@ class ComparisonView : public QWidget {
   void deleteRequested(const QString& path);
   void diffRequested(const QString& path);
   void openDirectoryRequested(int pane, const QString& path);
+  void useAsLocationRequested(const QString& path);
 
  private slots:
   void startDecisionBatch();

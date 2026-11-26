@@ -41,6 +41,11 @@ QStringList filterFileLines(const QVector<FilterRule>& rules);
 QVector<FilterRule> importFilterFile(const QString& text);
 QString exportFilterFile(const QVector<FilterRule>& rules);
 
+// Remove a leading directory from every filter pattern that starts with it.
+// Used when a comparison folder becomes the new transfer root.
+QString shortenFilterRule(const QString& rule, const QString& prefix);
+QString shortenFilterText(const QString& text, const QString& prefix);
+
 QString extensionOf(const QString& path);
 QVector<FilterPhrase> phrasesFor(const QString& path, bool isDirectory);
 QVector<FilterPhrase> deletePhrasesFor(const QString& path, bool isDirectory);
