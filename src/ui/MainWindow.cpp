@@ -204,8 +204,6 @@ class MainWindow::Private {
   QString searchText;
   int searchPosition = -1;
   bool cancelled = false;
-  bool compareRunning = false;
-  bool destinationInventoryDone = false;
   QLineEdit* status = nullptr;
   QLabel* stateLabel = nullptr;
   QLabel* progressLabel = nullptr;
@@ -1038,7 +1036,6 @@ MainWindow::MainWindow(QWidget* parent)
     core::storage::Settings settings;
     settings.setValue(QStringLiteral("decisions/preserve"),
                       d_->preserve->isChecked());
-    settings.sync();
     updateStateIcons();
   });
   connect(d_->filterBar, &ActionFilterBar::unchangedToggled, this,
@@ -1199,7 +1196,6 @@ MainWindow::MainWindow(QWidget* parent)
     core::storage::Settings settings;
     settings.setValue(QStringLiteral("comparison/filter-directories"),
                       d_->filterBar->filterDirectories());
-    settings.sync();
   });
   applyActionColours();
   updateVerificationVisibility();
@@ -1340,7 +1336,11 @@ void MainWindow::appendJournalLine(const QString& rawLine) {
                                  QStringLiteral("HH:mm:ss.zz")) +
                                  QLatin1Char(' ') + rawLine;
   QString colour = QStringLiteral("#9CA3AF");
-  if (line.contains(QStringLiteral("fail"), Qt::CaseInsensitive) ||
+  // Shell commands are informational, even when their arguments happen to
+  // contain a word like "error" or "failed" in a path or filter rule.
+  if (rawLine.startsWith(QStringLiteral("$ "))) {
+    colour = QStringLiteral("#9CA3AF");
+  } else if (line.contains(QStringLiteral("fail"), Qt::CaseInsensitive) ||
       line.contains(QStringLiteral("error"), Qt::CaseInsensitive) ||
       line.contains(QStringLiteral("cancel"), Qt::CaseInsensitive) ||
       line.contains(QStringLiteral("mismatch"), Qt::CaseInsensitive)) {
@@ -1449,12 +1449,7 @@ void MainWindow::startCompare() {
   d_->progress->show();
   d_->progressLabel->setText(QStringLiteral("Comparing... 0 item(s) found"));
   d_->pauseButton->setChecked(false);
-  d_->compareRunning = true;
   d_->compareProcess->start(spec.program, spec.arguments);
-  // The destination listing is independent of the dry run. Starting it now
-  // overlaps the two rsync passes; qpy starts it when the dry run ends, but
-  // the extra overlap removes the whole listing from the critical path.
-  startDestinationInventory();
 }
 
 void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
@@ -1494,6 +1489,10 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   appendJournalLine(d_->preserve->isChecked()
                         ? QStringLiteral("Decisions preserved for this comparison.")
                         : QStringLiteral("Decisions reset for this comparison."));
+  // Start the destination listing now, like qpy: it overlaps parsing and
+  // view construction but never runs two rsync passes on the same endpoints
+  // at the same time.
+  startDestinationInventory();
   QElapsedTimer parseClock;
   parseClock.start();
   const core::ParseResult parsed = core::parseOutput(
@@ -1549,21 +1548,14 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   // qpy keeps the progress bar hidden for a comparison; it is only shown
   // while verifying or synchronizing. Leaving a bright 100% bar on screen
   // after Compare was a visible mismatch.
-  d_->compareRunning = false;
   d_->comparisonAwaitingMetadata = true;
-  if (d_->destinationInventoryDone) {
-    // The listing finished while the view was being built.
-    finishComparison();
-  } else {
-    d_->progress->hide();
-    d_->progressLabel->setText(QStringLiteral("Gathering destination metadata..."));
-    setStatus(QStringLiteral("Gathering destination metadata..."));
-  }
+  d_->progress->hide();
+  d_->progressLabel->setText(QStringLiteral("Gathering destination metadata..."));
+  setStatus(QStringLiteral("Gathering destination metadata..."));
 }
 
 void MainWindow::onCompareError(QProcess::ProcessError error) {
   Q_UNUSED(error)
-  d_->compareRunning = false;
   d_->compare->setEnabled(true);
   d_->cancel->setEnabled(false);
   d_->progress->setRange(0, 100);
@@ -1573,7 +1565,6 @@ void MainWindow::onCompareError(QProcess::ProcessError error) {
 }
 
 void MainWindow::startDestinationInventory() {
-  d_->destinationInventoryDone = false;
   // The post-compare listing fills destination sizes and dates only. It must
   // not be mistaken for the source inventory, and it must not add unchanged
   // rows until the user asks for them.
@@ -1677,12 +1668,6 @@ void MainWindow::onDestinationInventoryFinished(int, QProcess::ExitStatus) {
     d_->destinationListingCache = metadata;
     appendJournalLine(QStringLiteral("Destination metadata: %1 object(s).")
                           .arg(metadata.size()));
-  }
-  d_->destinationInventoryDone = true;
-  if (d_->compareRunning && !d_->destinationInventoryForUnchanged) {
-    // The dry run is still in flight; onCompareFinished will apply the cache
-    // once the store has been rebuilt.
-    return;
   }
   if (d_->destinationInventoryForUnchanged) {
     d_->destinationInventoryForUnchanged = false;
@@ -1890,9 +1875,6 @@ void MainWindow::cancelOperation() {
   QProcess* target = nullptr;
   if (d_->compareProcess->state() != QProcess::NotRunning) {
     target = d_->compareProcess;
-    if (d_->destinationInventoryProcess->state() != QProcess::NotRunning) {
-      d_->destinationInventoryProcess->kill();
-    }
   } else if (d_->operationProcess->state() != QProcess::NotRunning) {
     target = d_->operationProcess;
   } else if (d_->inventoryProcess->state() != QProcess::NotRunning) {

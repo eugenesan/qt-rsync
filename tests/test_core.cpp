@@ -9,6 +9,7 @@
 #include "core/Parser.h"
 #include "core/ExternalTools.h"
 #include "core/Paths.h"
+#include "model/DataStore.h"
 
 #include <QTemporaryDir>
 #include "core/Profile.h"
@@ -37,6 +38,7 @@ class CoreTest : public QObject {
   void externalToolPlaceholders();
   void liveRecordCheckMatchesParser();
   void quickPlanSummaryMatchesFullPlan();
+  void formatSizeUsesLargeUnits();
   // Decisions (ported from qpy-rsync tests/unit/test_changes.py)
   void changeProperties();
   void inheritedExclusionAndChildOverride();
@@ -892,6 +894,13 @@ void CoreTest::quickPlanSummaryMatchesFullPlan() {
   QCOMPARE(quick.modified, full.summary.modified);
   QCOMPARE(quick.retainedDestinationOnly, full.summary.retainedDestinationOnly);
   QCOMPARE(quick.backupEnabled, full.summary.backupEnabled);
+}
+
+void CoreTest::formatSizeUsesLargeUnits() {
+  QCOMPARE(qt_rsync::model::qpy_format_size(512), QStringLiteral("512 B"));
+  QVERIFY(qt_rsync::model::qpy_format_size(1536).contains(QStringLiteral("KiB")));
+  QVERIFY(qt_rsync::model::qpy_format_size(2LL * 1024 * 1024).contains(QStringLiteral("MiB")));
+  QVERIFY(qt_rsync::model::qpy_format_size(3LL * 1024 * 1024 * 1024).contains(QStringLiteral("GiB")));
 }
 
 QTEST_MAIN(CoreTest)

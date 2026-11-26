@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 460 pytest cases. qt-rsync has 94 QtTest cases
-(47 core, 47 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 460 pytest cases. qt-rsync has 96 QtTest cases
+(48 core, 48 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -95,7 +95,8 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
   destination listing is launched before the view is built, and
   `journalEntriesHaveTimestamps` checks the timestamped journal.
   `quickPlanSummaryMatchesFullPlan` guards the summary-only plan update used
-  by decision edits.
+  by decision edits, `formatSizeUsesLargeUnits` covers overview scaling and
+  `journalCommandLinesAreNeutral` covers the command-line colour.
 - External tools: `externalToolPlaceholders` covers the qpy placeholder cases
   and the diff command now uses the configured placeholder-aware command.
 

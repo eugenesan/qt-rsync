@@ -268,8 +268,7 @@ void OverviewPane::rebuild(const model::DataStore& store) {
     } else if (action == model::DestOnly) ++kept;
   }
   const auto formatSize = [](long long bytes) {
-    if (bytes < 1024) return QString::number(bytes) + QStringLiteral(" B");
-    return QString::number(bytes / 1024.0, 'f', 1) + QStringLiteral(" KiB");
+    return model::qpy_format_size(bytes);
   };
   stats_->setEntries({
       {QStringLiteral("%1 item(s), %2").arg(count).arg(formatSize(size)),

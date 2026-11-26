@@ -87,6 +87,12 @@ and refreshed documentation and packaging.
   fingerprints until Sync/Verify, and focus restoration no longer builds a
   half-million-entry hash. Excluding one item dropped from about 700 ms to
   roughly 150 ms on the same comparison.
+- The destination listing starts when the dry run ends, not alongside it, so
+  two rsync passes never run on the same endpoints at once and the compare
+  progress label is not interrupted. Journal command lines use the neutral
+  colour even when a path contains a word like "error", and preference
+  changes no longer force a synchronous settings write inside UI slots.
+- Overview statistics scale sizes to MiB/GiB instead of always showing KiB.
 - External tools support qpy's placeholder expansion; the diff command uses
   the configured command with `%a`/`%A` and quoted paths stay one argument.
 
