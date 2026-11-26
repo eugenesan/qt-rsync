@@ -268,9 +268,12 @@ void ComparisonView::refreshDecisionHeader() {
 }
 
 void ComparisonView::setRootNames(const QString& source,
-                                  const QString& destination) {
+                                  const QString& destination,
+                                  bool sourceLocal, bool destinationLocal) {
   store_.root_source = source.toStdString();
   store_.root_dest = destination.toStdString();
+  sourceLocal_ = sourceLocal;
+  destinationLocal_ = destinationLocal;
 }
 
 void ComparisonView::setShowUnchanged(bool show) {
@@ -862,10 +865,24 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
     while (relative.startsWith('/')) relative.remove(0, 1);
     QApplication::clipboard()->setText(relative);
   });
-  menu.addAction(QStringLiteral("Open Directory"), [this, pane, path]() {
-    emit openDirectoryRequested(pane, path);
-  });
-  menu.addSeparator();
+  const bool paneLocal = pane == 2 ? destinationLocal_ : sourceLocal_;
+  if (paneLocal && !path.isEmpty()) {
+    const auto found = store_.path_to_id.find(path.toStdString());
+    const bool isDirectory =
+        found != store_.path_to_id.end() &&
+        found->second < static_cast<int>(store_.is_dir.size()) &&
+        store_.is_dir[found->second] != 0;
+    if (isDirectory) {
+      menu.addAction(QStringLiteral("Open Directory"), [this, pane, path]() {
+        emit openDirectoryRequested(pane, path);
+      });
+    } else {
+      menu.addAction(QStringLiteral("Open File"), [this, pane, path]() {
+        emit openFileRequested(pane, path);
+      });
+    }
+    menu.addSeparator();
+  }
   menu.addAction(QStringLiteral("Open in Diff Tool\t1"), [this, path]() {
     emit diffRequested(path);
   });

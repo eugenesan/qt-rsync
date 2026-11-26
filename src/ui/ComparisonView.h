@@ -33,7 +33,8 @@ class ComparisonView : public QWidget {
   void setShowUnchanged(bool show);
   void setStale(bool stale);
   void setActionColours(const QVector<QString>& colours);
-  void setRootNames(const QString& source, const QString& destination);
+  void setRootNames(const QString& source, const QString& destination,
+                    bool sourceLocal = true, bool destinationLocal = true);
   void selectPath(const QString& path);
   // Reveal a folder from the overview: expand its ancestors, keep the row
   // centered in all panes and move the keyboard focus to the list.
@@ -67,10 +68,12 @@ class ComparisonView : public QWidget {
   void deleteRequested(const QString& path);
   void diffRequested(const QString& path);
   void openDirectoryRequested(int pane, const QString& path);
+  void openFileRequested(int pane, const QString& path);
   void useAsLocationRequested(const QString& path);
 
  public slots:
   void showContextMenu(int pane, const QPoint& position);
+  void showHeaderMenu(int pane, const QPoint& position);
 
  private slots:
   void startDecisionBatch();
@@ -80,12 +83,12 @@ class ComparisonView : public QWidget {
   void syncDecisionsToStore();
   void onSortIndicatorChanged(int pane, int section, Qt::SortOrder order);
   void onCurrentChanged(int origin, const QModelIndex& index);
-  void showHeaderMenu(int pane, const QPoint& position);
-
   void selectRow(int row);
   void restoreFocusAfterDecision(const std::vector<int>& oldVisible,
                                  const QStringList& affectedPaths);
 
+  bool sourceLocal_ = true;
+  bool destinationLocal_ = true;
   bool batching_ = false;
   std::vector<int> batchOldVisible_;
   QStringList batchAffectedPaths_;

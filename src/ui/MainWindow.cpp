@@ -1315,10 +1315,18 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->comparison, &ComparisonView::useAsLocationRequested, this,
           &MainWindow::useAsLocation);
   connect(d_->comparison, &ComparisonView::openDirectoryRequested, this,
-          [this](int pane, const QString&) {
+          [this](int pane, const QString& path) {
     const QString root = pane == 2 ? d_->profile.destination.path
                                    : d_->profile.source.path;
-    QDesktopServices::openUrl(QUrl::fromLocalFile(root));
+    QDesktopServices::openUrl(
+        QUrl::fromLocalFile(QDir(root).filePath(path)));
+  });
+  connect(d_->comparison, &ComparisonView::openFileRequested, this,
+          [this](int pane, const QString& path) {
+    const QString root = pane == 2 ? d_->profile.destination.path
+                                   : d_->profile.source.path;
+    QDesktopServices::openUrl(
+        QUrl::fromLocalFile(QDir(root).filePath(path)));
   });
 }
 
@@ -1450,6 +1458,13 @@ void MainWindow::startCompare() {
     }
     return core::parseEndpoint(text);
   };
+  const QString sourceError = core::endpointParseError(d_->source->text());
+  const QString destinationError = core::endpointParseError(d_->destination->text());
+  if (!sourceError.isEmpty() || !destinationError.isEmpty()) {
+    setStatus(QStringLiteral("Invalid location: %1")
+                  .arg(sourceError.isEmpty() ? destinationError : sourceError));
+    return;
+  }
   d_->profile.source = endpointFromField(d_->source, d_->profile.source);
   d_->profile.destination =
       endpointFromField(d_->destination, d_->profile.destination);
@@ -1458,6 +1473,20 @@ void MainWindow::startCompare() {
     return;
   }
   d_->profile.filters = core::filterTextToRules(d_->profile.filterText);
+  const QStringList validation = core::validateProfile(d_->profile);
+  QStringList problems;
+  for (const QString& message : validation) {
+    if (message.contains(QStringLiteral(".root")) ||
+        message.contains(QStringLiteral("two_remote")) ||
+        message.contains(QStringLiteral("remote_operand"))) {
+      problems.append(message.section(QLatin1Char(':'), 1).trimmed());
+    }
+  }
+  if (!problems.isEmpty()) {
+    setStatus(QStringLiteral("Invalid profile: %1")
+                  .arg(problems.join(QStringLiteral("; "))));
+    return;
+  }
   d_->destinationListingCache.clear();
   const core::ProcessSpec spec = core::buildCompareSpec(d_->profile);
   setProcessEnvironment(spec, d_->compareProcess);
@@ -1544,8 +1573,11 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
     const QString name = clean.section('/', -1);
     return name.isEmpty() ? QStringLiteral("?") : name;
   };
-  d_->comparison->setRootNames(baseName(d_->profile.source.path),
-                               baseName(d_->profile.destination.path));
+  d_->comparison->setRootNames(
+      baseName(d_->profile.source.path),
+      baseName(d_->profile.destination.path),
+      d_->profile.source.kind == core::EndpointKind::Local,
+      d_->profile.destination.kind == core::EndpointKind::Local);
   core::ScopedPerf viewPerf("compare.viewBuild");
   d_->viewClock.start();
   d_->comparison->setChanges(parsed.changes);

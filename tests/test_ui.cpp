@@ -121,6 +121,10 @@ class UiTest : public QObject {
   void dialogRoundTripsCoverPortedFields();
   void goldenScreenshotsAreValidImages();
   void exitSavePromptOffersSaveAs();
+  void headerMenuTogglesExactSections();
+  void contextMenuOpenActionsFollowEndpointKind();
+  void cellRolesAndPresenceMatchPython();
+  void swapEndpointTexts();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -2358,6 +2362,162 @@ void UiTest::exitSavePromptOffersSaveAs() {
   QVERIFY(labels.contains(QStringLiteral("Save")));
   QVERIFY(labels.contains(QStringLiteral("Save As...")));
   QVERIFY(labels.contains(QStringLiteral("Don't Save")));
+}
+
+void UiTest::headerMenuTogglesExactSections() {
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("a.txt")}));
+  auto tables = view.findChildren<QTableView*>();
+  QCOMPARE(tables.size(), 3);
+
+  const auto toggle = [&view](int pane, const QString& label) -> QPair<QStringList, QStringList> {
+    QStringList labels;
+    QStringList enabled;
+    QTimer::singleShot(15, [&labels, &enabled, label]() {
+      auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+      if (menu == nullptr) return;
+      for (QAction* action : menu->actions()) {
+        labels.append(action->text());
+        if (action->isEnabled()) enabled.append(action->text());
+        if (action->text() == label && action->isEnabled()) action->trigger();
+      }
+      menu->close();
+    });
+    if (!QMetaObject::invokeMethod(
+            &view, "showHeaderMenu", Q_ARG(int, pane), Q_ARG(QPoint, QPoint(0, 0)))) {
+      return qMakePair(labels, enabled);
+    }
+    return qMakePair(labels, enabled);
+  };
+
+  auto result = toggle(0, QStringLiteral("Items"));
+  QVERIFY(result.first.contains(QStringLiteral("Item")));
+  QVERIFY(result.second.contains(QStringLiteral("Items")));
+  QVERIFY(tables[0]->isColumnHidden(1));
+  toggle(0, QStringLiteral("Items"));
+  QVERIFY(!tables[0]->isColumnHidden(1));
+
+  // The decisions pane exposes only its Decisions column; the destination
+  // pane maps the same menu entries onto its own column indices.
+  for (int column : {0, 1, 2, 3, 5, 6, 7, 8, 9, 10}) {
+    QVERIFY(tables[1]->isColumnHidden(column));
+  }
+  QVERIFY(!tables[1]->horizontalHeader()->isSectionHidden(4));
+  QVERIFY(!tables[2]->horizontalHeader()->isSectionHidden(5));
+  QVERIFY(tables[2]->horizontalHeader()->isSectionHidden(10));
+}
+
+void UiTest::contextMenuOpenActionsFollowEndpointKind() {
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("docs/a.txt")}));
+  view.setRootNames(QStringLiteral("src-root"), QStringLiteral("dst-root"),
+                    true, true);
+  auto& store = view.store();
+  const auto rootIt = store.path_to_id.find(model::DataStore::root_path());
+  QVERIFY(rootIt != store.path_to_id.end());
+  model::TableModel sourceModel(&store, 0);
+  const QModelIndex rootIndex =
+      sourceModel.index(store.row_of_id.at(rootIt->second), 0);
+  QCOMPARE(sourceModel.data(rootIndex, Qt::DisplayRole).toString(),
+           QStringLiteral("src-root"));
+  model::TableModel destModel(&store, 2);
+  const QModelIndex destRoot =
+      destModel.index(store.row_of_id.at(rootIt->second), 0);
+  QCOMPARE(destModel.data(destRoot, Qt::DisplayRole).toString(),
+           QStringLiteral("dst-root"));
+
+  const auto menuAt = [&view, &store](const QString& path) {
+    QStringList labels;
+    QTimer::singleShot(15, [&labels]() {
+      auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+      if (menu == nullptr) return;
+      for (QAction* action : menu->actions()) labels.append(action->text());
+      menu->close();
+    });
+    const auto it = store.path_to_id.find(path.toStdString());
+    const int row = it == store.path_to_id.end() ? 0 : store.row_of_id.at(it->second);
+    QMetaObject::invokeMethod(&view, "showContextMenu", Q_ARG(int, 0),
+                              Q_ARG(QPoint, QPoint(30, row * 22 + 11)));
+    return labels;
+  };
+
+  QVERIFY(menuAt(QStringLiteral("docs/a.txt"))
+              .contains(QStringLiteral("Open File")));
+  QVERIFY(menuAt(QStringLiteral("docs"))
+              .contains(QStringLiteral("Open Directory")));
+  view.setRootNames(QStringLiteral("src-root"), QStringLiteral("dst-root"),
+                    false, true);
+  QVERIFY(!menuAt(QStringLiteral("docs"))
+               .contains(QStringLiteral("Open Directory")));
+  QVERIFY(!menuAt(QStringLiteral("docs/a.txt"))
+               .contains(QStringLiteral("Open File")));
+}
+
+void UiTest::cellRolesAndPresenceMatchPython() {
+  QVector<core::Change> changes;
+  const auto add = [&changes](const QString& path, core::Action action,
+                              core::Kind kind, qlonglong size) {
+    core::Change change;
+    change.path = path;
+    change.action = action;
+    change.kind = kind;
+    change.size = size;
+    change.modifiedTime = QStringLiteral("2026-11-23-11:23:22");
+    changes.append(change);
+  };
+  add(QStringLiteral("new.txt"), core::Action::Create, core::Kind::File, 12345);
+  add(QStringLiteral("gone.txt"), core::Action::Delete, core::Kind::File, 99);
+  add(QStringLiteral("extra.txt"), core::Action::DestinationOnly,
+      core::Kind::File, 77);
+  add(QStringLiteral("link"), core::Action::UpdateContent,
+      core::Kind::Symlink, 0);
+
+  ui::ComparisonView view;
+  view.setChanges(changes);
+  auto& store = view.store();
+  model::TableModel source(&store, 0);
+  model::TableModel destination(&store, 2);
+  const auto cell = [&store](model::TableModel& model, const QString& path,
+                             int column) {
+    const auto it = store.path_to_id.find(path.toStdString());
+    if (it == store.path_to_id.end()) return QVariant();
+    const int row = store.row_of_id.at(it->second);
+    return model.data(model.index(row, column), Qt::DisplayRole);
+  };
+  QVERIFY(cell(source, QStringLiteral("new.txt"), 0).isValid());
+  QVERIFY(!cell(destination, QStringLiteral("new.txt"), 0).isValid());
+  QVERIFY(!cell(source, QStringLiteral("gone.txt"), 0).isValid());
+  QVERIFY(cell(destination, QStringLiteral("gone.txt"), 0).isValid());
+  QVERIFY(cell(destination, QStringLiteral("extra.txt"), 0).isValid());
+  QCOMPARE(cell(source, QStringLiteral("new.txt"), 9).toLongLong(), 12345LL);
+  QVERIFY(cell(source, QStringLiteral("new.txt"), 10).toString().isEmpty());
+
+  const auto it = store.path_to_id.find(QStringLiteral("new.txt").toStdString());
+  QVERIFY(it != store.path_to_id.end());
+  const QModelIndex index = source.index(store.row_of_id.at(it->second), 0);
+  QVERIFY(source.data(index, Qt::DecorationRole).isValid());
+  QVERIFY(source.data(source.index(store.row_of_id.at(it->second), 4),
+                      Qt::ToolTipRole)
+              .toString()
+              .contains(QStringLiteral("new")));
+}
+
+void UiTest::swapEndpointTexts() {
+  ui::MainWindow window;
+  app::StartupOptions options;
+  window.applyStartupOptions(options);
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
+  edits[0]->setText(QStringLiteral("/src/"));
+  edits[1]->setText(QStringLiteral("/dst/"));
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
+    if (button->accessibleName() == QStringLiteral("Swap Source and Destination")) {
+      button->click();
+      break;
+    }
+  }
+  QCOMPARE(edits[0]->text(), QStringLiteral("/dst/"));
+  QCOMPARE(edits[1]->text(), QStringLiteral("/src/"));
 }
 
 QTEST_MAIN(UiTest)

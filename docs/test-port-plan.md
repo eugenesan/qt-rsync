@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 488 pytest cases. qt-rsync has 109 QtTest cases
-(49 core, 60 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 488 pytest cases. qt-rsync has 115 QtTest cases
+(51 core, 64 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -106,8 +106,8 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
   `decisionsTooltipIsInformative` covers the Decisions cell and header tips.
 - External tools: `externalToolPlaceholders` covers the qpy placeholder cases
   and the diff command now uses the configured placeholder-aware command.
-- Test-port batches 1-5, 7 and 8 above are complete; see "Batches completed in
-  this pass" for the case names. `exitSavePromptOffersSaveAs` covers the three
+- All test-port batches are complete: see "Batches completed in this pass"
+  and "Final batches completed". `exitSavePromptOffersSaveAs` covers the three
   exit choices.
 
 ## Batches completed in this pass
@@ -128,8 +128,31 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
    committed reference images; the profile editor is covered by the widget
    round-trip instead of a separate image.
 
-## Remaining
+## Final batches completed
 
-Exhaustive header-menu combinations, per-pane local/remote context variants and
-the long tail of storage/CLI edge cases. The core behaviour rows are now all
-covered by at least one regression case.
+- Header-menu variants: `headerMenuTogglesExactSections` asserts source-pane
+  toggles, the decisions-only column and the destination column mapping.
+  Byte-size columns 9/10 are hidden by default in the Qt port (unlike qpy),
+  which is an explicit presentation difference, not a missing case.
+- Per-pane variants: `contextMenuOpenActionsFollowEndpointKind` covers local
+  file/directory open actions, SSH gating and distinct root names;
+  `cellRolesAndPresenceMatchPython` covers per-side presence, byte sizes,
+  decoration and tooltip roles.
+- Storage/CLI edge cases: `endpointEdgeCases` (alias, daemon/relative syntax,
+  home expansion), `profileValidationMessages` (two remotes, backup root,
+  remote backup, nested-backup warnings), `swapEndpointTexts`. The remaining
+  profile store/convert/legacy cases are already covered by
+  `profileJsonRoundTrip`, `legacyProfileFieldsMigrate` and
+  `settingsAreSplitByPrefix`.
+
+## Explicit N/A
+
+- `test_cli.py` JSON compare output and rsync exit propagation: the C++ port
+  is a GUI app with CLI startup options only.
+- `test_process_runner_contract.py` and `test_ssh_askpass.py`: qpy-specific
+  process/environment and askpass plumbing; Qt uses QProcess directly.
+- Narrow saved-header restoration and exact visual screenshots for the profile
+  editor: covered by the widget round-trip instead of a pixel reference.
+
+All behaviour rows in the status table are now either ported or N/A. Test-port
+work is complete; future changes should add cases alongside the behaviour.

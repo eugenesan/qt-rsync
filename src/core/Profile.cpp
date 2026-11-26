@@ -69,6 +69,58 @@ Endpoint parseEndpoint(const QString& text) {
   return endpoint;
 }
 
+QString endpointParseError(const QString& text) {
+  const QString value = text.trimmed();
+  if (value.isEmpty()) return {};
+  if (value.contains(QLatin1String("::"))) {
+    return QStringLiteral("rsync daemon syntax (host::module) is not supported");
+  }
+  static const QRegularExpression remote(
+      QStringLiteral("^(?:([^@/:]+)@)?([^/:]+):(/.+)$"));
+  if (remote.match(value).hasMatch()) return {};
+  const int colon = value.indexOf(QLatin1Char(':'));
+  if (colon > 0 && !value.mid(colon + 1).startsWith(QLatin1Char('/'))) {
+    return QStringLiteral("a remote path must be absolute");
+  }
+  return {};
+}
+
+QStringList validateProfile(const SyncProfile& profile) {
+  QStringList messages;
+  if (profile.source.kind == EndpointKind::Ssh &&
+      profile.destination.kind == EndpointKind::Ssh) {
+    messages << QStringLiteral(
+        "endpoints.two_remote: at most one endpoint may be remote");
+  }
+  const QString backup = profile.backup.directory.trimmed();
+  if (!backup.isEmpty()) {
+    if (backup == QLatin1String("/")) {
+      messages << QStringLiteral(
+          "backup.directory.root: backup directory cannot be the filesystem root");
+    }
+    if (!endpointParseError(backup).isEmpty() ||
+        (!backup.startsWith('/') && backup.contains(':'))) {
+      messages << QStringLiteral(
+          "backup.directory.remote_operand: backup directory must be local");
+    }
+    const QString destination = normalizePosixPath(profile.destination.path);
+    const QString normalizedBackup = normalizePosixPath(backup);
+    if (profile.destination.kind == EndpointKind::Local &&
+        !destination.isEmpty() && !normalizedBackup.isEmpty() &&
+        (normalizedBackup == destination ||
+         normalizedBackup.startsWith(destination + QLatin1Char('/')))) {
+      messages << QStringLiteral(
+          "backup.directory.inside_destination: backup is inside Destination");
+      if (!profile.backup.protectNested) {
+        messages << QStringLiteral(
+            "backup.directory.unprotected: a nested backup needs the "
+            "protection rule enabled");
+      }
+    }
+  }
+  return messages;
+}
+
 QString normalizePosixPath(const QString& value) {
   QString text = value.trimmed();
   if (text.isEmpty()) return {};

@@ -77,5 +77,7 @@ QString normalizePosixPath(const QString& value);
 QString destinationBackupDirectory(const SyncProfile& profile);
 QStringList backupProtectionArguments(const SyncProfile& profile);
 Endpoint parseEndpoint(const QString& text);
+QString endpointParseError(const QString& text);
+QStringList validateProfile(const SyncProfile& profile);
 
 }  // namespace qt_rsync::core

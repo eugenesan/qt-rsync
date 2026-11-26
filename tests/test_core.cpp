@@ -40,6 +40,8 @@ class CoreTest : public QObject {
   void quickPlanSummaryMatchesFullPlan();
   void formatSizeUsesLargeUnits();
   void shortenFilterPrefixes();
+  void endpointEdgeCases();
+  void profileValidationMessages();
   // Decisions (ported from qpy-rsync tests/unit/test_changes.py)
   void changeProperties();
   void inheritedExclusionAndChildOverride();
@@ -923,6 +925,59 @@ void CoreTest::shortenFilterPrefixes() {
   const QString text = QStringLiteral("# note\n- /docs/a/\n+ /docs/b/\n- /keep/");
   QCOMPARE(shortenFilterText(text, QStringLiteral("docs")),
            QStringLiteral("# note\n- /a/\n+ /b/\n- /keep/"));
+}
+
+void CoreTest::endpointEdgeCases() {
+  const auto alias = parseEndpoint(QStringLiteral("nas:/backup"));
+  QCOMPARE(alias.kind, EndpointKind::Ssh);
+  QCOMPARE(alias.host, QStringLiteral("nas"));
+  QVERIFY(alias.user.isEmpty());
+  QCOMPARE(alias.rsyncOperand(), QStringLiteral("nas:/backup"));
+
+  QCOMPARE(endpointParseError(QStringLiteral("server::module")),
+           QStringLiteral("rsync daemon syntax (host::module) is not supported"));
+  QCOMPARE(endpointParseError(QStringLiteral("server:relative")),
+           QStringLiteral("a remote path must be absolute"));
+  QVERIFY(endpointParseError(QStringLiteral("alice@server:/srv/data")).isEmpty());
+  QVERIFY(endpointParseError(QStringLiteral("/local/path")).isEmpty());
+
+  const QByteArray oldHome = qgetenv("HOME");
+  qputenv("HOME", "/home/tester");
+  const auto home = parseEndpoint(QStringLiteral("~/data"));
+  QCOMPARE(home.kind, EndpointKind::Local);
+  QCOMPARE(home.rsyncOperand(), QStringLiteral("/home/tester/data"));
+  qputenv("HOME", oldHome);
+}
+
+void CoreTest::profileValidationMessages() {
+  SyncProfile profile;
+  profile.source = parseEndpoint(QStringLiteral("/src/"));
+  profile.destination = parseEndpoint(QStringLiteral("/dst/"));
+  QVERIFY(validateProfile(profile).isEmpty());
+
+  profile.source = parseEndpoint(QStringLiteral("one:/a"));
+  profile.destination = parseEndpoint(QStringLiteral("two:/b"));
+  QVERIFY(validateProfile(profile).join('\n').contains(
+      QStringLiteral("endpoints.two_remote")));
+
+  profile.source = parseEndpoint(QStringLiteral("/src/"));
+  profile.destination = parseEndpoint(QStringLiteral("/dst/"));
+  profile.backup.directory = QStringLiteral("/");
+  QVERIFY(validateProfile(profile).join('\n').contains(
+      QStringLiteral("backup.directory.root")));
+
+  profile.backup.directory = QStringLiteral("nas:/backup");
+  QVERIFY(validateProfile(profile).join('\n').contains(
+      QStringLiteral("backup.directory.remote_operand")));
+
+  profile.backup.directory = QStringLiteral("/dst/.backup");
+  profile.backup.protectNested = false;
+  const QString nested = validateProfile(profile).join('\n');
+  QVERIFY(nested.contains(QStringLiteral("backup.directory.inside_destination")));
+  QVERIFY(nested.contains(QStringLiteral("backup.directory.unprotected")));
+  profile.backup.protectNested = true;
+  QVERIFY(!validateProfile(profile).join('\n').contains(
+      QStringLiteral("backup.directory.unprotected")));
 }
 
 QTEST_MAIN(CoreTest)
