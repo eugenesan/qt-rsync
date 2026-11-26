@@ -61,19 +61,6 @@ class NavigationKeyFilter : public QObject {
 class DecisionTableView : public QTableView {
  public:
   using QTableView::QTableView;
-
- protected:
-  void paintEvent(QPaintEvent* event) override {
-    QTableView::paintEvent(event);
-    QPainter painter(viewport());
-    QColor border = palette().color(QPalette::Mid);
-    if (!border.isValid()) border = palette().color(QPalette::Text);
-    painter.setPen(border);
-    const int bottom = viewport()->height() - 1;
-    const int right = viewport()->width() - 1;
-    painter.drawLine(0, 0, 0, bottom);
-    painter.drawLine(right, 0, right, bottom);
-  }
 };
 
 int logicalSortColumn(int section) {
@@ -116,6 +103,7 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
     auto* view = pane == 1 ? static_cast<QTableView*>(new DecisionTableView(this))
                            : new QTableView(this);
     view->verticalHeader()->hide();
+    view->setFrameShape(QFrame::NoFrame);
     if (pane != 2) {
       view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     }
