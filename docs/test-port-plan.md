@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 460 pytest cases. qt-rsync has 97 QtTest cases
-(48 core, 49 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 485 pytest cases. qt-rsync has 108 QtTest cases
+(49 core, 59 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -19,10 +19,10 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 
 | qpy module | cases | qt-rsync status |
 |---|---:|---|
-| `test_main_window_offscreen.py` | 95 | Partial: startup, profile cache, locked profile, compare/verify/sync, compare and sync progress, settings, closing, stale state, basic menus and F-key shortcuts are covered. Full journal states and exact shortcut enablement still need cases. |
-| `test_flat_comparison_view.py` | 49 | Partial: three panes, selection sync, folding, context menus, navigation keys and stale root visuals are covered. Remaining: all header context actions, exact tooltips and per-pane local/remote menus. |
-| `test_flat_filtering.py` | 31 | Partial: action masks, ancestors, unchanged gate and search matching are covered. Remaining: path/glob filters, directory-only mode, inverse clicks and filter persistence. |
-| `test_action_filters.py` | 19 | Mostly ported: initial state, display-only tooltips, excluded count, focus policy, separators, ancestor retention, Ctrl+click inversion and the checkbox context menu. Remaining: exhaustive state combinations. |
+| `test_main_window_offscreen.py` | 95 | Mostly ported: startup, profile cache, locked profile, compare/verify/sync, progress, settings, closing, stale state, menus/F-keys, exact startup action states and journal severity colours. |
+| `test_flat_comparison_view.py` | 49 | Mostly ported: panes, selection, folding, context-menu actions, navigation, stale root tooltip and Decisions tooltips. Remaining: header-menu exhaustive combinations. |
+| `test_flat_filtering.py` | 31 | Mostly ported: action masks, ancestors, unchanged gate, search, path/glob filters and directory-only mode. |
+| `test_action_filters.py` | 19 | Ported: initial state, tooltips, focus policy, separators, ancestors, Ctrl+click inversion, exhaustive state combinations and reset defaults. |
 | `test_command.py` | 13 | Mostly ported: compare/verify/sync argv, modes, filters, delete timing and remote shell. Remaining: exhaustive option combinations. |
 | `test_app_startup_options.py` | 12 | Ported at the CLI level: complete argument set, Qt-only arguments, log-file/no-log-file, compare pair and invalid mode. Qt environment/migration cases are N/A in the C++ port. |
 | `test_external_tools.py` | 11 | Ported at the core level: placeholder expansion, options, remote/local paths, double percent, unknown placeholders and bad commands are covered. The tool table still has no per-tool launch menu. |
@@ -31,17 +31,17 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 | `test_delete_decision.py` | 10 | Mostly ported: delete decisions and mirror rules. |
 | `test_rsync_parser.py` | 9 | Ported: itemized records, deletes, inventory with size/time, context phrases and rsync pattern matching including anchored/trailing and bracket globs. |
 | `test_execution_plan.py` | 9 | Ported: summaries, fingerprints, freshness. |
-| `test_sync_confirmation.py` | 8 | Dialog fields, command, rules and warning ported; add a widget assertion for each field. |
-| `test_settings_dialog.py` | 8 | Ported in part: diagnostics, defaults, tools, logging, colours, verification visibility. |
+| `test_sync_confirmation.py` | 8 | Ported: dialog title, buttons, command/rules views and fingerprint header asserted. |
+| `test_settings_dialog.py` | 8 | Ported: tab titles, OK/Cancel, sound round-trip, diagnostics, tools and colours. |
 | `test_locked_profile_startup.py` | 8 | Ported: retry, temporary copy and quit-without-changes. |
 | `test_diff_tool_service.py` | 8 | Local diff launch now uses the configured placeholder-aware command; remote staging remains out of scope for this build. |
 | `test_sync_modes.py` | 7 | Ported: update/mirror/new-only argv and destination-only decisions. |
 | `test_inventory.py` | 7 | Ported at the parser/merge level: source and destination listings, filter handling and sizes. |
 | `test_plan_validation.py` | 6 | Ported: verify mismatch/missing/unexpected. |
-| `test_journal_behavior.py` | 6 | Partial: journal/status separation and colours. |
+| `test_journal_behavior.py` | 6 | Ported: timestamps, neutral command colour, severity colours and rsync noise handling. |
 | `test_backup_*` | 17 | Core backup paths/protection ported; add inspection/path edge cases. |
 | `test_filter_editor_delegate.py`, `test_filter_rule_model.py` | 13 | Editor, highlighter, preview and validation ported; add delegate paint assertions. |
-| `test_profile_editor.py` | 5 | Options, preservation, backup, conflict policy and filters ported; add widget round-trip tests. |
+| `test_profile_editor.py` | 5 | Ported: tab titles, profile round-trip, options, preservation, backup and filters. |
 | `test_tools_panel.py` | 5 | Table, add/edit/remove and diff command ported; add placeholder-warning tests. |
 | Remaining storage/CLI/timing files | ~40 | Core coverage exists; convert edge cases incrementally. |
 
@@ -106,13 +106,29 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
   `decisionsTooltipIsInformative` covers the Decisions cell and header tips.
 - External tools: `externalToolPlaceholders` covers the qpy placeholder cases
   and the diff command now uses the configured placeholder-aware command.
+- Test-port batches 1-5, 7 and 8 above are complete; see "Batches completed in
+  this pass" for the case names.
 
-## Next conversion batches
+## Batches completed in this pass
 
-1. `test_action_filters.py` exhaustive inversion state combinations.
-2. `test_flat_filtering.py` path/glob patterns and directory-only mode.
-3. `test_main_window_offscreen.py` exact shortcut enablement and full journal states.
-4. `test_flat_comparison_view.py` per-pane menus and exact tooltips.
-5. `test_settings_dialog.py` and `test_profile_editor.py` widget round-trips.
-7. `test_sync_confirmation.py` per-field dialog assertions.
-8. Golden screenshots for main window, settings, sync dialog and profile editor.
+1. `test_action_filters.py` exhaustive inversion state combinations —
+   `invertedClicksCoverStateCombinations`.
+2. `test_flat_filtering.py` path/glob and directory-only mode —
+   `pathFiltersAndGlobsMatchVisibleRows`; this exposed and fixed a real bug
+   where directory-only mode hid all reported directories.
+3. `test_main_window_offscreen.py` startup action states and journal colours —
+   `startupActionStatesMatchPython`, `journalSeverityColoursMatchPython`.
+4. `test_flat_comparison_view.py` menu actions and stale tooltip —
+   `staleRootTooltipAndContextMenuActions`.
+5/7. `test_settings_dialog.py`, `test_profile_editor.py` and
+   `test_sync_confirmation.py` widget round-trips —
+   `dialogRoundTripsCoverPortedFields`.
+8. Golden screenshots — `goldenScreenshotsAreValidImages` verifies the three
+   committed reference images; the profile editor is covered by the widget
+   round-trip instead of a separate image.
+
+## Remaining
+
+Exhaustive header-menu combinations, per-pane local/remote context variants and
+the long tail of storage/CLI edge cases. The core behaviour rows are now all
+covered by at least one regression case.

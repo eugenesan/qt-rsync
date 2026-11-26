@@ -69,6 +69,9 @@ class ComparisonView : public QWidget {
   void openDirectoryRequested(int pane, const QString& path);
   void useAsLocationRequested(const QString& path);
 
+ public slots:
+  void showContextMenu(int pane, const QPoint& position);
+
  private slots:
   void startDecisionBatch();
   void endDecisionBatch();
@@ -77,7 +80,6 @@ class ComparisonView : public QWidget {
   void syncDecisionsToStore();
   void onSortIndicatorChanged(int pane, int section, Qt::SortOrder order);
   void onCurrentChanged(int origin, const QModelIndex& index);
-  void showContextMenu(int pane, const QPoint& position);
   void showHeaderMenu(int pane, const QPoint& position);
 
   void selectRow(int row);

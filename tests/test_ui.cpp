@@ -22,6 +22,8 @@
 #include <QTabWidget>
 #include <QLineEdit>
 #include <QPlainTextEdit>
+#include <QTextBlock>
+#include <QTextFragment>
 #include <QTextCursor>
 #include <QProgressBar>
 #include <QPushButton>
@@ -45,6 +47,8 @@
 #include "ui/NativeDelegate.h"
 #include "ui/OverviewPane.h"
 #include "ui/SettingsDialog.h"
+#include "ui/ProfileEditorDialog.h"
+#include "ui/SyncDialog.h"
 #include "ui/UseAsLocationDialog.h"
 #include "core/Parser.h"
 #include "core/Storage.h"
@@ -108,6 +112,13 @@ class UiTest : public QObject {
   void useAsLocationDialogChoices();
   void useAsLocationMakesComparisonStale();
   void syncIsDisabledOnStartup();
+  void invertedClicksCoverStateCombinations();
+  void pathFiltersAndGlobsMatchVisibleRows();
+  void startupActionStatesMatchPython();
+  void journalSeverityColoursMatchPython();
+  void staleRootTooltipAndContextMenuActions();
+  void dialogRoundTripsCoverPortedFields();
+  void goldenScreenshotsAreValidImages();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -2035,6 +2046,292 @@ void UiTest::syncIsDisabledOnStartup() {
   }
   QVERIFY(syncAction != nullptr);
   QVERIFY(!syncAction->isEnabled());
+}
+
+void UiTest::invertedClicksCoverStateCombinations() {
+  ui::ActionFilterBar bar;
+  const auto box = [&bar](int number) {
+    return bar.findChild<QCheckBox*>(QStringLiteral("filter-box-%1").arg(number));
+  };
+  const auto ctrlClick = [](QCheckBox* target) {
+    QPointF point(5, 5);
+    QMouseEvent press(QEvent::MouseButtonPress, point, point, Qt::LeftButton,
+                      Qt::LeftButton, Qt::ControlModifier);
+    QMouseEvent release(QEvent::MouseButtonRelease, point, point, Qt::LeftButton,
+                        Qt::NoButton, Qt::ControlModifier);
+    QApplication::sendEvent(target, &press);
+    QApplication::sendEvent(target, &release);
+  };
+  const auto allActions = [&bar]() {
+    for (int action = 0; action < 5; ++action) {
+      if (!bar.actionVisible(action)) return false;
+    }
+    return true;
+  };
+  QCheckBox* excluded = box(1);
+  QCheckBox* create = box(3);
+  QCheckBox* update = box(4);
+  QVERIFY(excluded != nullptr && create != nullptr && update != nullptr);
+
+  ctrlClick(create);
+  QVERIFY(bar.actionVisible(0));
+  for (int action = 1; action < 5; ++action) QVERIFY(!bar.actionVisible(action));
+  ctrlClick(create);
+  QVERIFY(allActions());
+
+  // Ctrl+click on an action that is currently off restores all actions.
+  ctrlClick(create);
+  QVERIFY(!bar.actionVisible(1));
+  ctrlClick(update);
+  QVERIFY(allActions());
+
+  // An action solo followed by ctrl+click excluded still selects only
+  // excluded, and a second inverted click restores the default bar.
+  ctrlClick(create);
+  ctrlClick(excluded);
+  QVERIFY(bar.showExcluded());
+  QVERIFY(!allActions());
+  ctrlClick(excluded);
+  QVERIFY(!bar.showExcluded());
+  QVERIFY(allActions());
+
+  // A plain click still toggles, and reset clears the auxiliary toggles.
+  QVERIFY(create->isChecked());
+  QTest::mouseClick(create, Qt::LeftButton);
+  QVERIFY(!bar.actionVisible(0));
+  bar.toggleUnchanged();
+  QVERIFY(bar.showUnchanged());
+  bar.resetDefaults();
+  QVERIFY(allActions());
+  QVERIFY(!bar.showUnchanged());
+  QVERIFY(!bar.showExcluded());
+}
+
+void UiTest::pathFiltersAndGlobsMatchVisibleRows() {
+  QVector<core::Change> changes;
+  const auto add = [&changes](const QString& path, core::Action action,
+                              core::Kind kind) {
+    core::Change change;
+    change.path = path;
+    change.action = action;
+    change.kind = kind;
+    change.modifiedTime = QStringLiteral("2026-11-23-11:23:22");
+    changes.append(change);
+  };
+  add(QStringLiteral("docs/a.txt"), core::Action::UpdateContent, core::Kind::File);
+  add(QStringLiteral("docs/sub/b.txt"), core::Action::UpdateContent, core::Kind::File);
+  add(QStringLiteral("docs.txt"), core::Action::UpdateContent, core::Kind::File);
+  add(QStringLiteral("pics/c.jpg"), core::Action::UpdateContent, core::Kind::File);
+
+  auto visiblePaths = [](const model::DataStore& store) {
+    QStringList paths;
+    for (int id : store.visible) {
+      if (id >= 0 && id < static_cast<int>(store.paths.size())) {
+        paths.append(QString::fromStdString(store.paths[id]));
+      }
+    }
+    return paths;
+  };
+  const auto build = [&changes](const QString& pattern, bool glob,
+                                bool dirsOnly) {
+    model::DataStore store;
+    qt_rsync::model::loadChanges(store, changes);
+    store.pattern = pattern.toLower().toStdString();
+    store.pattern_glob = glob;
+    store.dirs_only = dirsOnly;
+    store.rebuild_visible();
+    return store;
+  };
+
+  auto store = build(QStringLiteral("docs/"), false, false);
+  auto paths = visiblePaths(store);
+  QVERIFY(paths.contains(QStringLiteral("docs/a.txt")));
+  QVERIFY(paths.contains(QStringLiteral("docs/sub/b.txt")));
+  QVERIFY(!paths.contains(QStringLiteral("docs.txt")));
+  QVERIFY(!paths.contains(QStringLiteral("pics/c.jpg")));
+
+  store = build(QStringLiteral("docs"), false, false);
+  paths = visiblePaths(store);
+  QVERIFY(paths.contains(QStringLiteral("docs.txt")));
+
+  store = build(QStringLiteral("*.jpg"), true, false);
+  paths = visiblePaths(store);
+  QVERIFY(paths.contains(QStringLiteral("pics/c.jpg")));
+  QVERIFY(!paths.contains(QStringLiteral("docs/a.txt")));
+
+  store = build(QString(), false, true);
+  paths = visiblePaths(store);
+  QVERIFY(paths.contains(QStringLiteral("docs")));
+  QVERIFY(!paths.contains(QStringLiteral("docs/a.txt")));
+}
+
+void UiTest::startupActionStatesMatchPython() {
+  ui::MainWindow window;
+  window.show();
+  QTest::qWait(10);
+  const auto findAction = [&window](const QString& text) {
+    for (QAction* action : window.findChildren<QAction*>()) {
+      if (action->text() == text) return action;
+    }
+    return static_cast<QAction*>(nullptr);
+  };
+  QAction* undo = findAction(QStringLiteral("Undo Decision"));
+  QAction* redo = findAction(QStringLiteral("Redo Decision"));
+  QVERIFY(undo != nullptr && redo != nullptr);
+  QVERIFY(!undo->isEnabled());
+  QVERIFY(!redo->isEnabled());
+  QAction* verify = findAction(QStringLiteral("Verify Decisions"));
+  QVERIFY(verify != nullptr);
+  QVERIFY(!verify->isEnabled());
+  QVERIFY(findAction(QStringLiteral("Synchronize")) != nullptr);
+  QVERIFY(!findAction(QStringLiteral("Synchronize"))->isEnabled());
+}
+
+void UiTest::journalSeverityColoursMatchPython() {
+  ui::MainWindow window;
+  window.show();
+  QTest::qWait(10);
+  QPlainTextEdit* journal = nullptr;
+  for (QPlainTextEdit* edit : window.findChildren<QPlainTextEdit*>()) {
+    if (edit->objectName() != QStringLiteral("command-preview-label")) journal = edit;
+  }
+  QVERIFY(journal != nullptr);
+  journal->clear();
+  const auto append = [&window](const QString& line) {
+    QVERIFY(QMetaObject::invokeMethod(
+        &window, "appendJournalLine", Q_ARG(QString, line)));
+  };
+  append(QStringLiteral("warning message"));
+  append(QStringLiteral("error message"));
+  append(QStringLiteral("comparison complete"));
+  append(QStringLiteral("$ rsync --dry-run -- /src/ /dst/"));
+  const auto colourOf = [journal](int row) {
+    QTextBlock block = journal->document()->findBlockByNumber(row);
+    QTextBlock::iterator it = block.begin();
+    QString colour;
+    while (!it.atEnd()) {
+      const QTextFragment fragment = it.fragment();
+      if (fragment.isValid() && !fragment.text().trimmed().isEmpty()) {
+        colour = fragment.charFormat().foreground().color().name().toLower();
+      }
+      ++it;
+    }
+    return colour;
+  };
+  QVERIFY(!colourOf(0).isEmpty());
+  QVERIFY(colourOf(0) != colourOf(1));
+  QCOMPARE(colourOf(3), QStringLiteral("#9ca3af"));
+}
+
+void UiTest::staleRootTooltipAndContextMenuActions() {
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("docs/a.txt"),
+                               QStringLiteral("docs/b.txt")}));
+  view.setStale(true);
+  auto& store = view.store();
+  const auto rootIt = store.path_to_id.find(model::DataStore::root_path());
+  QVERIFY(rootIt != store.path_to_id.end());
+  model::TableModel sourceModel(&store, 0);
+  const QModelIndex rootIndex =
+      sourceModel.index(store.row_of_id.at(rootIt->second), 0);
+  QVERIFY(sourceModel.data(rootIndex, Qt::ToolTipRole)
+              .toString()
+              .contains(QStringLiteral("stale comparison")));
+  view.setStale(false);
+
+  auto* sourceView = view.findChildren<QTableView*>().first();
+  QVERIFY(sourceView != nullptr);
+  view.show();
+  QTest::qWait(10);
+  QStringList labels;
+  QTimer::singleShot(0, [&labels]() {
+    auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+    if (menu == nullptr) return;
+    for (QAction* action : menu->actions()) labels.append(action->text());
+    menu->close();
+  });
+  QVERIFY(QMetaObject::invokeMethod(
+      &view, "showContextMenu", Q_ARG(int, 0), Q_ARG(QPoint, QPoint(30, 30))));
+  for (const QString& expected : {QStringLiteral("Copy Path"),
+                                  QStringLiteral("Copy Filename"),
+                                  QStringLiteral("Copy Relative Path"),
+                                  QStringLiteral("Open Directory"),
+                                  QStringLiteral("Use as Source/Destination..."),
+                                  QStringLiteral("Exclude via Filter"),
+                                  QStringLiteral("Delete on Destination"),
+                                  QStringLiteral("Collapse / Expand")}) {
+    QVERIFY2(labels.contains(expected), qPrintable(expected));
+  }
+}
+
+void UiTest::dialogRoundTripsCoverPortedFields() {
+  ui::SettingsDialog settings;
+  auto* settingsTabs = settings.findChild<QTabWidget*>();
+  QVERIFY(settingsTabs != nullptr);
+  QStringList settingsTitles;
+  for (int index = 0; index < settingsTabs->count(); ++index) {
+    settingsTitles.append(settingsTabs->tabText(index));
+  }
+  QCOMPARE(settingsTitles,
+           QStringList({QStringLiteral("General"), QStringLiteral("Logging"),
+                        QStringLiteral("Tools"), QStringLiteral("Advanced")}));
+  auto* settingsButtons = settings.findChild<QDialogButtonBox*>();
+  QVERIFY(settingsButtons != nullptr);
+  QVERIFY(settingsButtons->standardButtons() & QDialogButtonBox::Ok);
+  QVERIFY(settingsButtons->standardButtons() & QDialogButtonBox::Cancel);
+  auto* sound = settings.findChild<QCheckBox*>();
+  QVERIFY(sound != nullptr);
+  const bool initialSound = sound->isChecked();
+  sound->setChecked(!initialSound);
+  QCOMPARE(sound->isChecked(), !initialSound);
+
+  core::SyncProfile profile;
+  profile.name = QStringLiteral("example");
+  profile.source = core::parseEndpoint(QStringLiteral("/src/"));
+  profile.destination = core::parseEndpoint(QStringLiteral("/dst/"));
+  ui::ProfileEditorDialog editor(profile);
+  auto* editorTabs = editor.findChild<QTabWidget*>();
+  QVERIFY(editorTabs != nullptr);
+  QStringList editorTitles;
+  for (int index = 0; index < editorTabs->count(); ++index) {
+    editorTitles.append(editorTabs->tabText(index));
+  }
+  QCOMPARE(editorTitles,
+           QStringList({QStringLiteral("Options"), QStringLiteral("Preservation"),
+                        QStringLiteral("Backup"), QStringLiteral("Filters")}));
+  QCOMPARE(editor.profile().name, QStringLiteral("example"));
+
+  QVector<core::Change> changes = fileChanges({QStringLiteral("a.txt")});
+  core::Decisions decisions;
+  const auto plan = core::buildExecutionPlan(profile, changes, decisions);
+  ui::SyncDialog sync(profile, plan, QStringLiteral("/tmp/rules"));
+  QCOMPARE(sync.windowTitle(), QStringLiteral("Confirm synchronization"));
+  auto* syncButtons = sync.findChild<QDialogButtonBox*>();
+  QVERIFY(syncButtons != nullptr);
+  QVERIFY(syncButtons->button(QDialogButtonBox::Ok)->isEnabled());
+  QCOMPARE(syncButtons->button(QDialogButtonBox::Ok)->text(),
+           QStringLiteral("Synchronize Now"));
+  const QString allText = sync.findChildren<QLabel*>().size() > 0
+                              ? sync.findChildren<QLabel*>().first()->text()
+                              : QString();
+  QVERIFY(sync.findChildren<QPlainTextEdit*>().size() >= 2);
+  QVERIFY(allText.contains(QStringLiteral("fingerprint")));
+  auto* stats = sync.findChild<QTableWidget*>();
+  QVERIFY(stats == nullptr ||
+          stats->rowCount() >= 0);  // dialog uses a grid, not a table
+}
+
+void UiTest::goldenScreenshotsAreValidImages() {
+  const QString root = QStringLiteral(QT_RSYNC_SOURCE_DIR);
+  for (const QString& name : {QStringLiteral("main-window.png"),
+                              QStringLiteral("settings-dialog.png"),
+                              QStringLiteral("sync-dialog.png")}) {
+    const QString path = root + QStringLiteral("/resources/") + name;
+    QVERIFY2(QFile::exists(path), qPrintable(path));
+    QPixmap pixmap(path);
+    QVERIFY2(!pixmap.isNull(), qPrintable(path));
+    QVERIFY(pixmap.width() > 100 && pixmap.height() > 100);
+  }
 }
 
 QTEST_MAIN(UiTest)

@@ -774,7 +774,7 @@ struct DataStore {
     std::vector<char> keep_ancestor(paths.size(), 0);
     for (int i = 0; i < static_cast<int>(paths.size()); ++i) {
       if (!matches(i)) continue;
-      if (!show_unchanged && i < static_cast<int>(is_dir.size()) &&
+      if (!dirs_only && !show_unchanged && i < static_cast<int>(is_dir.size()) &&
           is_dir[i] && i < static_cast<int>(actions.size()) &&
           actions[i] == NoChange) {
         continue;
@@ -836,8 +836,9 @@ struct DataStore {
       }
       if (!show_excluded && decisions[i] == Exclude) continue;
       bool path_ok = matches(i);
-      if (!show_unchanged && i < static_cast<int>(is_dir.size()) && is_dir[i] &&
-          i < static_cast<int>(actions.size()) && actions[i] == NoChange) {
+      if (!dirs_only && !show_unchanged && i < static_cast<int>(is_dir.size()) &&
+          is_dir[i] && i < static_cast<int>(actions.size()) &&
+          actions[i] == NoChange) {
         path_ok = false;
       }
       if (!path_ok && include_contents) {

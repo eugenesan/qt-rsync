@@ -38,11 +38,13 @@ class ActionFilterBar : public QWidget {
   void undoRequested();
   void unchangedToggled(bool enabled);
 
+ public slots:
+  void resetDefaults();
+
  private:
   QVector<QCheckBox*> allBoxes() const;
   void applyInverse(QCheckBox* box);
   void setStates(const QHash<QCheckBox*, bool>& wanted);
-  void resetDefaults();
   void showBoxMenu(QCheckBox* box, const QPoint& point);
   void showExcludedMenu(const QPoint& point);
 
