@@ -100,7 +100,8 @@ struct DataStore {
   std::vector<int> depth;
   std::vector<std::string> names;
   std::vector<std::string> folded_names;
-  std::vector<std::string> folded_paths;
+  mutable std::vector<std::string> folded_paths;
+  mutable bool folded_paths_ready_ = false;
   std::vector<char> collapsed;
   std::unordered_map<std::string, int> path_to_id;
   int action_mask = 0;  // 0 means "all actions"
@@ -246,11 +247,6 @@ struct DataStore {
         folded_names[i][j] = static_cast<char>(
             std::tolower(static_cast<unsigned char>(name[j])));
       }
-      folded_paths[i].resize(path.size());
-      for (std::size_t j = 0; j < path.size(); ++j) {
-        folded_paths[i][j] = static_cast<char>(
-            std::tolower(static_cast<unsigned char>(path[j])));
-      }
     }
   }
 
@@ -284,6 +280,7 @@ struct DataStore {
     derive_range(0, count);
     decision_log.clear();
     tree_order_dirty_ = true;
+    folded_paths_ready_ = false;
     children_dirty_ = true;
     collapsed.assign(paths.size(), 0);
     action_mask = 0;
@@ -321,6 +318,7 @@ struct DataStore {
     for (int i = start; i < count; ++i) path_to_id[paths[i]] = i;
     derive_range(start, count);
     tree_order_dirty_ = true;
+    folded_paths_ready_ = false;
     children_dirty_ = true;
     collapsed.resize(count, 0);
     visible.resize(count);
@@ -351,6 +349,7 @@ struct DataStore {
     }
     decision_log.clear();
     tree_order_dirty_ = true;
+    folded_paths_ready_ = false;
     children_dirty_ = true;
     visible.resize(count);
     std::iota(visible.begin(), visible.end(), 0);
@@ -371,6 +370,7 @@ struct DataStore {
         parent = next == std::string::npos ? "" : parent.substr(0, next);
       }
     }
+    core::ScopedPerf collectPerf("addDirs.collect");
     const int start = static_cast<int>(paths.size());
     for (const std::string& dir : dirs) {
       if (path_to_id.count(dir)) continue;
@@ -384,6 +384,7 @@ struct DataStore {
       synthetic.push_back(1);
       path_to_id[dir] = id;
     }
+    core::ScopedPerf appendPerf("addDirs.append");
     int root = -1;
     auto root_it = path_to_id.find(root_path());
     if (root_it == path_to_id.end()) {
@@ -409,8 +410,14 @@ struct DataStore {
     collapsed.resize(count, 0);
     // Re-derive the structure now that the synthesized folders are in the
     // map; the display text of the existing rows is already cached.
-    derive_structure(0, count);
-    derive_text(start, count);
+    {
+      core::ScopedPerf perf("addDirs.deriveStructure");
+      derive_structure(0, count);
+    }
+    {
+      core::ScopedPerf perf("addDirs.deriveText");
+      derive_text(start, count);
+    }
     // Top-level rows hang off the virtual root.
     for (int i = 0; i < count; ++i) {
       if (i == root) continue;
@@ -430,7 +437,6 @@ struct DataStore {
     depth[root] = 0;
     names[root] = root_source;
     folded_names[root] = root_source;
-    folded_paths[root] = root_source;
     dir_has_children.assign(count, 0);
     for (int i = 0; i < count; ++i) {
       const int parent = i < static_cast<int>(parents.size()) ? parents[i] : -1;
@@ -439,8 +445,12 @@ struct DataStore {
       }
     }
     tree_order_dirty_ = true;
+    folded_paths_ready_ = false;
     children_dirty_ = true;
-    visible = tree_order();
+    {
+      core::ScopedPerf perf("addDirs.treeOrder");
+      visible = tree_order();
+    }
     row_of_id.assign(count, -1);
     for (int row = 0; row < static_cast<int>(visible.size()); ++row) {
       row_of_id[visible[row]] = row;
@@ -569,6 +579,7 @@ struct DataStore {
 
   void invalidate_tree_order() {
     tree_order_dirty_ = true;
+    folded_paths_ready_ = false;
     children_dirty_ = true;
     children_dirty_ = true;
   }
@@ -599,6 +610,22 @@ struct DataStore {
     return true;
   }
 
+  void ensure_folded_paths() const {
+    if (folded_paths_ready_) return;
+    for (std::size_t i = 0; i < paths.size(); ++i) {
+      folded_paths[i].resize(paths[i].size());
+      for (std::size_t j = 0; j < paths[i].size(); ++j) {
+        folded_paths[i][j] = static_cast<char>(
+            std::tolower(static_cast<unsigned char>(paths[i][j])));
+      }
+    }
+    auto root = path_to_id.find(root_path());
+    if (root != path_to_id.end() && root->second < folded_paths.size()) {
+      folded_paths[root->second] = root_source;
+    }
+    folded_paths_ready_ = true;
+  }
+
   bool matches(int id) const {
     // NoChange files are inventory-only and stay hidden until the user turns
     // on the Unchanged toggle. Directories remain as navigation rows.
@@ -624,6 +651,7 @@ struct DataStore {
     }
     if (!pattern.empty() && id < static_cast<int>(folded_paths.size())) {
       const bool by_path = pattern.find('/') != std::string::npos;
+      if (by_path) ensure_folded_paths();
       const std::string& candidate = by_path ? folded_paths[id] : folded_names[id];
       if (dirs_only && !pattern_glob) {
         const std::string& exact = by_path ? folded_paths[id] : folded_names[id];
@@ -1604,9 +1632,18 @@ inline void loadChanges(DataStore& store, const QVector<core::Change>& changes) 
     decisions.push_back(Inherit);
     times.push_back(change.modifiedTime.toStdString());
   }
-  store.load_direct(paths, actions, kinds, sizes, decisions, times);
-  store.add_directories();
-  store.rebuild_visible();
+  {
+    core::ScopedPerf perf("loadChanges.load_direct");
+    store.load_direct(paths, actions, kinds, sizes, decisions, times);
+  }
+  {
+    core::ScopedPerf perf("loadChanges.add_directories");
+    store.add_directories();
+  }
+  {
+    core::ScopedPerf perf("loadChanges.rebuild_visible");
+    store.rebuild_visible();
+  }
 }
 
 }  // namespace qt_rsync::model

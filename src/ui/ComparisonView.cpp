@@ -298,10 +298,18 @@ void ComparisonView::setActionColours(const QVector<QString>& colours) {
 
 void ComparisonView::setChanges(const QVector<core::Change>& changes) {
   core::ScopedPerf perf("ui.setChanges");
-  decisions_.reconcile(changes, true);
-  loadChanges(store_, changes);
-  syncDecisionsToStore();
-  for (model::TableModel* model : models_) model->reset();
+  {
+    core::ScopedPerf phase("ui.setChanges.reconcile");
+    decisions_.reconcile(changes, true);
+  }
+  {
+    core::ScopedPerf phase("ui.setChanges.loadChanges");
+    loadChanges(store_, changes);
+  }
+  {
+    core::ScopedPerf phase("ui.setChanges.modelReset");
+    for (model::TableModel* model : models_) model->reset();
+  }
   emit decisionChanged();
 }
 

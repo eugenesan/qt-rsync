@@ -118,8 +118,13 @@ and refreshed documentation and packaging.
   skipped for decisions, so a full overview update is ~15-35 ms at 640k rows.
 - Ctrl+click on Show excluded also handles modifiers delivered only with the
   release event, and the checkbox context menu now offers "Show only excluded
-  items" / "Show all decisions" explicitly. Legacy app-default.log settings
-  are ignored by file name so old nested paths cannot pin the log name.
+  items" / "Show all decisions" explicitly. The click() fallback was removed
+  because it could apply the inverse twice on real X11 and undo the filter.
+  Legacy app-default.log settings are ignored by file name so old nested
+  paths cannot pin the log name.
+- Folded full paths are computed lazily, saving a full lowercase pass over
+  every path during compare. More sub-phase timings are available when timing
+  diagnostics are enabled, for further performance analysis.
 - External tools support qpy's placeholder expansion; the diff command uses
   the configured command with `%a`/`%A` and quoted paths stay one argument.
 
