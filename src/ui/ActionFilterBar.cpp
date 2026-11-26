@@ -184,8 +184,15 @@ bool ActionFilterBar::eventFilter(QObject* watched, QEvent* event) {
       return true;
     }
   } else if (event->type() == QEvent::MouseButtonRelease) {
+    auto* mouse = static_cast<QMouseEvent*>(event);
     if (inverseClick_ == box) {
       inverseClick_ = nullptr;
+      return true;
+    }
+    // Some window managers deliver the modifier only with the release.
+    if (mouse->button() == Qt::LeftButton &&
+        (mouse->modifiers() & Qt::ControlModifier)) {
+      applyInverse(box);
       return true;
     }
   }
@@ -303,12 +310,23 @@ void ActionFilterBar::showBoxMenu(QCheckBox* box, const QPoint& point) {
 
 void ActionFilterBar::showExcludedMenu(const QPoint& point) {
   QMenu menu(this);
+  bool onlyExcluded = excluded_->isChecked();
+  for (QCheckBox* action : actions_) {
+    if (action->isChecked()) onlyExcluded = false;
+  }
+  if (unchanged_ != nullptr && unchanged_->isChecked()) onlyExcluded = false;
+  QAction* invert = menu.addAction(onlyExcluded
+                                       ? QStringLiteral("Show all decisions")
+                                       : QStringLiteral("Show only excluded items"));
   QAction* reset = menu.addAction(
       excludedCount_ > 0
           ? QStringLiteral("Reset All Exclusions (%1)").arg(excludedCount_)
           : QStringLiteral("Reset All Exclusions"));
   reset->setEnabled(excludedCount_ > 0);
-  if (menu.exec(excluded_->mapToGlobal(point)) == reset && excludedCount_ > 0) {
+  QAction* chosen = menu.exec(excluded_->mapToGlobal(point));
+  if (chosen == invert) {
+    applyInverse(excluded_);
+  } else if (chosen == reset && excludedCount_ > 0) {
     emit resetExclusionsRequested();
   }
 }

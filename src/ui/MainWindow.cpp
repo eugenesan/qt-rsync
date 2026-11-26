@@ -1972,8 +1972,9 @@ void MainWindow::openSessionLog(const QString& name) {
   // Older settings stored the Settings dialog's "default" placeholder as a
   // real path; that made every profile write to app-default.log. Ignore it
   // so the log follows the loaded profile again.
-  d_->logPath = configured.isEmpty() ||
-                        configured == core::paths::appLogPath(QStringLiteral("default"))
+  const bool legacyDefault =
+      QFileInfo(configured).fileName() == QLatin1String("app-default.log");
+  d_->logPath = configured.isEmpty() || legacyDefault
                     ? core::paths::appLogPath(name)
                     : configured;
   refreshDiagnosticsSettings();
