@@ -104,6 +104,14 @@ and refreshed documentation and packaging.
   diagnostics in the session log" (or "Include rsync debug diagnostics") to
   write per-phase millisecond timings for decisions, filters, overview, plan
   and compare into the session log. With the option off there is no overhead.
+- The single-decision plan rebuild is deferred until Sync/Verify, decision
+  inheritance is checked by prefix instead of allocating every ancestor, and
+  the overview tree is built from stable path ids instead of parsing and
+  hashing every path. On a 640k deep-path comparison, exclude dropped from
+  ~500 ms to ~16 ms and a filter toggle from ~650 ms to ~30 ms.
+- Ctrl+click on Show excluded now reliably selects "only excluded" from any
+  other filter state, and the session log path no longer duplicates the
+  application name under XDG_CACHE_HOME.
 - External tools support qpy's placeholder expansion; the diff command uses
   the configured command with `%a`/`%A` and quoted paths stay one argument.
 

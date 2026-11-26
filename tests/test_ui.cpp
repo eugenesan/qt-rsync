@@ -1495,6 +1495,16 @@ void UiTest::filterCheckboxesSupportInvertedClicks() {
   for (int action = 0; action < 5; ++action) {
     QVERIFY(bar.actionVisible(action));
   }
+  ctrlClick(excluded);
+  QVERIFY(bar.showExcluded());
+  for (int action = 0; action < 5; ++action) {
+    QVERIFY(!bar.actionVisible(action));
+  }
+  ctrlClick(excluded);
+  QVERIFY(!bar.showExcluded());
+  for (int action = 0; action < 5; ++action) {
+    QVERIFY(bar.actionVisible(action));
+  }
 }
 
 void UiTest::resetExclusionsKeepsOtherDecisions() {

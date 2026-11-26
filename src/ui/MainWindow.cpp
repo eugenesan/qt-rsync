@@ -205,6 +205,7 @@ class MainWindow::Private {
   QString searchText;
   int searchPosition = -1;
   bool cancelled = false;
+  bool planDirty = false;
   QTimer* settingsTimer = nullptr;
   QHash<QString, QVariant> pendingSettings;
   QLineEdit* status = nullptr;
@@ -1218,10 +1219,9 @@ MainWindow::MainWindow(QWidget* parent)
     // Signatures are needed only when the plan is executed or shown in the
     // sync dialog. Recomputing them for every decision was the bulk of the
     // cost of excluding a single item on a large comparison.
-    {
-      core::ScopedPerf perf("ui.decision.refreshPlan");
-      refreshPlan(true);
-    }
+    // A single decision does not need a full plan: the plan is rebuilt
+    // lazily when Sync/Verify actually uses it.
+    d_->planDirty = true;
     {
       core::ScopedPerf perf("ui.decision.excludedCount");
       d_->filterBar->setExcludedCount(
@@ -1744,6 +1744,7 @@ void MainWindow::finishComparison() {
 }
 
 void MainWindow::refreshPlan(bool quick) {
+  d_->planDirty = false;
   if (quick) {
     d_->plan.summary = core::buildPlanSummary(d_->profile, d_->changes,
                                               d_->comparison->decisions());
@@ -1764,7 +1765,10 @@ void MainWindow::refreshPlan(bool quick) {
 }
 
 void MainWindow::verifyPlan() {
-  if (d_->plan.items.isEmpty() || d_->plan.comparisonSignature.isEmpty()) refreshPlan();
+  if (d_->planDirty || d_->plan.items.isEmpty() ||
+      d_->plan.comparisonSignature.isEmpty()) {
+    refreshPlan();
+  }
   d_->filterFile = new QTemporaryFile(
       QDir::tempPath() + QStringLiteral("/qt-rsync-plan-XXXXXX.rules"), this);
   if (!d_->filterFile->open()) {
@@ -1786,7 +1790,8 @@ void MainWindow::verifyPlan() {
 }
 
 void MainWindow::synchronize() {
-  if (d_->plan.items.isEmpty() || d_->stale || d_->plan.comparisonSignature.isEmpty()) {
+  if (d_->planDirty || d_->plan.items.isEmpty() || d_->stale ||
+      d_->plan.comparisonSignature.isEmpty()) {
     refreshPlan();
   }
   d_->filterFile = new QTemporaryFile(

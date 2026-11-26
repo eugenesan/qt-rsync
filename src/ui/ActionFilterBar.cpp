@@ -221,11 +221,11 @@ void ActionFilterBar::resetDefaults() {
 void ActionFilterBar::applyInverse(QCheckBox* box) {
   const QVector<QCheckBox*> boxes = allBoxes();
   if (box == excluded_) {
-    bool allActions = true;
-    for (QCheckBox* action : actions_) {
-      if (!action->isChecked()) allActions = false;
+    bool onlyExcluded = box->isChecked();
+    for (QCheckBox* other : boxes) {
+      if (other != box && other->isChecked()) onlyExcluded = false;
     }
-    if (box->isChecked() || !allActions) {
+    if (onlyExcluded) {
       resetDefaults();
     } else {
       QHash<QCheckBox*, bool> wanted;

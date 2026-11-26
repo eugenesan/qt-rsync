@@ -21,8 +21,9 @@ qt-rsync (0.2.0-0) resolute; urgency=medium
     timestamped, decision filtering and overview building are much faster,
     destination metadata runs after the dry run without overlapping rsync
     passes, journal commands are neutral, tooltips are informative, sizes
-    scale to MiB/GiB, decisions update incrementally and timings report real
-    wall-clock values; example profile installed under
+    scale to MiB/GiB, decisions update incrementally, log paths and inverted
+    clicks are fixed, and timings report real wall-clock values; example
+    profile installed under
     /usr/share/doc/qt-rsync/examples.
 
  -- Eugene San (eugenesan) <eugenesan@gmail.com>  Tue, 24 Nov 2026 18:40:00 -0700

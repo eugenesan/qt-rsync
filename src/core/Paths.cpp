@@ -16,7 +16,9 @@ QString stateHome() {
 }
 
 QString cacheHome() {
-  return QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+  // GenericCacheLocation avoids appending the organisation/application name
+  // twice: logDirectory() already adds /qt-rsync.
+  return QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation);
 }
 
 QString profilesDirectory() { return configHome() + "/qt-rsync/profiles"; }

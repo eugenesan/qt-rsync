@@ -66,11 +66,44 @@ Decision Decisions::explicitDecision(const QString& path) const {
 
 std::optional<Decision> Decisions::inherited(const QString& path) const {
   if (explicit_.isEmpty()) return std::nullopt;
-  QString current = normalize(path);
-  while (!current.isEmpty()) {
-    const auto it = explicit_.constFind(current);
+  // A decision set is normally a handful of paths while changes are hundreds
+  // of thousands. Checking each key as a prefix avoids allocating every
+  // ancestor of every change, which dominated refreshPlan on deep trees.
+  const QString current = normalize(path);
+  if (explicit_.size() <= 32) {
+    std::optional<Decision> result;
+    int best = -1;
+    for (auto it = explicit_.cbegin(); it != explicit_.cend(); ++it) {
+      const QString& key = it.key();
+      if (key.isEmpty()) {
+        if (best < 0) {
+          best = 0;
+          result = it.value();
+        }
+        continue;
+      }
+      if (current == key) {
+        if (static_cast<int>(key.size()) >= best) {
+          best = static_cast<int>(key.size());
+          result = it.value();
+        }
+        continue;
+      }
+      if (current.size() <= key.size() || static_cast<int>(key.size()) <= best) {
+        continue;
+      }
+      if (!current.startsWith(key)) continue;
+      if (current.at(key.size()) != QLatin1Char('/')) continue;
+      best = static_cast<int>(key.size());
+      result = it.value();
+    }
+    return result;
+  }
+  QString ancestor = current;
+  while (!ancestor.isEmpty()) {
+    const auto it = explicit_.constFind(ancestor);
     if (it != explicit_.cend()) return it.value();
-    current = parentOf(current);
+    ancestor = parentOf(ancestor);
   }
   const auto root = explicit_.constFind(QString());
   if (root != explicit_.cend()) return root.value();
