@@ -3,6 +3,7 @@
 #define QT_RSYNC_DATASTORE_H
 
 #include <QAbstractItemModel>
+#include "core/Perf.h"
 #include <QApplication>
 #include <QColor>
 #include <QFontMetrics>
@@ -822,6 +823,7 @@ struct DataStore {
     if (sort_column == 0) {
       // Column 0 keeps the natural folder-tree order built by add_directories().
     } else {
+      core::ScopedPerf perf("store.sortVisible");
       sort_visible(sort_column, sort_desc);
     }
     for (int row = 0; row < static_cast<int>(visible.size()); ++row) {

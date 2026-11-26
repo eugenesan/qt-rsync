@@ -3,6 +3,7 @@
 #include "core/Filter.h"
 
 #include <algorithm>
+#include "core/Perf.h"
 #include "ui/Icons.h"
 #include "ui/TreeDelegate.h"
 
@@ -254,6 +255,7 @@ void ComparisonView::setStale(bool stale) {
 }
 
 void ComparisonView::applyFilters() {
+  core::ScopedPerf perf("ui.applyFilters");
   if (filterBar_ == nullptr) return;
   int mask = 0;
   for (int action = 0; action < 5; ++action) {
@@ -281,6 +283,7 @@ void ComparisonView::setRootNames(const QString& source,
 }
 
 void ComparisonView::setShowUnchanged(bool show) {
+  core::ScopedPerf perf("ui.showUnchanged");
   if (store_.show_unchanged == show) return;
   store_.show_unchanged = show;
   store_.rebuild_visible();
@@ -294,6 +297,7 @@ void ComparisonView::setActionColours(const QVector<QString>& colours) {
 }
 
 void ComparisonView::setChanges(const QVector<core::Change>& changes) {
+  core::ScopedPerf perf("ui.setChanges");
   decisions_.reconcile(changes, true);
   loadChanges(store_, changes);
   syncDecisionsToStore();
@@ -475,6 +479,7 @@ void ComparisonView::restoreFocusAfterDecision(
 }
 
 bool ComparisonView::undoDecision() {
+  core::ScopedPerf perf("ui.undoDecision");
   if (decisionHistory_.isEmpty()) return false;
   redoHistory_.append(decisions_.explicitItemsAsHash());
   if (redoHistory_.size() > 100) redoHistory_.removeFirst();
@@ -489,6 +494,7 @@ bool ComparisonView::undoDecision() {
 }
 
 bool ComparisonView::redoDecision() {
+  core::ScopedPerf perf("ui.redoDecision");
   if (redoHistory_.isEmpty()) return false;
   decisionHistory_.append(decisions_.explicitItemsAsHash());
   if (decisionHistory_.size() > 100) decisionHistory_.removeFirst();
@@ -503,6 +509,7 @@ bool ComparisonView::redoDecision() {
 }
 
 void ComparisonView::applyDecision(const QString& path, int decision) {
+  core::ScopedPerf perf("ui.applyDecision");
   // The compared folder is the container, not a decidable row. Keep its row
   // and the whole comparison always reachable.
   if (path.isEmpty() ||
@@ -520,10 +527,22 @@ void ComparisonView::applyDecision(const QString& path, int decision) {
     if (decisionHistory_.size() > 100) decisionHistory_.removeFirst();
   }
   decisions_.set(path, value);
-  syncDecisionsToStore();
-  store_.rebuild_visible();
-  for (model::TableModel* model : models_) model->reset();
-  if (single) restoreFocusAfterDecision(oldVisible, {path});
+  {
+    core::ScopedPerf phase("ui.decision.syncDecisions");
+    syncDecisionsToStore();
+  }
+  {
+    core::ScopedPerf phase("ui.decision.rebuildVisible");
+    store_.rebuild_visible();
+  }
+  {
+    core::ScopedPerf phase("ui.decision.modelReset");
+    for (model::TableModel* model : models_) model->reset();
+  }
+  if (single) {
+    core::ScopedPerf phase("ui.decision.restoreFocus");
+    restoreFocusAfterDecision(oldVisible, {path});
+  }
   redoHistory_.clear();
   emit redoAvailable(false);
   emit decisionChanged();

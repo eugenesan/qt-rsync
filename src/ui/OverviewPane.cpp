@@ -1,5 +1,7 @@
 #include "ui/OverviewPane.h"
 
+#include "core/Perf.h"
+
 #include <QApplication>
 #include <QContextMenuEvent>
 #include <QHeaderView>
@@ -206,6 +208,7 @@ void OverviewPane::showFolderMenu(const QString& path,
 }
 
 void OverviewPane::rebuild(const model::DataStore& store) {
+  core::ScopedPerf perf("ui.overviewRebuild");
   // Remember which folders were open; a reset of the model collapses them.
   if (!firstBuild_) {
     expandedPaths_.clear();
@@ -247,6 +250,7 @@ void OverviewPane::rebuild(const model::DataStore& store) {
 }
 
 void OverviewPane::updateStats(const model::DataStore& store) {
+  core::ScopedPerf perf("ui.overviewStats");
   int count = 0, creates = 0, updates = 0, metadata = 0, deletes = 0, kept = 0;
   long long size = 0, deletedSize = 0;
   for (int id : store.visible) {

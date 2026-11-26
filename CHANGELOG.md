@@ -100,6 +100,10 @@ and refreshed documentation and packaging.
   are refreshed, matching the hybrid view's incremental behaviour. Preference
   writes from toolbar/filter clicks are coalesced on a timer instead of
   hitting the settings files on every click.
+- Opt-in phase timing: enable Settings > Advanced > "Include timing
+  diagnostics in the session log" (or "Include rsync debug diagnostics") to
+  write per-phase millisecond timings for decisions, filters, overview, plan
+  and compare into the session log. With the option off there is no overhead.
 - External tools support qpy's placeholder expansion; the diff command uses
   the configured command with `%a`/`%A` and quoted paths stay one argument.
 

@@ -49,6 +49,7 @@
 #include "core/Command.h"
 #include "core/Filter.h"
 #include "core/Parser.h"
+#include "core/Perf.h"
 #include "core/ExternalTools.h"
 #include "core/Paths.h"
 #include "core/Storage.h"
@@ -496,6 +497,7 @@ MainWindow::MainWindow(QWidget* parent)
                     d_->soundEnabled =
                         settings.value(QStringLiteral("sound/enabled"), true)
                             .toBool();
+                    refreshDiagnosticsSettings();
                     applyActionColours();
                     updateVerificationVisibility();
                   }
@@ -532,6 +534,7 @@ MainWindow::MainWindow(QWidget* parent)
       core::storage::Settings settings;
       d_->soundEnabled =
           settings.value(QStringLiteral("sound/enabled"), true).toBool();
+      refreshDiagnosticsSettings();
       applyActionColours();
       updateVerificationVisibility();
     }
@@ -1215,13 +1218,22 @@ MainWindow::MainWindow(QWidget* parent)
     // Signatures are needed only when the plan is executed or shown in the
     // sync dialog. Recomputing them for every decision was the bulk of the
     // cost of excluding a single item on a large comparison.
-    refreshPlan(true);
-    d_->filterBar->setExcludedCount(
-        d_->comparison->decisions().excludedPaths().size());
+    {
+      core::ScopedPerf perf("ui.decision.refreshPlan");
+      refreshPlan(true);
+    }
+    {
+      core::ScopedPerf perf("ui.decision.excludedCount");
+      d_->filterBar->setExcludedCount(
+          d_->comparison->decisions().excludedPaths().size());
+    }
     // qpy skips the full overview rebuild for a single decision and only
     // refreshes the totals; the folder tree is rebuilt on the next full
     // refresh. That keeps exclude/undo interactive on large comparisons.
-    d_->overview->refreshStats(d_->comparison->store());
+    {
+      core::ScopedPerf perf("ui.decision.overviewStats");
+      d_->overview->refreshStats(d_->comparison->store());
+    }
   });
   connect(d_->comparison, &ComparisonView::filterRequested, this,
           [this](const QString& pattern, const QString& path) {
@@ -1304,9 +1316,11 @@ MainWindow::~MainWindow() {
 void MainWindow::applyStartupOptions(const app::StartupOptions& options) {
   if (options.noLogFile) {
     closeSessionLog();
+    refreshDiagnosticsSettings();
   } else if (!options.logFile.isEmpty()) {
     closeSessionLog();
     d_->logPath = options.logFile;
+    refreshDiagnosticsSettings();
     QFileInfo(d_->logPath).absoluteDir().mkpath(QStringLiteral("."));
     d_->logFile = new QFile(d_->logPath, this);
     if (d_->logFile->open(QIODevice::Append | QIODevice::Text)) {
@@ -1500,6 +1514,7 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   // view construction but never runs two rsync passes on the same endpoints
   // at the same time.
   startDestinationInventory();
+  core::ScopedPerf parsePerf("compare.cpuPhase");
   QElapsedTimer parseClock;
   parseClock.start();
   const core::ParseResult parsed = core::parseOutput(
@@ -1516,6 +1531,7 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   };
   d_->comparison->setRootNames(baseName(d_->profile.source.path),
                                baseName(d_->profile.destination.path));
+  core::ScopedPerf viewPerf("compare.viewBuild");
   d_->viewClock.start();
   d_->comparison->setChanges(parsed.changes);
   d_->filterBar->setExcludedCount(0);
@@ -1523,6 +1539,7 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   appendJournalLine(
       QStringLiteral("Comparison view built in %1 s.")
           .arg(d_->viewClock.elapsed() / 1000.0, 0, 'f', 2));
+  core::ScopedPerf planPerf("compare.planBuild");
   QElapsedTimer planClock;
   planClock.start();
   refreshPlan();
@@ -1945,6 +1962,7 @@ void MainWindow::openSessionLog(const QString& name) {
       settings.value(QStringLiteral("logging/file")).toString().trimmed();
   d_->logPath =
       configured.isEmpty() ? core::paths::appLogPath(name) : configured;
+  refreshDiagnosticsSettings();
   if (!settings.value(QStringLiteral("logging/enabled"), true).toBool()) {
     return;
   }
@@ -2242,6 +2260,14 @@ void MainWindow::saveWindowState() {
 void MainWindow::queueSetting(const QString& key, const QVariant& value) {
   d_->pendingSettings.insert(key, value);
   d_->settingsTimer->start();
+}
+
+void MainWindow::refreshDiagnosticsSettings() {
+  core::storage::Settings settings;
+  const bool timing = settings.value(QStringLiteral("logging/timing"), false).toBool();
+  const bool debug = settings.value(QStringLiteral("logging/debug"), false).toBool();
+  core::setPerfEnabled(timing || debug);
+  core::setPerfLogPath(d_->logPath.toLocal8Bit());
 }
 
 void MainWindow::flushSettings() {

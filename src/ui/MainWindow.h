@@ -47,6 +47,7 @@ class MainWindow : public QMainWindow {
   void refreshPlan(bool quick = false);
   void queueSetting(const QString& key, const QVariant& value);
   void flushSettings();
+  void refreshDiagnosticsSettings();
   void addFilterPattern(const QString& pattern, const QString& path);
   void setStatus(const QString& text);
   void appendJournalLine(const QString& line);
