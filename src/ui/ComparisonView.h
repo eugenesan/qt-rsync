@@ -26,6 +26,7 @@ class ComparisonView : public QWidget {
   [[nodiscard]] model::DataStore& store() { return store_; }
   [[nodiscard]] ActionFilterBar* filterBar() { return filterBar_; }
   void applyFilters();
+  void refreshDecisionHeader();
   void setFilterBar(ActionFilterBar* bar);
   [[nodiscard]] core::Decisions& decisions() { return decisions_; }
   void setChanges(const QVector<core::Change>& changes);

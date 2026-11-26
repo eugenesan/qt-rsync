@@ -103,6 +103,7 @@ class UiTest : public QObject {
   void journalEntriesHaveTimestamps();
   void metadataListingStartsBeforeViewBuild();
   void journalCommandLinesAreNeutral();
+  void decisionsTooltipIsInformative();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1900,6 +1901,45 @@ void UiTest::journalCommandLinesAreNeutral() {
   QCOMPARE(cursor.charFormat().foreground().color().name().toLower(),
            QStringLiteral("#9ca3af"));
   qputenv("PATH", oldPath);
+}
+
+void UiTest::decisionsTooltipIsInformative() {
+  QVector<core::Change> changes;
+  core::Change change;
+  change.path = QStringLiteral("docs/a.txt");
+  change.action = core::Action::Create;
+  change.kind = core::Kind::File;
+  change.size = 1024;
+  change.modifiedTime = QStringLiteral("2026-11-23-11:23:22");
+  changes.append(change);
+
+  ui::ComparisonView view;
+  view.setChanges(changes);
+  auto& store = view.store();
+  const auto found = store.path_to_id.find("docs/a.txt");
+  QVERIFY(found != store.path_to_id.end());
+  const int id = found->second;
+  store.dest_times.resize(store.paths.size());
+  store.dest_times[id] = "2026-11-24-10:10:10";
+
+  model::TableModel decisions(&store, 1);
+  const QModelIndex index = decisions.index(store.row_of_id.at(id), 4);
+  const QString tip = decisions.data(index, Qt::ToolTipRole).toString();
+  QVERIFY(tip.contains(QStringLiteral("Source:")));
+  QVERIFY(tip.contains(QStringLiteral("Destination:")));
+  QVERIFY(tip.contains(QStringLiteral("new")));
+  QVERIFY(tip.contains(QStringLiteral("Modified:")));
+  QVERIFY(tip.contains(QStringLiteral("source 2026-11-23-11:23:22")));
+  QVERIFY(tip.contains(QStringLiteral("destination 2026-11-24-10:10:10")));
+
+  QCOMPARE(decisions.headerData(4, Qt::Horizontal, Qt::DisplayRole).toString(),
+           QStringLiteral("Decisions"));
+  store.modified_decisions = 1;
+  QCOMPARE(decisions.headerData(4, Qt::Horizontal, Qt::DisplayRole).toString(),
+           QStringLiteral("Decisions*"));
+  QVERIFY(decisions.headerData(4, Qt::Horizontal, Qt::ToolTipRole)
+              .toString()
+              .contains(QStringLiteral("1 modified")));
 }
 
 QTEST_MAIN(UiTest)

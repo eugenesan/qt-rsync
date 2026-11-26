@@ -93,6 +93,9 @@ and refreshed documentation and packaging.
   colour even when a path contains a word like "error", and preference
   changes no longer force a synchronous settings write inside UI slots.
 - Overview statistics scale sizes to MiB/GiB instead of always showing KiB.
+- The Decisions column tooltip now follows qpy: wrapped source and destination
+  paths, the action, both modification times, changed-item counts on folders,
+  stale-comparison help, and a `Decisions* (N modified)` header tooltip.
 - External tools support qpy's placeholder expansion; the diff command uses
   the configured command with `%a`/`%A` and quoted paths stay one argument.
 

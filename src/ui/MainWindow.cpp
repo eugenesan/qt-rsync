@@ -1732,6 +1732,8 @@ void MainWindow::refreshPlan(bool quick) {
     d_->plan = core::buildExecutionPlan(d_->profile, d_->changes,
                                         d_->comparison->decisions());
   }
+  d_->comparison->store().modified_decisions = d_->plan.summary.modified;
+  d_->comparison->refreshDecisionHeader();
   const bool actionable = d_->plan.summary.included > 0;
   d_->verify->setEnabled(actionable);
   d_->sync->setEnabled(actionable);

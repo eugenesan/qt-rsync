@@ -3,9 +3,44 @@
 #define QT_RSYNC_DATASTORE_H
 
 #include <QAbstractItemModel>
+#include <QApplication>
 #include <QColor>
+#include <QFontMetrics>
 #include <QIcon>
 #include <QVector>
+
+namespace qt_rsync::model {
+inline const char* const kStaleHelpText =
+    "A stale comparison is still browsable: you can move around the lists, "
+    "open tools and add more filters. Decisions are disabled and "
+    "synchronization is unavailable until you run Compare again.";
+
+inline QString wrapTooltipPath(const QString& path) {
+  if (path.isEmpty()) return {};
+  const QFontMetrics metrics(QApplication::font());
+  constexpr int width = 256;
+  QString remaining = path;
+  QStringList lines;
+  for (int line = 0; line < 1; ++line) {
+    if (metrics.horizontalAdvance(remaining) <= width) break;
+    int best = -1;
+    for (int i = 0; i < remaining.size(); ++i) {
+      if (metrics.horizontalAdvance(remaining.left(i + 1)) > width) break;
+      if (remaining.at(i) == QLatin1Char('/') ||
+          remaining.at(i) == QLatin1Char('\\')) {
+        best = i + 1;
+      }
+    }
+    if (best <= 0) break;
+    lines.append(remaining.left(best));
+    remaining = remaining.mid(best).trimmed();
+  }
+  if (!remaining.isEmpty()) {
+    lines.append(metrics.elidedText(remaining, Qt::TextElideMode::ElideMiddle, width));
+  }
+  return lines.join(QLatin1Char('\n'));
+}
+}  // namespace qt_rsync::model
 
 #include "core/Change.h"
 #include <QAbstractTableModel>
@@ -82,6 +117,7 @@ struct DataStore {
   bool show_unchanged = false;
   bool filter_directories = false;
   bool stale = false;
+  int modified_decisions = 0;
   std::vector<char> faded;
   // Folder aggregates and per-visible-row striping owned by native.
   std::vector<long long> dir_items;
@@ -1023,20 +1059,48 @@ class TableModel : public QAbstractTableModel {
     if (role == Qt::ToolTipRole) {
       const std::string& path = id < static_cast<int>(store_->paths.size())
                                     ? store_->paths[id] : std::string();
-      if (path == DataStore::root_path()) return QString("Compared folder");
-      const QString shown = QString::fromStdString(path);
+      if (path == DataStore::root_path()) {
+        return store_->stale ? QString::fromLatin1(kStaleHelpText)
+                             : QStringLiteral("Compared folder");
+      }
+      const QString shown = wrapTooltipPath(QString::fromStdString(path));
       if (index.column() == 4) {
+        const bool isDir = id < static_cast<int>(store_->is_dir.size()) &&
+                           store_->is_dir[id];
+        if (isDir) {
+          const long long inside = id < static_cast<int>(store_->dir_items.size())
+                                       ? store_->dir_items[id] : 0;
+          QString tip = QStringLiteral("Source: ") + shown +
+                        QStringLiteral("\nDestination: ") + shown;
+          if (inside > 0) {
+            tip += QStringLiteral("\n%1 changed item(s) inside").arg(inside);
+          }
+          return tip;
+        }
         int action = id < static_cast<int>(store_->actions.size())
                          ? store_->actions[id] : NoChange;
         if (id < static_cast<int>(store_->decisions.size()) &&
             store_->decisions[id] == DeleteRequest) {
           action = Delete;
         }
-        QString tip = "Source: " + shown + "\nDestination: " + shown +
-                      "\n" + QString::fromStdString(action_label(action));
-        const std::string time = id < static_cast<int>(store_->times.size())
-                                     ? store_->times[id] : std::string();
-        if (!time.empty()) tip += "\nModified: " + QString::fromStdString(time);
+        QString tip = QStringLiteral("Source: ") + shown +
+                      QStringLiteral("\nDestination: ") + shown + QLatin1Char('\n') +
+                      QString::fromStdString(action_label(action));
+        const QString sourceTime = id < static_cast<int>(store_->times.size())
+                                       ? QString::fromStdString(store_->times[id])
+                                       : QString();
+        const QString destTime = id < static_cast<int>(store_->dest_times.size())
+                                     ? QString::fromStdString(store_->dest_times[id])
+                                     : QString();
+        if (!sourceTime.isEmpty() || !destTime.isEmpty()) {
+          tip += QStringLiteral("\nModified:");
+          if (!sourceTime.isEmpty()) tip += QStringLiteral(" source ") + sourceTime;
+          if (!destTime.isEmpty()) {
+            tip += sourceTime.isEmpty() ? QStringLiteral(" destination ")
+                                        : QStringLiteral(", destination ");
+            tip += destTime;
+          }
+        }
         return tip;
       }
       return shown;
@@ -1136,10 +1200,22 @@ class TableModel : public QAbstractTableModel {
   }
 
   QVariant headerData(int section, Qt::Orientation, int role) const override {
-    if (role != Qt::DisplayRole) return {};
     static const char* headers[11] = {
         "Item", "Items", "Size", "Modified", "Decisions",
         "Item", "Items", "Size", "Modified", "Size (bytes)", "Size (bytes)"};
+    if (section == 4) {
+      const bool modified = store_->modified_decisions > 0;
+      if (role == Qt::DisplayRole) {
+        return modified ? QStringLiteral("Decisions*") : QStringLiteral("Decisions");
+      }
+      if (role == Qt::ToolTipRole) {
+        return modified ? QStringLiteral("Decisions* (%1 modified)")
+                              .arg(store_->modified_decisions)
+                        : QStringLiteral("Decisions");
+      }
+      return {};
+    }
+    if (role != Qt::DisplayRole) return {};
     return section >= 0 && section < 11 ? QString(headers[section]) : QString();
   }
 

@@ -268,6 +268,12 @@ void ComparisonView::applyFilters() {
   emit viewChanged();
 }
 
+void ComparisonView::refreshDecisionHeader() {
+  for (model::TableModel* model : models_) {
+    emit model->headerDataChanged(Qt::Horizontal, 4, 4);
+  }
+}
+
 void ComparisonView::setRootNames(const QString& source,
                                   const QString& destination) {
   store_.root_source = source.toStdString();
