@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QHash>
+#include <QElapsedTimer>
 #include <QWidget>
 
 class QCheckBox;
@@ -53,6 +54,7 @@ class ActionFilterBar : public QWidget {
   QCheckBox* conflicts_ = nullptr;
   QToolButton* undo_ = nullptr;
   QCheckBox* inverseClick_ = nullptr;
+  QElapsedTimer lastInverse_;
   int excludedCount_ = 0;
 };
 

@@ -42,6 +42,12 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
     box->setFocusPolicy(Qt::TabFocus);
     layout->addWidget(box);
     connect(box, &QCheckBox::toggled, this, &ActionFilterBar::filterChanged);
+    // Fallback for platforms that only expose the modifier on click().
+    connect(box, &QCheckBox::clicked, this, [this, box](bool) {
+      if (QGuiApplication::keyboardModifiers() & Qt::ControlModifier) {
+        applyInverse(box);
+      }
+    });
     if (shortcutNumber > 0) {
       auto* alt = new QShortcut(
           QKeySequence(Qt::ALT | (Qt::Key_0 + shortcutNumber)), this);
@@ -168,6 +174,8 @@ bool ActionFilterBar::eventFilter(QObject* watched, QEvent* event) {
   }
   if (event->type() == QEvent::MouseButtonPress) {
     auto* mouse = static_cast<QMouseEvent*>(event);
+    // A new physical click starts a new inverse cycle.
+    lastInverse_.invalidate();
     if (mouse->button() == Qt::LeftButton &&
         (mouse->modifiers() & Qt::ControlModifier)) {
       // Consume both press and release so the checkbox does not toggle
@@ -226,6 +234,10 @@ void ActionFilterBar::resetDefaults() {
 }
 
 void ActionFilterBar::applyInverse(QCheckBox* box) {
+  // press/release filtering and the clicked() fallback can both observe the
+  // same physical click; apply at most one inverse per click.
+  if (lastInverse_.isValid() && lastInverse_.elapsed() < 150) return;
+  lastInverse_.restart();
   const QVector<QCheckBox*> boxes = allBoxes();
   if (box == excluded_) {
     bool onlyExcluded = box->isChecked();
