@@ -123,6 +123,9 @@ and refreshed documentation and packaging.
   menu offers "Show only excluded items" / "Show all decisions". Legacy
   app-default.log settings are ignored by file name so old nested paths
   cannot pin the log name.
+- Fixed the drawing artefact where the Decisions column kept a framed,
+  striped area below the last row after the journal was repainted: the table
+  views now use NoFrame and the custom full-height border painting is gone.
 - Folded full paths are computed lazily, saving a full lowercase pass over
   every path during compare. More sub-phase timings are available when timing
   diagnostics are enabled, for further performance analysis.
