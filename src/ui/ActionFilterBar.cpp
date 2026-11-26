@@ -175,7 +175,7 @@ bool ActionFilterBar::eventFilter(QObject* watched, QEvent* event) {
   if (event->type() == QEvent::MouseButtonPress) {
     auto* mouse = static_cast<QMouseEvent*>(event);
     // A new physical click starts a new inverse cycle.
-    lastInverse_.invalidate();
+    inverseHandled_ = false;
     if (mouse->button() == Qt::LeftButton &&
         (mouse->modifiers() & Qt::ControlModifier)) {
       // Consume both press and release so the checkbox does not toggle
@@ -234,10 +234,11 @@ void ActionFilterBar::resetDefaults() {
 }
 
 void ActionFilterBar::applyInverse(QCheckBox* box) {
-  // press/release filtering and the clicked() fallback can both observe the
-  // same physical click; apply at most one inverse per click.
-  if (lastInverse_.isValid() && lastInverse_.elapsed() < 150) return;
-  lastInverse_.restart();
+  // The press/release filter and the clicked() fallback can both observe
+  // the same physical click. Reset only on a new press, not by elapsed time:
+  // a slow click can exceed any timeout and get inverted twice.
+  if (inverseHandled_) return;
+  inverseHandled_ = true;
   const QVector<QCheckBox*> boxes = allBoxes();
   if (box == excluded_) {
     bool onlyExcluded = box->isChecked();

@@ -596,6 +596,13 @@ struct DataStore {
 
   bool action_allowed(int id) const {
     if (action_mask == 0) return true;
+    if (action_mask == -2) {
+      // No action selected: only excluded items survive, and only while the
+      // Show excluded toggle is on.
+      return show_excluded && id >= 0 &&
+             id < static_cast<int>(decisions.size()) &&
+             decisions[id] == Exclude;
+    }
     if (id < 0 || id >= static_cast<int>(actions.size())) return true;
     const int bit = actions[id];
     return bit >= 0 && bit < 32 && (action_mask & (1 << bit)) != 0;

@@ -116,12 +116,13 @@ and refreshed documentation and packaging.
 - The overview updates on every decision again (not just its totals). Its
   folder nodes are built from stable path ids and the expanded-path scan is
   skipped for decisions, so a full overview update is ~15-35 ms at 640k rows.
-- Ctrl+click on Show excluded also handles modifiers delivered only with the
-  release event, and the checkbox context menu now offers "Show only excluded
-  items" / "Show all decisions" explicitly. The click() fallback was removed
-  because it could apply the inverse twice on real X11 and undo the filter.
-  Legacy app-default.log settings are ignored by file name so old nested
-  paths cannot pin the log name.
+- Ctrl+click on Show excluded now really shows only excluded items. The
+  filter bar used 0 both for "all actions" and "no actions", so turning every
+  action off left all rows visible; an explicit no-actions sentinel fixes it.
+  The inverse is applied at most once per physical click, and the context
+  menu offers "Show only excluded items" / "Show all decisions". Legacy
+  app-default.log settings are ignored by file name so old nested paths
+  cannot pin the log name.
 - Folded full paths are computed lazily, saving a full lowercase pass over
   every path during compare. More sub-phase timings are available when timing
   diagnostics are enabled, for further performance analysis.

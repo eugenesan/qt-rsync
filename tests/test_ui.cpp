@@ -1505,6 +1505,25 @@ void UiTest::filterCheckboxesSupportInvertedClicks() {
   for (int action = 0; action < 5; ++action) {
     QVERIFY(bar.actionVisible(action));
   }
+
+  // A second cycle with an actual exclusion must show only excluded items.
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("a.txt"), QStringLiteral("b.txt"),
+                               QStringLiteral("c.txt")}));
+  view.setFilterBar(&bar);
+  view.applyDecision(QStringLiteral("b.txt"),
+                     static_cast<int>(core::Decision::Exclude));
+  ctrlClick(excluded);
+  QVERIFY(bar.showExcluded());
+  QStringList visiblePaths;
+  for (int id : view.store().visible) {
+    if (id >= 0 && id < static_cast<int>(view.store().paths.size())) {
+      visiblePaths.append(QString::fromStdString(view.store().paths[id]));
+    }
+  }
+  QVERIFY(visiblePaths.contains(QStringLiteral("b.txt")));
+  QVERIFY(!visiblePaths.contains(QStringLiteral("a.txt")));
+  QVERIFY(!visiblePaths.contains(QStringLiteral("c.txt")));
 }
 
 void UiTest::resetExclusionsKeepsOtherDecisions() {

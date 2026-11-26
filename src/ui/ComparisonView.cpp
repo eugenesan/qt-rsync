@@ -261,7 +261,10 @@ void ComparisonView::applyFilters() {
   for (int action = 0; action < 5; ++action) {
     if (filterBar_->actionVisible(action)) mask |= (1 << action);
   }
-  store_.action_mask = (mask == 0x1F) ? 0 : mask;
+  // 0 is the "no filtering" sentinel in DataStore, so an all-off bar needs
+  // its own value; otherwise Ctrl+click Show excluded leaves every action
+  // visible and merely adds the excluded rows.
+  store_.action_mask = (mask == 0x1F) ? 0 : (mask == 0 ? -2 : mask);
   store_.show_excluded = filterBar_->showExcluded();
   store_.filter_directories = filterBar_->filterDirectories();
   store_.dirs_only = false;
