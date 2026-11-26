@@ -45,6 +45,8 @@ class MainWindow : public QMainWindow {
   void onOperationFinished(int exitCode, QProcess::ExitStatus status);
   void onOperationError(QProcess::ProcessError error);
   void refreshPlan(bool quick = false);
+  void queueSetting(const QString& key, const QVariant& value);
+  void flushSettings();
   void addFilterPattern(const QString& pattern, const QString& path);
   void setStatus(const QString& text);
   void appendJournalLine(const QString& line);

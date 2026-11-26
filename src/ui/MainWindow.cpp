@@ -204,6 +204,8 @@ class MainWindow::Private {
   QString searchText;
   int searchPosition = -1;
   bool cancelled = false;
+  QTimer* settingsTimer = nullptr;
+  QHash<QString, QVariant> pendingSettings;
   QLineEdit* status = nullptr;
   QLabel* stateLabel = nullptr;
   QLabel* progressLabel = nullptr;
@@ -1032,10 +1034,13 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->verify, &QAbstractButton::clicked, this, &MainWindow::verifyPlan);
   connect(d_->sync, &QAbstractButton::clicked, this, &MainWindow::synchronize);
   connect(d_->cancel, &QAbstractButton::clicked, this, &MainWindow::cancelOperation);
+  d_->settingsTimer = new QTimer(this);
+  d_->settingsTimer->setSingleShot(true);
+  d_->settingsTimer->setInterval(1000);
+  connect(d_->settingsTimer, &QTimer::timeout, this, &MainWindow::flushSettings);
+
   connect(d_->preserve, &QAbstractButton::clicked, this, [this]() {
-    core::storage::Settings settings;
-    settings.setValue(QStringLiteral("decisions/preserve"),
-                      d_->preserve->isChecked());
+    queueSetting(QStringLiteral("decisions/preserve"), d_->preserve->isChecked());
     updateStateIcons();
   });
   connect(d_->filterBar, &ActionFilterBar::unchangedToggled, this,
@@ -1193,9 +1198,8 @@ MainWindow::MainWindow(QWidget* parent)
             .toBool());
   }
   connect(d_->filterBar, &ActionFilterBar::filterChanged, this, [this]() {
-    core::storage::Settings settings;
-    settings.setValue(QStringLiteral("comparison/filter-directories"),
-                      d_->filterBar->filterDirectories());
+    queueSetting(QStringLiteral("comparison/filter-directories"),
+                 d_->filterBar->filterDirectories());
   });
   applyActionColours();
   updateVerificationVisibility();
@@ -1214,7 +1218,10 @@ MainWindow::MainWindow(QWidget* parent)
     refreshPlan(true);
     d_->filterBar->setExcludedCount(
         d_->comparison->decisions().excludedPaths().size());
-    d_->overview->rebuild(d_->comparison->store());
+    // qpy skips the full overview rebuild for a single decision and only
+    // refreshes the totals; the folder tree is rebuilt on the next full
+    // refresh. That keeps exclude/undo interactive on large comparisons.
+    d_->overview->refreshStats(d_->comparison->store());
   });
   connect(d_->comparison, &ComparisonView::filterRequested, this,
           [this](const QString& pattern, const QString& path) {
@@ -2232,7 +2239,24 @@ void MainWindow::saveWindowState() {
   settings.sync();
 }
 
+void MainWindow::queueSetting(const QString& key, const QVariant& value) {
+  d_->pendingSettings.insert(key, value);
+  d_->settingsTimer->start();
+}
+
+void MainWindow::flushSettings() {
+  d_->settingsTimer->stop();
+  if (d_->pendingSettings.isEmpty()) return;
+  core::storage::Settings settings;
+  for (auto it = d_->pendingSettings.cbegin(); it != d_->pendingSettings.cend(); ++it) {
+    settings.setValue(it.key(), it.value());
+  }
+  settings.sync();
+  d_->pendingSettings.clear();
+}
+
 void MainWindow::closeEvent(QCloseEvent* event) {
+  flushSettings();
   saveWindowState();
   QMainWindow::closeEvent(event);
 }

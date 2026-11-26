@@ -243,6 +243,10 @@ void OverviewPane::rebuild(const model::DataStore& store) {
     }
   }
 
+  updateStats(store);
+}
+
+void OverviewPane::updateStats(const model::DataStore& store) {
   int count = 0, creates = 0, updates = 0, metadata = 0, deletes = 0, kept = 0;
   long long size = 0, deletedSize = 0;
   for (int id : store.visible) {
@@ -280,6 +284,10 @@ void OverviewPane::rebuild(const model::DataStore& store) {
        QStringLiteral("#ef4444")},
       {QString::number(kept), QStringLiteral("#a05020")},
   });
+}
+
+void OverviewPane::refreshStats(const model::DataStore& store) {
+  updateStats(store);
 }
 
 }  // namespace qt_rsync::ui

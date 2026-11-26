@@ -96,6 +96,10 @@ and refreshed documentation and packaging.
 - The Decisions column tooltip now follows qpy: wrapped source and destination
   paths, the action, both modification times, changed-item counts on folders,
   stale-comparison help, and a `Decisions* (N modified)` header tooltip.
+- A single decision no longer rebuilds the full overview tree; only the totals
+  are refreshed, matching the hybrid view's incremental behaviour. Preference
+  writes from toolbar/filter clicks are coalesced on a timer instead of
+  hitting the settings files on every click.
 - External tools support qpy's placeholder expansion; the diff command uses
   the configured command with `%a`/`%A` and quoted paths stay one argument.
 

@@ -17,6 +17,7 @@ class OverviewPane : public QWidget {
   explicit OverviewPane(QWidget* parent = nullptr);
 
   void rebuild(const model::DataStore& store);
+  void refreshStats(const model::DataStore& store);
   void setActionColours(const QVector<QString>& colours);
 
  signals:
@@ -27,6 +28,7 @@ class OverviewPane : public QWidget {
 
  private:
   void showFolderMenu(const QString& path, const QPoint& globalPosition);
+  void updateStats(const model::DataStore& store);
 
   QTreeView* tree_;
   model::OverviewModel* model_;
