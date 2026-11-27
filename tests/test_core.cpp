@@ -1005,6 +1005,18 @@ void CoreTest::fetchSpecAndToolPersistence() {
   QCOMPARE(loaded.first().name, QStringLiteral("Kate"));
   QCOMPARE(loaded.first().command, QStringLiteral("kate %d/%f"));
   QCOMPARE(loaded.first().options, QStringLiteral("--wait"));
+
+  // qpy stores tool JSON base64-encoded for KDE's INI parser; legacy payloads
+  // written by qpy must still load in the C++ port.
+  const QByteArray json =
+      R"([{"name":"Kate","command":"kate %d/%f","options":"","enabled":true}])";
+  storage::Settings settings;
+  settings.setValue(QStringLiteral("tools/external"),
+                    QByteArray("b64:") + json.toBase64());
+  const auto legacy = loadExternalTools();
+  QCOMPARE(legacy.size(), 1);
+  QCOMPARE(legacy.first().name, QStringLiteral("Kate"));
+  QCOMPARE(legacy.first().command, QStringLiteral("kate %d/%f"));
 }
 
 QTEST_MAIN(CoreTest)

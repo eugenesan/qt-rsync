@@ -127,6 +127,7 @@ class UiTest : public QObject {
   void swapEndpointTexts();
   void overviewFollowsActionFilters();
   void contextMenuOffersExternalTools();
+  void foldingRefreshesViewsAndOverview();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -2571,6 +2572,25 @@ void UiTest::contextMenuOffersExternalTools() {
   QVERIFY(QMetaObject::invokeMethod(&view, "showContextMenu", Q_ARG(int, 0),
                                     Q_ARG(QPoint, QPoint(30, 30))));
   QVERIFY(submenuLabels.contains(QStringLiteral("Kate")));
+}
+
+void UiTest::foldingRefreshesViewsAndOverview() {
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("docs/a.txt"),
+                               QStringLiteral("docs/b.txt")}));
+  const int before = static_cast<int>(view.store().visible.size());
+  const auto docs = view.store().path_to_id.find(QStringLiteral("docs").toStdString());
+  QVERIFY(docs != view.store().path_to_id.end());
+  int changes = 0;
+  connect(&view, &ui::ComparisonView::viewChanged, [&changes]() { ++changes; });
+  view.selectPath(QStringLiteral("docs"));
+  view.foldCurrent(0, true);
+  QCOMPARE(changes, 1);
+  QVERIFY(view.store().is_collapsed(docs->second));
+  QVERIFY(static_cast<int>(view.store().visible.size()) < before);
+  view.foldCurrent(0, false);
+  QCOMPARE(changes, 2);
+  QVERIFY(!view.store().is_collapsed(docs->second));
 }
 
 QTEST_MAIN(UiTest)

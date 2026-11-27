@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 488 pytest cases. qt-rsync has 118 QtTest cases
-(52 core, 66 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 488 pytest cases. qt-rsync has 119 QtTest cases
+(52 core, 67 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -138,7 +138,8 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
   shell) into a private temporary directory; the GUI shows preparation
   progress, journals the command and removes staged directories on exit.
 - Overview callbacks: `overviewFollowsActionFilters` checks that overview
-  totals track action filters.
+  totals track action filters; `foldingRefreshesViewsAndOverview` covers the
+  repaint/refresh after collapsing a folder.
 
 ## Final batches completed
 

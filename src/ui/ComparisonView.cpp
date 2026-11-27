@@ -837,7 +837,12 @@ void ComparisonView::foldCurrent(int pane, bool collapse) {
   store_.set_collapsed(id, collapse);
   store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
+  // A short tree leaves large parts of each viewport empty. Force a full
+  // repaint so stale rows are cleared instead of being painted over the panes
+  // below, and refresh the overview counts.
+  for (QTableView* view : views_) view->viewport()->update();
   selectPath(path);
+  emit viewChanged();
 }
 
 void ComparisonView::foldAll(bool collapse) {
@@ -846,6 +851,8 @@ void ComparisonView::foldAll(bool collapse) {
   }
   store_.rebuild_visible();
   for (model::TableModel* model : models_) model->reset();
+  for (QTableView* view : views_) view->viewport()->update();
+  emit viewChanged();
 }
 
 void ComparisonView::showContextMenu(int pane, const QPoint& position) {

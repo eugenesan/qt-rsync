@@ -9,6 +9,13 @@ rather than every commit; the port started at 0.0.1 and reached 0.2.0 on
 Parity follow-up: decision terminology, directory filters, overview totals,
 and refreshed documentation and packaging.
 
+### Fixed
+
+- Tools written by qpy with the `b64:` text prefix are decoded correctly, so
+  "Open with" no longer tries to start a command named `b64:...`.
+- Collapsing a folder forces a full repaint of all three comparison panes and
+  refreshes the overview, removing stale cells painted over the panes below.
+
 ### Added
 
 - Per-tool "Open with" context menu, remote diff staging and overview filter

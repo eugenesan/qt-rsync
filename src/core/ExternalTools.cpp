@@ -33,11 +33,24 @@ void splitName(const QString& name, QString* stem, QString* extension) {
 
 }  // namespace
 
+namespace {
+
+QByteArray decodeStoredText(const QByteArray& value) {
+  if (!value.startsWith("b64:")) return value;
+  return QByteArray::fromBase64(value.mid(4));
+}
+
+QByteArray encodeStoredText(const QByteArray& value) {
+  return QByteArray("b64:") + value.toBase64();
+}
+
+}  // namespace
+
 QVector<ExternalTool> loadExternalTools() {
   QVector<ExternalTool> tools;
   core::storage::Settings settings;
   const QByteArray payload =
-      settings.value(QStringLiteral("tools/external")).toByteArray();
+      decodeStoredText(settings.value(QStringLiteral("tools/external")).toByteArray());
   if (payload.isEmpty()) return tools;
   const QJsonArray array = QJsonDocument::fromJson(payload).array();
   for (const QJsonValue& value : array) {
@@ -64,7 +77,8 @@ void saveExternalTools(const QVector<ExternalTool>& tools) {
   }
   core::storage::Settings settings;
   settings.setValue(QStringLiteral("tools/external"),
-                    QJsonDocument(array).toJson(QJsonDocument::Compact));
+                    encodeStoredText(
+                        QJsonDocument(array).toJson(QJsonDocument::Compact)));
   settings.sync();
 }
 
