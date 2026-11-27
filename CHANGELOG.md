@@ -18,7 +18,8 @@ and refreshed documentation and packaging.
 - The rsync command preview is now a temporary, selectable last entry in the
   journal: no timestamp, not written to the log file. It shows Compare by
   default, switches to Verify on hover (when enabled), clears when a command
-  starts and returns when the app is idle.
+  starts and returns when the app is idle. Repeated hover events replace the
+  single entry, and any real journal line removes the preview first.
 
 ### Fixed
 

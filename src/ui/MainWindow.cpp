@@ -1385,6 +1385,8 @@ void MainWindow::applyStartupOptions(const app::StartupOptions& options) {
 }
 
 void MainWindow::appendJournalLine(const QString& rawLine) {
+  // The preview is transient: any real journal entry replaces it.
+  clearCommandPreview();
   QElapsedTimer writeClock;
   writeClock.start();
   static const QRegularExpression timestampPrefix(
@@ -1435,16 +1437,22 @@ void MainWindow::setCommandPreview(const core::ProcessSpec& spec) {
 }
 
 void MainWindow::clearCommandPreview() {
+  if (d_->journal == nullptr) return;
   QTextDocument* document = d_->journal->document();
-  for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
-    if (dynamic_cast<PreviewBlockData*>(block.userData()) == nullptr) continue;
-    QTextCursor cursor(block);
-    cursor.movePosition(QTextCursor::StartOfBlock);
-    if (!cursor.movePosition(QTextCursor::NextBlock, QTextCursor::KeepAnchor)) {
-      cursor.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+  // Remove every marked preview block so repeated hovers can never leave more
+  // than one command in the journal.
+  QTextBlock block = document->begin();
+  while (block.isValid()) {
+    QTextBlock next = block.next();
+    if (dynamic_cast<PreviewBlockData*>(block.userData()) != nullptr) {
+      QTextCursor cursor(block);
+      cursor.movePosition(QTextCursor::StartOfBlock);
+      if (!cursor.movePosition(QTextCursor::NextBlock, QTextCursor::KeepAnchor)) {
+        cursor.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+      }
+      cursor.removeSelectedText();
     }
-    cursor.removeSelectedText();
-    break;
+    block = next;
   }
 }
 

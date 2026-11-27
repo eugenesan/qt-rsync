@@ -2690,6 +2690,17 @@ void UiTest::commandPreviewIsTemporaryJournalEntry() {
   QVERIFY2(last.startsWith(QStringLiteral("$ rsync")), qPrintable(last));
   QVERIFY(!last.contains(QRegularExpression(QStringLiteral("^\\d{2}:"))));
 
+  // Repeated hovers replace the same single entry.
+  QVERIFY(QMetaObject::invokeMethod(&window, "showCommandPreview"));
+  QVERIFY(QMetaObject::invokeMethod(&window, "showCommandPreview"));
+  QCOMPARE(journal->toPlainText().count(QStringLiteral("$ rsync")), 1);
+
+  // Any real journal entry removes the temporary preview first.
+  QVERIFY(QMetaObject::invokeMethod(
+      &window, "appendJournalLine", Q_ARG(QString, QStringLiteral("real line"))));
+  QVERIFY(!journal->toPlainText().contains(QStringLiteral("$ rsync")));
+  QVERIFY(journal->toPlainText().contains(QStringLiteral("real line")));
+
   QVERIFY(QMetaObject::invokeMethod(&window, "clearCommandPreview"));
   QVERIFY(!journal->toPlainText().contains(QStringLiteral("$ rsync --dry-run")));
 }
