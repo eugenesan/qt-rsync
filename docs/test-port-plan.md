@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 489 pytest cases. qt-rsync has 120 QtTest cases
-(52 core, 68 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 489 pytest cases. qt-rsync has 121 QtTest cases
+(53 core, 68 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -127,6 +127,14 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 8. Golden screenshots — `goldenScreenshotsAreValidImages` verifies the three
    committed reference images; the profile editor is covered by the widget
    round-trip instead of a separate image.
+
+## Recent profiles
+
+`profile/current_path` is a plain path; the old `profile/recent` /
+`profile/recent_paths` keys are gone. The profile menu is built from the
+profiles directory, sorted by modification time (newest first, name as tie
+break) and capped at ten entries, matching qpy. Covered by
+`recentProfilesUseModificationTime`.
 
 ## Plain settings format
 

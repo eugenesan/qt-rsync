@@ -11,6 +11,8 @@ and refreshed documentation and packaging.
 
 ### Fixed
 
+- The profile menu lists the ten most recently modified profiles (name as tie
+  break) instead of a name-sorted list; the old recent-profile keys are gone.
 - All settings are now plain text. Base64 is gone: tools use indexed INI keys,
   colours use one key per action, and window/splitter state uses comma-separated
   integers. There is no settings or profile import from qpy-rsync.

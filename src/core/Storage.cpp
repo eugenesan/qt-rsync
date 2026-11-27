@@ -1,5 +1,6 @@
 #include "core/Storage.h"
 
+#include <algorithm>
 #include <QDir>
 #include <QFile>
 #include <QDateTime>
@@ -389,8 +390,21 @@ SyncProfile loadProfile(const QString& path) {
 
 QStringList listProfiles() {
   QDir directory(paths::profilesDirectory());
-  QStringList names = directory.entryList({QStringLiteral("*.json")},
-                                          QDir::Files, QDir::Name);
+  QFileInfoList files = directory.entryInfoList({QStringLiteral("*.json")},
+                                                QDir::Files);
+  // The profile menu is a "recent profiles" list: newest first, by name for
+  // ties. The old b64 recent-profile keys are gone, so mtime is the source.
+  std::sort(files.begin(), files.end(), [](const QFileInfo& left,
+                                           const QFileInfo& right) {
+    if (left.lastModified() != right.lastModified()) {
+      return left.lastModified() > right.lastModified();
+    }
+    return left.fileName() < right.fileName();
+  });
+  QStringList names;
+  for (int index = 0; index < files.size() && index < 10; ++index) {
+    names.append(files.at(index).fileName());
+  }
   return names;
 }
 

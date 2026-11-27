@@ -44,6 +44,7 @@ class CoreTest : public QObject {
   void profileValidationMessages();
   void fetchSpecAndToolPersistence();
   void obsoleteEncodedSettingsAreRemoved();
+  void recentProfilesUseModificationTime();
   // Decisions (ported from qpy-rsync tests/unit/test_changes.py)
   void changeProperties();
   void inheritedExclusionAndChildOverride();
@@ -1004,6 +1005,37 @@ void CoreTest::obsoleteEncodedSettingsAreRemoved() {
   QVERIFY(!keys.contains(QStringLiteral("colours/actions")));
   QVERIFY(!keys.contains(QStringLiteral("main-window/state")));
   QVERIFY(!keys.join(' ').contains(QStringLiteral("b64:")));
+}
+
+void CoreTest::recentProfilesUseModificationTime() {
+  const QByteArray oldConfig = qgetenv("XDG_CONFIG_HOME");
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  qputenv("XDG_CONFIG_HOME", dir.path().toUtf8());
+  const QString profileDir = qt_rsync::core::paths::profilesDirectory();
+  QDir().mkpath(profileDir);
+  const QStringList names{"alpha.json", "bravo.json", "charlie.json"};
+  for (const QString& name : names) {
+    QFile file(profileDir + QLatin1Char('/') + name);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("{}");
+    file.close();
+  }
+  QFileInfoList infos;
+  for (const QString& name : names) {
+    infos.append(QFileInfo(profileDir + QLatin1Char('/') + name));
+  }
+  std::sort(infos.begin(), infos.end(), [](const QFileInfo& left,
+                                           const QFileInfo& right) {
+    if (left.lastModified() != right.lastModified()) {
+      return left.lastModified() > right.lastModified();
+    }
+    return left.fileName() < right.fileName();
+  });
+  QStringList expected;
+  for (const QFileInfo& info : infos) expected.append(info.fileName());
+  QCOMPARE(storage::listProfiles(), expected);
+  qputenv("XDG_CONFIG_HOME", oldConfig);
 }
 
 QTEST_MAIN(CoreTest)
