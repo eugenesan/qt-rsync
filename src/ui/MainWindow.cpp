@@ -248,6 +248,12 @@ class MainWindow::Private {
   bool previewVerify = false;
   bool previewRequested = false;
   int overviewWidth = 620;
+  QString locationBaselineSource;
+  QString locationBaselineDestination;
+  bool staleFromLocation = false;
+  bool staleBeforeLocation = false;
+  bool verifiedBeforeLocation = false;
+  bool suppressLocationStale = false;
   bool operationActive = false;
   ActionFilterBar* filterBar = nullptr;
   QPlainTextEdit* journal = nullptr;
@@ -330,6 +336,20 @@ MainWindow::MainWindow(QWidget* parent)
     button->setFixedSize(40, 40);
   };
 
+  auto* swapButton = new QToolButton(toolbarRow);
+  swapButton->setIcon(icons::toolbarIcon(QStringLiteral("swap")));
+  swapButton->setToolTip(QStringLiteral("Swap Source and Destination"));
+  swapButton->setAccessibleName(QStringLiteral("Swap Source and Destination"));
+  styleTool(swapButton);
+  connect(swapButton, &QToolButton::clicked, this, [this]() {
+    const QString source = d_->source->text();
+    d_->source->setText(d_->destination->text());
+    d_->destination->setText(source);
+  });
+  // qpy adds the swap button to this row first and then reparents it into
+  // the Source panel below; doing the same keeps the order identical.
+  toolbarLayout->addWidget(swapButton);
+
   d_->mode = new QComboBox(toolbarRow);
   d_->mode->addItem(QStringLiteral("Update"), static_cast<int>(core::SyncMode::Update));
   d_->mode->addItem(QStringLiteral("Mirror"), static_cast<int>(core::SyncMode::Mirror));
@@ -363,20 +383,6 @@ MainWindow::MainWindow(QWidget* parent)
             }
           });
   toolbarLayout->addWidget(d_->mode);
-
-  auto* swapButton = new QToolButton(toolbarRow);
-  swapButton->setIcon(icons::toolbarIcon(QStringLiteral("swap")));
-  swapButton->setToolTip(QStringLiteral("Swap Source and Destination"));
-  swapButton->setAccessibleName(QStringLiteral("Swap Source and Destination"));
-  styleTool(swapButton);
-  connect(swapButton, &QToolButton::clicked, this, [this]() {
-    const QString source = d_->source->text();
-    d_->source->setText(d_->destination->text());
-    d_->destination->setText(source);
-  });
-  // qpy adds the swap button to this row first and then reparents it into
-  // the Source panel below; doing the same keeps the order identical.
-  toolbarLayout->addWidget(swapButton);
 
   const auto addTool = [&](QToolButton*& button, const QString& text,
                            const QString& iconName, const QString& tip) {
@@ -512,7 +518,28 @@ MainWindow::MainWindow(QWidget* parent)
   backupButton->setIcon(icons::toolbarIcon(QStringLiteral("backup")));
   backupButton->setAccessibleName(QStringLiteral("Open the backup directory"));
   backupButton->setToolTip(QStringLiteral("Open the backup directory"));
-  connect(backupButton, &QToolButton::clicked, this, [this]() {
+  styleTool(backupButton);
+  toolbarLayout->addWidget(backupButton);
+  auto* logButton = new MenuToolButton(toolbarRow);
+  d_->logButton = logButton;
+  logButton->setIcon(icons::toolbarIcon(QStringLiteral("log")));
+  logButton->setAccessibleName(QStringLiteral("Open the log file"));
+  logButton->setToolTip(QStringLiteral("Open the log file"));
+  styleTool(logButton);
+  toolbarLayout->addWidget(logButton);
+
+  const auto openLocation = [this](bool logging) {
+    if (logging) {
+      if (d_->logPath.isEmpty()) {
+        SettingsDialog dialog(
+            this, core::paths::appLogPath(
+                      QFileInfo(d_->profilePath).completeBaseName()));
+        if (dialog.exec() == QDialog::Accepted) updateOpenButtonStates();
+        return;
+      }
+      QDesktopServices::openUrl(QUrl::fromLocalFile(d_->logPath));
+      return;
+    }
     if (d_->profile.backup.directory.trimmed().isEmpty()) {
       ProfileEditorDialog dialog(d_->profile, this, QStringLiteral("backup"));
       if (dialog.exec() == QDialog::Accepted) {
@@ -526,108 +553,74 @@ MainWindow::MainWindow(QWidget* parent)
       return;
     }
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->profile.backup.directory));
-  });
-  styleTool(backupButton);
-  toolbarLayout->addWidget(backupButton);
-  const auto configureOpenMenu = [this](QToolButton* button, bool logging) {
-    button->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(button, &QToolButton::customContextMenuRequested, this,
-            [this, button, logging](const QPoint& point) {
-              QMenu menu(button);
-              QAction* open = menu.addAction(button->toolTip());
-              QAction* clear = logging ? menu.addAction(QStringLiteral("Clear Log"))
-                                       : nullptr;
-              QAction* configure =
-                  menu.addAction(QStringLiteral("Configure..."));
-              QAction* selected = menu.exec(button->mapToGlobal(point));
-              if (selected == open) {
-                button->click();
-              } else if (selected == clear) {
-                QMessageBox prompt(this);
-                prompt.setIcon(QMessageBox::Question);
-                prompt.setWindowTitle(QStringLiteral("Clear Log"));
-                prompt.setText(QStringLiteral(
-                    "Clear the current session log? This cannot be undone."));
-                auto* approve =
-                    prompt.addButton(QStringLiteral("Approve"),
-                                     QMessageBox::AcceptRole);
-                prompt.addButton(QStringLiteral("Cancel"),
-                                 QMessageBox::RejectRole);
-                prompt.setDefaultButton(approve);
-                if (prompt.exec() != QDialog::Accepted) return;
-                if (d_->logFile != nullptr) {
-                  d_->logFile->close();
-                  d_->logFile->open(QIODevice::WriteOnly | QIODevice::Truncate);
-                  d_->logFile->close();
-                  d_->logFile->open(QIODevice::WriteOnly | QIODevice::Append);
-                }
-                setStatus(QStringLiteral("Log files cleared."));
-              } else if (selected == configure) {
-                if (logging) {
-                  SettingsDialog dialog(
-                      this, core::paths::appLogPath(
-                                QFileInfo(d_->profilePath).completeBaseName()));
-                  if (dialog.exec() == QDialog::Accepted) {
-                    core::storage::Settings settings;
-                    d_->soundEnabled =
-                        settings.value(QStringLiteral("sound/enabled"), true)
-                            .toBool();
-                    refreshDiagnosticsSettings();
-                    d_->externalTools = core::loadExternalTools();
-                    d_->comparison->setExternalTools(d_->externalTools);
-                    applyActionColours();
-                    updateVerificationVisibility();
-                  }
-                } else {
-                  ProfileEditorDialog dialog(
-                      d_->profile, this, QStringLiteral("backup"));
-                  if (dialog.exec() == QDialog::Accepted) {
-                    const core::SyncProfile updated = dialog.profile();
-                    d_->profile.backup = updated.backup;
-                    d_->profile.transfer = updated.transfer;
-                    d_->profile.preservation = updated.preservation;
-                    updateStateIcons();
-                  }
-                }
-              }
-            });
+  };
+  const auto showOpenMenu = [this, openLocation](QToolButton* button, bool logging) {
+    QMenu menu(button);
+    // The button's own action is always the first entry.
+    QAction* open = menu.addAction(logging ? QStringLiteral("Open the log file")
+                                           : QStringLiteral("Open the backup directory"));
+    QAction* clear = logging ? menu.addAction(QStringLiteral("Clear Log"))
+                             : nullptr;
+    QAction* configure = menu.addAction(QStringLiteral("Configure..."));
+    QAction* selected =
+        menu.exec(button->mapToGlobal(QPoint(0, button->height())));
+    if (selected == open) {
+      openLocation(logging);
+    } else if (selected == clear) {
+      QMessageBox prompt(this);
+      prompt.setIcon(QMessageBox::Question);
+      prompt.setWindowTitle(QStringLiteral("Clear Log"));
+      prompt.setText(QStringLiteral(
+          "Clear the current session log? This cannot be undone."));
+      auto* approve = prompt.addButton(QStringLiteral("Approve"),
+                                       QMessageBox::AcceptRole);
+      prompt.addButton(QStringLiteral("Cancel"), QMessageBox::RejectRole);
+      prompt.setDefaultButton(approve);
+      if (prompt.exec() != QDialog::Accepted) return;
+      if (d_->logFile != nullptr) {
+        d_->logFile->close();
+        d_->logFile->open(QIODevice::WriteOnly | QIODevice::Truncate);
+        d_->logFile->close();
+        d_->logFile->open(QIODevice::WriteOnly | QIODevice::Append);
+      }
+      setStatus(QStringLiteral("Log files cleared."));
+    } else if (selected == configure) {
+      if (logging) {
+        SettingsDialog dialog(
+            this, core::paths::appLogPath(
+                      QFileInfo(d_->profilePath).completeBaseName()));
+        if (dialog.exec() == QDialog::Accepted) {
+          core::storage::Settings settings;
+          d_->soundEnabled =
+              settings.value(QStringLiteral("sound/enabled"), true).toBool();
+          refreshDiagnosticsSettings();
+          d_->externalTools = core::loadExternalTools();
+          d_->comparison->setExternalTools(d_->externalTools);
+          applyActionColours();
+          updateVerificationVisibility();
+        }
+      } else {
+        ProfileEditorDialog dialog(d_->profile, this, QStringLiteral("backup"));
+        if (dialog.exec() == QDialog::Accepted) {
+          const core::SyncProfile updated = dialog.profile();
+          d_->profile.backup = updated.backup;
+          d_->profile.transfer = updated.transfer;
+          d_->profile.preservation = updated.preservation;
+          updateOpenButtonStates();
+          updateStateIcons();
+        }
+      }
+    }
+  };
+  const auto configureOpenMenu = [showOpenMenu](QToolButton* button, bool logging) {
+    button->setContextMenuPolicy(Qt::NoContextMenu);
+    QObject::connect(button, &QToolButton::clicked, button,
+                     [showOpenMenu, button, logging]() {
+                       showOpenMenu(button, logging);
+                     });
   };
   configureOpenMenu(backupButton, false);
-  auto* logButton = new MenuToolButton(toolbarRow);
-  d_->logButton = logButton;
-  logButton->setIcon(icons::toolbarIcon(QStringLiteral("log")));
-  logButton->setAccessibleName(QStringLiteral("Open the log file"));
-  logButton->setToolTip(QStringLiteral("Open the log file"));
-  connect(logButton, &QToolButton::clicked, this, [this]() {
-    if (d_->logPath.isEmpty()) {
-      SettingsDialog dialog(
-          this, core::paths::appLogPath(
-                    QFileInfo(d_->profilePath).completeBaseName()));
-      if (dialog.exec() == QDialog::Accepted) updateOpenButtonStates();
-      return;
-    }
-    QDesktopServices::openUrl(QUrl::fromLocalFile(d_->logPath));
-  });
-  styleTool(logButton);
-  toolbarLayout->addWidget(logButton);
   configureOpenMenu(logButton, true);
-  addTool(d_->settingsButton, QStringLiteral("Settings"),
-          QStringLiteral("settings"), QStringLiteral("Settings"));
-  connect(d_->settingsButton, &QAbstractButton::clicked, this, [this]() {
-    SettingsDialog dialog(
-          this, core::paths::appLogPath(
-                    QFileInfo(d_->profilePath).completeBaseName()));
-    if (dialog.exec() == QDialog::Accepted) {
-      core::storage::Settings settings;
-      d_->soundEnabled =
-          settings.value(QStringLiteral("sound/enabled"), true).toBool();
-      refreshDiagnosticsSettings();
-      d_->externalTools = core::loadExternalTools();
-      d_->comparison->setExternalTools(d_->externalTools);
-      applyActionColours();
-      updateVerificationVisibility();
-    }
-  });
   connect(d_->filtersButton, &QAbstractButton::clicked, this, [this]() {
     QDialog dialog(this);
     dialog.setWindowTitle(QStringLiteral("Filters"));
@@ -666,13 +659,6 @@ MainWindow::MainWindow(QWidget* parent)
   });
 
   toolbarLayout->addWidget(verticalSeparator(toolbarRow));
-  auto* findButton = new QToolButton(toolbarRow);
-  findButton->setIcon(icons::toolbarIcon(QStringLiteral("search")));
-  findButton->setAccessibleName(QStringLiteral("Find next"));
-  findButton->setToolTip(QStringLiteral("Find next (Ctrl+F)"));
-  styleTool(findButton);
-  connect(findButton, &QToolButton::clicked, this, &MainWindow::findNext);
-  toolbarLayout->addWidget(findButton);
   d_->searchPreviousButton = new QToolButton(toolbarRow);
   d_->searchPreviousButton->setIcon(
       icons::toolbarIcon(QStringLiteral("search-previous")));
@@ -719,6 +705,23 @@ MainWindow::MainWindow(QWidget* parent)
   d_->searchStatus->hide();
   toolbarLayout->addWidget(d_->searchStatus);
 
+  addTool(d_->settingsButton, QStringLiteral("Settings"),
+          QStringLiteral("settings"), QStringLiteral("Settings"));
+  connect(d_->settingsButton, &QAbstractButton::clicked, this, [this]() {
+    SettingsDialog dialog(
+          this, core::paths::appLogPath(
+                    QFileInfo(d_->profilePath).completeBaseName()));
+    if (dialog.exec() == QDialog::Accepted) {
+      core::storage::Settings settings;
+      d_->soundEnabled =
+          settings.value(QStringLiteral("sound/enabled"), true).toBool();
+      refreshDiagnosticsSettings();
+      d_->externalTools = core::loadExternalTools();
+      d_->comparison->setExternalTools(d_->externalTools);
+      applyActionColours();
+      updateVerificationVisibility();
+    }
+  });
   auto* layoutButton = new QToolButton(toolbarRow);
   d_->layoutButton = layoutButton;
   layoutButton->setIcon(icons::toolbarIcon(QStringLiteral("layout")));
@@ -1023,9 +1026,15 @@ MainWindow::MainWindow(QWidget* parent)
     d_->destinationOpen->setEnabled(local(d_->destination->text()));
   };
   connect(d_->source, &QLineEdit::textChanged, this,
-          [updateOpenStates](const QString&) { updateOpenStates(); });
+          [this, updateOpenStates](const QString&) {
+            updateOpenStates();
+            onLocationChanged();
+          });
   connect(d_->destination, &QLineEdit::textChanged, this,
-          [updateOpenStates](const QString&) { updateOpenStates(); });
+          [this, updateOpenStates](const QString&) {
+            updateOpenStates();
+            onLocationChanged();
+          });
   connect(d_->destination, &QLineEdit::returnPressed, this,
           [this]() { startCompare(); });
   updateOpenStates();
@@ -1539,8 +1548,12 @@ void MainWindow::setStatus(const QString& text) {
 }
 
 void MainWindow::startCompare() {
+  d_->suppressLocationStale = true;
   d_->source->setText(withTrailingSlash(d_->source->text()));
   d_->destination->setText(withTrailingSlash(d_->destination->text()));
+  d_->locationBaselineSource = d_->source->text();
+  d_->locationBaselineDestination = d_->destination->text();
+  d_->suppressLocationStale = false;
   const auto endpointFromField = [](QLineEdit* field,
                                     const core::Endpoint& current) {
     const QString text = field->text();
@@ -1859,6 +1872,7 @@ void MainWindow::finishComparison() {
   if (d_->comparisonAwaitingMetadata) {
     d_->comparisonAwaitingMetadata = false;
     d_->stale = false;
+    d_->staleFromLocation = false;
     updateStateIcons();
     // The plan depends on decisions and filters, not on destination sizes, so
     // rebuilding it here only repeated the same work a second time. Restore
@@ -1881,6 +1895,36 @@ void MainWindow::finishComparison() {
     playCompletionSound(QStringLiteral("success"));
   }
   d_->progress->hide();
+}
+
+void MainWindow::onLocationChanged() {
+  if (d_->suppressLocationStale || d_->changes.isEmpty()) return;
+  const bool restored =
+      d_->source->text() == d_->locationBaselineSource &&
+      d_->destination->text() == d_->locationBaselineDestination;
+  if (restored) {
+    if (!d_->staleFromLocation) return;
+    d_->staleFromLocation = false;
+    d_->stale = d_->staleBeforeLocation;
+    d_->verified = d_->verifiedBeforeLocation;
+    updateStateIcons();
+    const bool actionable = !d_->stale && d_->plan.summary.included > 0;
+    setSyncEnabled(actionable);
+    setVerifyEnabled(actionable);
+    setStatus(QStringLiteral("Locations restored; comparison state retained."));
+    return;
+  }
+  if (d_->staleFromLocation) return;
+  d_->staleBeforeLocation = d_->stale;
+  d_->verifiedBeforeLocation = d_->verified;
+  d_->staleFromLocation = true;
+  d_->stale = true;
+  d_->verified = false;
+  setSyncEnabled(false);
+  setVerifyEnabled(false);
+  updateStateIcons();
+  setStatus(QStringLiteral(
+      "Stale comparison: locations changed. Compare again to refresh results."));
 }
 
 void MainWindow::updateOpenButtonStates() {
@@ -2400,8 +2444,12 @@ void MainWindow::setProfilePath(const QString& path) {
 
 void MainWindow::loadProfileFile(const QString& path) {
   d_->profile = core::storage::loadProfile(path);
+  d_->suppressLocationStale = true;
   d_->source->setText(d_->profile.source.rsyncOperand());
   d_->destination->setText(d_->profile.destination.rsyncOperand());
+  d_->locationBaselineSource = d_->source->text();
+  d_->locationBaselineDestination = d_->destination->text();
+  d_->suppressLocationStale = false;
   setProfilePath(path);
   d_->baselineProfile = d_->profile;
   d_->hasBaseline = true;

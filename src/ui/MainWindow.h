@@ -54,6 +54,7 @@ class MainWindow : public QMainWindow {
   void setSyncEnabled(bool enabled);
   void setOperationControls(bool enabled);
   void updateOpenButtonStates();
+  void onLocationChanged();
   void setVerifyEnabled(bool enabled);
   void queueSetting(const QString& key, const QVariant& value);
   void flushSettings();

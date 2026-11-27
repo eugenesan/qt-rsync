@@ -134,6 +134,7 @@ class UiTest : public QObject {
   void startupControlsAndDialogDefaults();
   void commandPreviewIsTemporaryJournalEntry();
   void overviewWidthStableAcrossLayouts();
+  void toolbarOrderAndLocationStaleness();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -2742,6 +2743,60 @@ void UiTest::overviewWidthStableAcrossLayouts() {
   normal->trigger();
   QTest::qWait(20);
   QCOMPARE(overview->width(), normalWidth);
+}
+
+void UiTest::toolbarOrderAndLocationStaleness() {
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString script = dir.path() + QStringLiteral("/rsync");
+  QFile file(script);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+  file.write("#!/bin/sh\n"
+             "case \"$*\" in *--list-only*) exit 0 ;; esac\n"
+             "printf '%s\\n' "
+             "'>f+++++++++|qpy-rsync|1|qpy-rsync|2026-11-23|qpy-rsync|a.txt'\n");
+  file.close();
+  QVERIFY(QFile::setPermissions(script, QFile::ReadOwner | QFile::WriteOwner |
+                                           QFile::ExeOwner));
+  const QByteArray oldPath = qgetenv("PATH");
+  qputenv("PATH", (dir.path() + ':' + QString::fromLocal8Bit(oldPath)).toLocal8Bit());
+
+  ui::MainWindow window;
+  app::StartupOptions options;
+  window.applyStartupOptions(options);
+  const auto edits = QList<QLineEdit*>{window.findChild<QLineEdit*>("source-edit"),
+                                       window.findChild<QLineEdit*>("destination-edit")};
+  edits.at(0)->setText(QStringLiteral("/src"));
+  edits.at(1)->setText(QStringLiteral("/dst"));
+  window.show();
+
+  const auto byAccessibleName = [&window](const QString& name) -> QToolButton* {
+    for (QToolButton* button : window.findChildren<QToolButton*>()) {
+      if (button->accessibleName() == name) return button;
+    }
+    return nullptr;
+  };
+  QToolButton* settings = byAccessibleName(QStringLiteral("Settings"));
+  QToolButton* layout = byAccessibleName(QStringLiteral("Compare layout"));
+  QToolButton* swap = byAccessibleName(QStringLiteral("Swap Source and Destination"));
+  QVERIFY(settings != nullptr && layout != nullptr && swap != nullptr);
+  QVERIFY(settings->x() < layout->x());
+  QVERIFY(swap->x() < window.findChild<QComboBox*>()->x() + 200);
+  QVERIFY(byAccessibleName(QStringLiteral("Find next")) == nullptr);
+
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
+    if (button->text() == QLatin1String("Compare")) button->click();
+  }
+  auto* status = window.findChild<QLineEdit*>("status-label");
+  QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 8000);
+
+  swap->click();
+  QVERIFY(status->text().contains(QStringLiteral("Stale comparison")));
+  swap->click();
+  QVERIFY(status->text().contains(QStringLiteral("Locations restored")));
+  QCOMPARE(edits.at(0)->text(), QStringLiteral("/src/"));
+  QCOMPARE(edits.at(1)->text(), QStringLiteral("/dst/"));
+  qputenv("PATH", oldPath);
 }
 
 QTEST_MAIN(UiTest)

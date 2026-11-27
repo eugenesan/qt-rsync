@@ -11,6 +11,15 @@ and refreshed documentation and packaging.
 
 ### Changed
 
+- Toolbar order: swap button before the sync mode selector, Settings before
+  the layout button, and the standalone Find button removed (keyboard search
+  shortcuts unchanged).
+- Backup and Log buttons open their menus on left-click, with their own action
+  as the first entry.
+- Changing Source/Destination marks the comparison stale; swapping twice
+  restores the previous state.
+- Compare uses `refreshstructure-symbolic` and the app menu uses
+  `open-menu-symbolic` when the icon theme provides them.
 - The progress pane is gone. A fixed-width progress bar (15% of the window)
   sits at the right end of the status bar, and progress messages share the
   status field instead of a separate label. Streaming updates do not spam the

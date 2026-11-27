@@ -206,8 +206,10 @@ QIcon toolbarIcon(const QString& name) {
     });
   }
   if (name == QLatin1String("appmenu")) {
+    const QIcon themed = QIcon::fromTheme(QStringLiteral("open-menu-symbolic"));
+    if (!themed.isNull()) return themed;
     return makeGrid([](QPainter& p) {
-      p.setPen(gridPen(QColor("#94a3b8"), 1.8));
+      p.setPen(gridPen(QApplication::palette().color(QPalette::WindowText), 1.8));
       for (double y : {4.5, 8.0, 11.5}) {
         p.drawLine(QPointF(3.5, y), QPointF(12.5, y));
       }
@@ -241,7 +243,8 @@ QIcon toolbarIcon(const QString& name) {
                   QStyle::SP_DialogOpenButton);
   }
   if (name == QLatin1String("compare")) {
-    return themed({"kr_comparedirs", "kr_comparedir", "document-compareright",
+    return themed({"refreshstructure-symbolic", "kr_comparedirs",
+                   "kr_comparedir", "document-compareright",
                    "document-compareright-symbolic"},
                   QStyle::SP_FileDialogContentsView);
   }
