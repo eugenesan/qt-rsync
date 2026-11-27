@@ -15,7 +15,8 @@ and refreshed documentation and packaging.
   the layout button, and the standalone Find button removed (keyboard search
   shortcuts unchanged).
 - Backup and Log buttons open their menus on left-click, with their own action
-  as the first entry.
+  as the first entry. The menus are now owned by the buttons (InstantPopup), so
+  clicking between them switches menus instead of triggering Clear Log.
 - Changing Source/Destination marks the comparison stale; swapping twice
   restores the previous state.
 - Compare uses `refreshstructure-symbolic` and the app menu uses

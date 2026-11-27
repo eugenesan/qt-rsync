@@ -2783,6 +2783,16 @@ void UiTest::toolbarOrderAndLocationStaleness() {
   QVERIFY(settings->x() < layout->x());
   QVERIFY(swap->x() < window.findChild<QComboBox*>()->x() + 200);
   QVERIFY(byAccessibleName(QStringLiteral("Find next")) == nullptr);
+  QToolButton* backup = byAccessibleName(QStringLiteral("Open the backup directory"));
+  QToolButton* log = byAccessibleName(QStringLiteral("Open the log file"));
+  QVERIFY(backup != nullptr && log != nullptr);
+  QCOMPARE(backup->popupMode(), QToolButton::InstantPopup);
+  QCOMPARE(backup->menu()->actions().first()->text(),
+           QStringLiteral("Open the backup directory"));
+  QCOMPARE(log->menu()->actions().first()->text(),
+           QStringLiteral("Open the log file"));
+  QCOMPARE(log->menu()->actions().at(1)->text(), QStringLiteral("Clear Log"));
+  QVERIFY(swap->parentWidget() != edits.at(0)->parentWidget());
 
   for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) button->click();

@@ -31,7 +31,8 @@ qt-rsync (0.2.0-0) resolute; urgency=medium
     disabled, sync can re-compare automatically, progress is in the status
     bar and the command preview is a temporary journal entry, menu chevrons
     point down, the overview keeps its width across layouts, the toolbar is
-    reordered, menus open on left-click and location changes mark the
+    reordered, buttons own their left-click menus, swap stays in the top row
+    and location changes mark the
     comparison stale, and
     timings report real wall-clock values;
     example profile installed under

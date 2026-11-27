@@ -346,8 +346,6 @@ MainWindow::MainWindow(QWidget* parent)
     d_->source->setText(d_->destination->text());
     d_->destination->setText(source);
   });
-  // qpy adds the swap button to this row first and then reparents it into
-  // the Source panel below; doing the same keeps the order identical.
   toolbarLayout->addWidget(swapButton);
 
   d_->mode = new QComboBox(toolbarRow);
@@ -554,70 +552,74 @@ MainWindow::MainWindow(QWidget* parent)
     }
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->profile.backup.directory));
   };
-  const auto showOpenMenu = [this, openLocation](QToolButton* button, bool logging) {
-    QMenu menu(button);
-    // The button's own action is always the first entry.
-    QAction* open = menu.addAction(logging ? QStringLiteral("Open the log file")
-                                           : QStringLiteral("Open the backup directory"));
-    QAction* clear = logging ? menu.addAction(QStringLiteral("Clear Log"))
-                             : nullptr;
-    QAction* configure = menu.addAction(QStringLiteral("Configure..."));
-    QAction* selected =
-        menu.exec(button->mapToGlobal(QPoint(0, button->height())));
-    if (selected == open) {
-      openLocation(logging);
-    } else if (selected == clear) {
-      QMessageBox prompt(this);
-      prompt.setIcon(QMessageBox::Question);
-      prompt.setWindowTitle(QStringLiteral("Clear Log"));
-      prompt.setText(QStringLiteral(
-          "Clear the current session log? This cannot be undone."));
-      auto* approve = prompt.addButton(QStringLiteral("Approve"),
-                                       QMessageBox::AcceptRole);
-      prompt.addButton(QStringLiteral("Cancel"), QMessageBox::RejectRole);
-      prompt.setDefaultButton(approve);
-      if (prompt.exec() != QDialog::Accepted) return;
-      if (d_->logFile != nullptr) {
-        d_->logFile->close();
-        d_->logFile->open(QIODevice::WriteOnly | QIODevice::Truncate);
-        d_->logFile->close();
-        d_->logFile->open(QIODevice::WriteOnly | QIODevice::Append);
+  const auto clearLog = [this]() {
+    QMessageBox prompt(this);
+    prompt.setIcon(QMessageBox::Question);
+    prompt.setWindowTitle(QStringLiteral("Clear Log"));
+    prompt.setText(QStringLiteral(
+        "Clear the current session log? This cannot be undone."));
+    auto* approve = prompt.addButton(QStringLiteral("Approve"),
+                                     QMessageBox::AcceptRole);
+    prompt.addButton(QStringLiteral("Cancel"), QMessageBox::RejectRole);
+    prompt.setDefaultButton(approve);
+    if (prompt.exec() != QDialog::Accepted) return;
+    if (d_->logFile != nullptr) {
+      d_->logFile->close();
+      d_->logFile->open(QIODevice::WriteOnly | QIODevice::Truncate);
+      d_->logFile->close();
+      d_->logFile->open(QIODevice::WriteOnly | QIODevice::Append);
+    }
+    setStatus(QStringLiteral("Log files cleared."));
+  };
+  const auto configureLocation = [this](bool logging) {
+    if (logging) {
+      SettingsDialog dialog(
+          this, core::paths::appLogPath(
+                    QFileInfo(d_->profilePath).completeBaseName()));
+      if (dialog.exec() == QDialog::Accepted) {
+        core::storage::Settings settings;
+        d_->soundEnabled =
+            settings.value(QStringLiteral("sound/enabled"), true).toBool();
+        refreshDiagnosticsSettings();
+        d_->externalTools = core::loadExternalTools();
+        d_->comparison->setExternalTools(d_->externalTools);
+        applyActionColours();
+        updateVerificationVisibility();
       }
-      setStatus(QStringLiteral("Log files cleared."));
-    } else if (selected == configure) {
-      if (logging) {
-        SettingsDialog dialog(
-            this, core::paths::appLogPath(
-                      QFileInfo(d_->profilePath).completeBaseName()));
-        if (dialog.exec() == QDialog::Accepted) {
-          core::storage::Settings settings;
-          d_->soundEnabled =
-              settings.value(QStringLiteral("sound/enabled"), true).toBool();
-          refreshDiagnosticsSettings();
-          d_->externalTools = core::loadExternalTools();
-          d_->comparison->setExternalTools(d_->externalTools);
-          applyActionColours();
-          updateVerificationVisibility();
-        }
-      } else {
-        ProfileEditorDialog dialog(d_->profile, this, QStringLiteral("backup"));
-        if (dialog.exec() == QDialog::Accepted) {
-          const core::SyncProfile updated = dialog.profile();
-          d_->profile.backup = updated.backup;
-          d_->profile.transfer = updated.transfer;
-          d_->profile.preservation = updated.preservation;
-          updateOpenButtonStates();
-          updateStateIcons();
-        }
-      }
+      return;
+    }
+    ProfileEditorDialog dialog(d_->profile, this, QStringLiteral("backup"));
+    if (dialog.exec() == QDialog::Accepted) {
+      const core::SyncProfile updated = dialog.profile();
+      d_->profile.backup = updated.backup;
+      d_->profile.transfer = updated.transfer;
+      d_->profile.preservation = updated.preservation;
+      updateOpenButtonStates();
+      updateStateIcons();
     }
   };
-  const auto configureOpenMenu = [showOpenMenu](QToolButton* button, bool logging) {
+  // A real QMenu owned by the button avoids nested menu.exec() loops: clicking
+  // the other button closes this menu and opens the right one instead of
+  // accidentally triggering an action of the open menu.
+  const auto configureOpenMenu = [this, openLocation, clearLog,
+                                  configureLocation](QToolButton* button,
+                                                     bool logging) {
+    auto* menu = new QMenu(button);
+    QAction* open = menu->addAction(
+        logging ? QStringLiteral("Open the log file")
+                : QStringLiteral("Open the backup directory"));
+    connect(open, &QAction::triggered, button,
+            [openLocation, logging]() { openLocation(logging); });
+    if (logging) {
+      QAction* clear = menu->addAction(QStringLiteral("Clear Log"));
+      connect(clear, &QAction::triggered, button, clearLog);
+    }
+    QAction* configure = menu->addAction(QStringLiteral("Configure..."));
+    connect(configure, &QAction::triggered, button,
+            [configureLocation, logging]() { configureLocation(logging); });
+    button->setMenu(menu);
+    button->setPopupMode(QToolButton::InstantPopup);
     button->setContextMenuPolicy(Qt::NoContextMenu);
-    QObject::connect(button, &QToolButton::clicked, button,
-                     [showOpenMenu, button, logging]() {
-                       showOpenMenu(button, logging);
-                     });
   };
   configureOpenMenu(backupButton, false);
   configureOpenMenu(logButton, true);
@@ -933,7 +935,6 @@ MainWindow::MainWindow(QWidget* parent)
   auto* sourceLayout = new QHBoxLayout(sourcePanel);
   sourceLayout->setContentsMargins(0, 0, 0, 0);
   sourceLayout->setSpacing(4);
-  sourceLayout->addWidget(swapButton);
   auto* sourceOpen = new QToolButton(sourcePanel);
   d_->sourceOpen = sourceOpen;
   sourceOpen->setIcon(icons::toolbarIcon(QStringLiteral("cloud-upload")));
