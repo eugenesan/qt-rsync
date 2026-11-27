@@ -11,6 +11,8 @@ and refreshed documentation and packaging.
 
 ### Added
 
+- Per-tool "Open with" context menu, remote diff staging and overview filter
+  tracking close the last test-port gaps; the tracker is now fully consistent.
 - The README was rewritten in the qpy-rsync style and uses new KDE-theme
   screenshots. The screenshots, the application icon and the desktop entry
   live in `resources/`.

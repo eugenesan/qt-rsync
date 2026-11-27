@@ -24,7 +24,8 @@ qt-rsync (0.2.0-0) resolute; urgency=medium
     scale to MiB/GiB, decisions and the overview update incrementally, log
     paths and inverted clicks are fixed, directories can become Source or
     Destination, sync starts disabled, modified profiles prompt to be saved
-    (Save / Save As... / Don't Save), and timings report real wall-clock values;
+    (Save / Save As... / Don't Save), external tools and remote diff staging
+    are ported, and timings report real wall-clock values;
     example profile installed under
     /usr/share/doc/qt-rsync/examples.
 
