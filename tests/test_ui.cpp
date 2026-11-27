@@ -7,6 +7,7 @@
 #include <QHeaderView>
 #include <QIcon>
 #include <QKeyEvent>
+#include <QHoverEvent>
 #include <QLabel>
 #include <QAbstractButton>
 #include <QPainter>
@@ -132,6 +133,7 @@ class UiTest : public QObject {
   void settingsUsePlainTextFormats();
   void startupControlsAndDialogDefaults();
   void commandPreviewIsTemporaryJournalEntry();
+  void overviewWidthStableAcrossLayouts();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -2680,9 +2682,16 @@ void UiTest::commandPreviewIsTemporaryJournalEntry() {
   QVERIFY(window.findChild<QPlainTextEdit*>(QStringLiteral("command-preview-label")) ==
           nullptr);
 
-  QVERIFY(QMetaObject::invokeMethod(&window, "showCommandPreview"));
   auto* journal = window.findChild<QPlainTextEdit*>();
   QVERIFY(journal != nullptr);
+  QVERIFY(!journal->toPlainText().contains(QStringLiteral("rsync preview:")));
+  QAbstractButton* compare = nullptr;
+  for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
+    if (button->text() == QStringLiteral("Compare")) compare = button;
+  }
+  QVERIFY(compare != nullptr);
+  QHoverEvent enter(QEvent::HoverEnter, QPointF(5, 5), QPointF());
+  QApplication::sendEvent(compare, &enter);
   const QString text = journal->toPlainText();
   const QStringList lines = text.split('\n');
   QVERIFY(!lines.isEmpty());
@@ -2692,8 +2701,8 @@ void UiTest::commandPreviewIsTemporaryJournalEntry() {
   QVERIFY(!last.contains(QRegularExpression(QStringLiteral("^\\d{2}:"))));
 
   // Repeated hovers replace the same single entry.
-  QVERIFY(QMetaObject::invokeMethod(&window, "showCommandPreview"));
-  QVERIFY(QMetaObject::invokeMethod(&window, "showCommandPreview"));
+  QApplication::sendEvent(compare, &enter);
+  QApplication::sendEvent(compare, &enter);
   QCOMPARE(journal->toPlainText().count(QStringLiteral("$ rsync")), 1);
   QVERIFY(!journal->toPlainText().split('\n').contains(QString()));
 
@@ -2705,6 +2714,34 @@ void UiTest::commandPreviewIsTemporaryJournalEntry() {
 
   QVERIFY(QMetaObject::invokeMethod(&window, "clearCommandPreview"));
   QVERIFY(!journal->toPlainText().contains(QStringLiteral("$ rsync --dry-run")));
+}
+
+void UiTest::overviewWidthStableAcrossLayouts() {
+  ui::MainWindow window;
+  window.resize(1280, 800);
+  window.show();
+  QTest::qWait(20);
+  auto* overview = window.findChild<ui::OverviewPane*>();
+  QVERIFY(overview != nullptr);
+  const auto action = [&window](const QString& text) -> QAction* {
+    for (QAction* candidate : window.findChildren<QAction*>()) {
+      if (candidate->text() == text) return candidate;
+    }
+    return nullptr;
+  };
+  QAction* wide = action(QStringLiteral("Compare with overview"));
+  QAction* normal = action(QStringLiteral("Normal"));
+  QVERIFY(wide != nullptr && normal != nullptr);
+  const int normalWidth = overview->width();
+  QVERIFY(normalWidth > 0);
+
+  wide->trigger();
+  QTest::qWait(20);
+  QCOMPARE(overview->width(), normalWidth);
+
+  normal->trigger();
+  QTest::qWait(20);
+  QCOMPARE(overview->width(), normalWidth);
 }
 
 QTEST_MAIN(UiTest)

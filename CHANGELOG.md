@@ -21,7 +21,11 @@ and refreshed documentation and packaging.
   starts and returns when the app is idle. Repeated hover events replace the
   single entry with no blank line, any real journal line removes the preview
   first, and it is shown in a faded italic colour with a "compare rsync
-  preview:" or "verify rsync preview:" marker.
+  preview:" or "verify rsync preview:" marker. The preview appears only after
+  the first hover of Compare or Verify.
+- Menu-button chevrons point down and sit at the bottom-left of the button.
+- The overview pane keeps the same width in Normal and "Compare with overview"
+  layouts.
 
 ### Fixed
 

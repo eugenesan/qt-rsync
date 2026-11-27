@@ -84,11 +84,11 @@ class MenuToolButton : public QToolButton {
     QToolButton::paintEvent(event);
     QPainter painter(this);
     const int x = 2;
-    const int y = 2;
+    const int y = height() - 9;
     painter.setPen(palette().color(QPalette::Text));
     painter.setBrush(palette().color(QPalette::Text));
     QPolygon triangle;
-    triangle << QPoint(x, y + 5) << QPoint(x + 5, y + 5) << QPoint(x + 2, y);
+    triangle << QPoint(x, y) << QPoint(x + 5, y) << QPoint(x + 2, y + 5);
     painter.drawPolygon(triangle);
   }
 };
@@ -246,6 +246,8 @@ class MainWindow::Private {
   core::ProcessSpec compareSpec;
   core::ProcessSpec verifySpec;
   bool previewVerify = false;
+  bool previewRequested = false;
+  int overviewWidth = 620;
   bool operationActive = false;
   ActionFilterBar* filterBar = nullptr;
   QPlainTextEdit* journal = nullptr;
@@ -1456,7 +1458,7 @@ void MainWindow::clearCommandPreview() {
 }
 
 void MainWindow::showCommandPreview() {
-  if (d_->operationActive) return;
+  if (!d_->previewRequested || d_->operationActive) return;
   core::ProcessSpec spec = d_->previewVerify ? d_->verifySpec : d_->compareSpec;
   if (spec.program.isEmpty()) {
     spec = d_->previewVerify
@@ -1499,6 +1501,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     if (watched == d_->compare) d_->previewVerify = false;
     else if (watched == d_->verify) d_->previewVerify = true;
     else return QMainWindow::eventFilter(watched, event);
+    d_->previewRequested = true;
     showCommandPreview();
   }
   return QMainWindow::eventFilter(watched, event);
@@ -1878,7 +1881,6 @@ void MainWindow::finishComparison() {
     playCompletionSound(QStringLiteral("success"));
   }
   d_->progress->hide();
-  showCommandPreview();
 }
 
 void MainWindow::updateOpenButtonStates() {
@@ -2073,7 +2075,6 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
       appendJournalLine(QStringLiteral("unexpected: ") + line);
     }
   }
-  showCommandPreview();
 }
 
 void MainWindow::onOperationError(QProcess::ProcessError error) {
@@ -2566,6 +2567,11 @@ void MainWindow::applyLayoutMode(const QString& mode) {
       d_->logSplitter == nullptr || d_->overview == nullptr) {
     return;
   }
+  // Remember the visible width before reparenting so all layouts keep the
+  // overview at the same size.
+  if (d_->overview->isVisible() && d_->overview->width() > 0) {
+    d_->overviewWidth = d_->overview->width();
+  }
   d_->layoutMode = mode;
   if (mode == QLatin1String("focus")) {
     d_->mainSplitter->setOrientation(Qt::Vertical);
@@ -2578,10 +2584,10 @@ void MainWindow::applyLayoutMode(const QString& mode) {
     d_->mainSplitter->setOrientation(Qt::Horizontal);
     d_->logPanel->hide();
     d_->mainSplitter->addWidget(d_->overview);
-    d_->overview->setMinimumWidth(180);
+    d_->overview->setFixedWidth(d_->overviewWidth);
     d_->overview->show();
     // The hidden log panel still occupies a splitter index, so give it zero.
-    d_->mainSplitter->setSizes({600, 0, 400});
+    d_->mainSplitter->setSizes({600, 0, d_->overviewWidth});
     return;
   }
   d_->mainSplitter->setOrientation(Qt::Vertical);
@@ -2589,11 +2595,14 @@ void MainWindow::applyLayoutMode(const QString& mode) {
     d_->logSplitter->addWidget(d_->overview);
   }
   d_->overview->setMinimumWidth(0);
+  d_->overview->setMaximumWidth(16777215);
   d_->logPanel->show();
   d_->overview->show();
   d_->logSplitter->setStretchFactor(0, 1);
   d_->logSplitter->setStretchFactor(1, 0);
-  d_->logSplitter->setSizes({680, 620});
+  const int total = qMax(d_->logSplitter->width(), d_->overviewWidth + 100);
+  d_->logSplitter->setSizes({total - d_->overviewWidth, d_->overviewWidth});
+  d_->overviewWidth = d_->logSplitter->sizes().value(1, d_->overviewWidth);
   d_->mainSplitter->setSizes({500, 280});
 }
 

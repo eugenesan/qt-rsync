@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 489 pytest cases. qt-rsync has 123 QtTest cases
-(53 core, 70 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 489 pytest cases. qt-rsync has 124 QtTest cases
+(53 core, 71 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -127,6 +127,12 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 8. Golden screenshots — `goldenScreenshotsAreValidImages` verifies the three
    committed reference images; the profile editor is covered by the widget
    round-trip instead of a separate image.
+
+## Layout and preview tweaks
+
+`overviewWidthStableAcrossLayouts` keeps the overview width constant between
+Normal and wide layouts; the preview test now simulates the first hover before
+expecting a command entry.
 
 ## Progress and command preview
 
