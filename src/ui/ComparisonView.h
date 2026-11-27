@@ -38,6 +38,7 @@ class ComparisonView : public QWidget {
   void setRootNames(const QString& source, const QString& destination,
                     bool sourceLocal = true, bool destinationLocal = true);
   void selectPath(const QString& path);
+  void focusPane(int pane);
   // Reveal a folder from the overview: expand its ancestors, keep the row
   // centered in all panes and move the keyboard focus to the list.
   void activatePath(const QString& path);

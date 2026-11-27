@@ -51,10 +51,14 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
     if (shortcutNumber > 0) {
       auto* alt = new QShortcut(
           QKeySequence(Qt::ALT | (Qt::Key_0 + shortcutNumber)), this);
+      alt->setContext(Qt::ApplicationShortcut);
       connect(alt, &QShortcut::activated, box, [box]() { box->click(); });
       auto* ctrl = new QShortcut(
           QKeySequence(Qt::CTRL | (Qt::Key_0 + shortcutNumber)), this);
+      ctrl->setContext(Qt::ApplicationShortcut);
       connect(ctrl, &QShortcut::activated, this, [this, box]() {
+        // The pointer guard only guards one mouse press/release cycle.
+        inverseHandled_ = false;
         applyInverse(box);
       });
     }

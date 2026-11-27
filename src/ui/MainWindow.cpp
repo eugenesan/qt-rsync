@@ -50,6 +50,7 @@
 #include <QTimer>
 #include <QComboBox>
 #include <QToolButton>
+#include <QTreeView>
 #include <QVBoxLayout>
 
 #include "core/Command.h"
@@ -1263,6 +1264,21 @@ MainWindow::MainWindow(QWidget* parent)
     const int next = (index + direction + modes.size()) % modes.size();
     applyLayoutMode(modes.at(next));
   };
+  const auto addPaneKey = [this](const QKeySequence& sequence, auto focus) {
+    auto* shortcut = new QShortcut(sequence, this);
+    shortcut->setContext(Qt::ApplicationShortcut);
+    connect(shortcut, &QShortcut::activated, this, [focus]() { focus(); });
+  };
+  addPaneKey(QKeySequence(QStringLiteral("Ctrl+S")),
+             [this]() { d_->comparison->focusPane(0); });
+  addPaneKey(QKeySequence(QStringLiteral("Ctrl+D")),
+             [this]() { d_->comparison->focusPane(2); });
+  addPaneKey(QKeySequence(QStringLiteral("Ctrl+N")),
+             [this]() { d_->comparison->focusPane(1); });
+  addPaneKey(QKeySequence(QStringLiteral("Ctrl+W")), [this]() {
+    auto* tree = d_->overview->findChild<QTreeView*>();
+    if (tree != nullptr) tree->setFocus(Qt::ShortcutFocusReason);
+  });
   addKey(QKeySequence(QStringLiteral("Ctrl+Tab")),
          [cycleLayout]() { cycleLayout(1); });
   addKey(QKeySequence(QStringLiteral("Ctrl+Shift+Tab")),

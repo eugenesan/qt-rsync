@@ -11,6 +11,9 @@ and refreshed documentation and packaging.
 
 ### Changed
 
+- Pane shortcuts Ctrl+S / Ctrl+D / Ctrl+N / Ctrl+W focus Source, Destination,
+  Decisions and Overview. Alt/Ctrl+1..8 filter shortcuts are application-wide,
+  and repeated Ctrl+1 correctly toggles "only excluded" back to defaults.
 - Escape in the search field clears the search like clicking the field's clear
   button. Stepping between search results replaces the selection instead of
   leaving previous results selected.

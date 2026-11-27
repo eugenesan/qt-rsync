@@ -138,6 +138,7 @@ class UiTest : public QObject {
   void overviewWidthStableAcrossLayouts();
   void toolbarOrderAndLocationStaleness();
   void escapeClearsSearchAndSearchSelectionReplaces();
+  void paneAndFilterShortcutsWork();
 };
 
 void UiTest::initTestCase() {
@@ -2847,6 +2848,35 @@ void UiTest::escapeClearsSearchAndSearchSelectionReplaces() {
   QVERIFY(current.isValid());
   QCOMPARE(source->model()->data(current, Qt::UserRole).toString(),
            QStringLiteral("b.txt"));
+}
+
+void UiTest::paneAndFilterShortcutsWork() {
+  ui::MainWindow window;
+  window.show();
+  window.activateWindow();
+  QTest::qWait(20);
+
+  const auto focusedTable = [&window]() -> QTableView* {
+    return qobject_cast<QTableView*>(QApplication::focusWidget());
+  };
+  QTest::keyClick(&window, Qt::Key_S, Qt::ControlModifier);
+  QVERIFY(focusedTable() != nullptr);
+  QTableView* sourceFocus = focusedTable();
+  QTest::keyClick(&window, Qt::Key_D, Qt::ControlModifier);
+  QVERIFY(focusedTable() != nullptr);
+  QVERIFY(focusedTable() != sourceFocus);
+
+  auto* excluded =
+      window.findChild<QCheckBox*>(QStringLiteral("filter-box-1"));
+  auto* create = window.findChild<QCheckBox*>(QStringLiteral("filter-box-3"));
+  QVERIFY(excluded != nullptr && create != nullptr);
+  QVERIFY(create->isChecked());
+  QTest::keyClick(&window, Qt::Key_1, Qt::ControlModifier);
+  QVERIFY(excluded->isChecked());
+  QVERIFY(!create->isChecked());
+  QTest::keyClick(&window, Qt::Key_1, Qt::ControlModifier);
+  QVERIFY(!excluded->isChecked());
+  QVERIFY(create->isChecked());
 }
 
 QTEST_MAIN(UiTest)

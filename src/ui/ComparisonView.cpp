@@ -754,6 +754,19 @@ void ComparisonView::selectPath(const QString& path) {
   }
 }
 
+void ComparisonView::focusPane(int pane) {
+  if (pane < 0 || pane >= static_cast<int>(views_.size())) return;
+  QTableView* view = views_[pane];
+  QModelIndex index = view->currentIndex();
+  if (!index.isValid() && view->model()->rowCount() > 0) {
+    index = view->model()->index(0, 0);
+    view->selectionModel()->setCurrentIndex(
+        index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+  }
+  view->setFocus(Qt::ShortcutFocusReason);
+  if (index.isValid()) view->scrollTo(index, QAbstractItemView::EnsureVisible);
+}
+
 void ComparisonView::activatePath(const QString& path) {
   const auto found = store_.path_to_id.find(path.toStdString());
   if (found == store_.path_to_id.end()) return;
