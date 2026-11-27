@@ -33,52 +33,41 @@ void splitName(const QString& name, QString* stem, QString* extension) {
 
 }  // namespace
 
-namespace {
-
-QByteArray decodeStoredText(const QByteArray& value) {
-  if (!value.startsWith("b64:")) return value;
-  return QByteArray::fromBase64(value.mid(4));
-}
-
-QByteArray encodeStoredText(const QByteArray& value) {
-  return QByteArray("b64:") + value.toBase64();
-}
-
-}  // namespace
-
 QVector<ExternalTool> loadExternalTools() {
   QVector<ExternalTool> tools;
   core::storage::Settings settings;
-  const QByteArray payload =
-      decodeStoredText(settings.value(QStringLiteral("tools/external")).toByteArray());
-  if (payload.isEmpty()) return tools;
-  const QJsonArray array = QJsonDocument::fromJson(payload).array();
-  for (const QJsonValue& value : array) {
-    const QJsonObject object = value.toObject();
+  const int count =
+      settings.value(QStringLiteral("tools/external/count"), 0).toInt();
+  for (int index = 1; index <= count; ++index) {
+    const QString prefix =
+        QStringLiteral("tools/external/%1/").arg(index);
     ExternalTool tool;
-    tool.name = object.value(QStringLiteral("name")).toString();
-    tool.command = object.value(QStringLiteral("command")).toString();
-    tool.options = object.value(QStringLiteral("options")).toString();
-    tool.enabled = object.value(QStringLiteral("enabled")).toBool(true);
+    tool.name = settings.value(prefix + QStringLiteral("name")).toString();
+    tool.command = settings.value(prefix + QStringLiteral("command")).toString();
+    tool.options = settings.value(prefix + QStringLiteral("options")).toString();
+    tool.enabled =
+        settings.value(prefix + QStringLiteral("enabled"), true).toBool();
     if (!tool.name.isEmpty() && !tool.command.isEmpty()) tools.append(tool);
   }
   return tools;
 }
 
 void saveExternalTools(const QVector<ExternalTool>& tools) {
-  QJsonArray array;
-  for (const ExternalTool& tool : tools) {
-    QJsonObject object;
-    object.insert(QStringLiteral("name"), tool.name);
-    object.insert(QStringLiteral("command"), tool.command);
-    object.insert(QStringLiteral("options"), tool.options);
-    object.insert(QStringLiteral("enabled"), tool.enabled);
-    array.append(object);
-  }
   core::storage::Settings settings;
-  settings.setValue(QStringLiteral("tools/external"),
-                    encodeStoredText(
-                        QJsonDocument(array).toJson(QJsonDocument::Compact)));
+  const QStringList oldKeys = settings.allKeys();
+  for (const QString& key : oldKeys) {
+    if (key.startsWith(QStringLiteral("tools/external/"))) settings.remove(key);
+  }
+  settings.setValue(QStringLiteral("tools/external/count"), tools.size());
+  for (int index = 0; index < tools.size(); ++index) {
+    const ExternalTool& tool = tools.at(index);
+    const QString prefix =
+        QStringLiteral("tools/external/%1/").arg(index + 1);
+    settings.setValue(prefix + QStringLiteral("name"), tool.name);
+    settings.setValue(prefix + QStringLiteral("command"), tool.command);
+    settings.setValue(prefix + QStringLiteral("options"), tool.options);
+    settings.setValue(prefix + QStringLiteral("enabled"), tool.enabled);
+  }
   settings.sync();
 }
 

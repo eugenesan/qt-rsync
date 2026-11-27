@@ -28,7 +28,7 @@ Push later for history only; it is not needed to run the shared binaries.
 ## 1. Environment (identical for both apps)
 
 Use the **real** XDG directories — do not override `XDG_CONFIG_HOME`,
-`XDG_STATE_HOME` or `XDG_CACHE_HOME` — otherwise qt-rsync's one-time migration
+`XDG_STATE_HOME` or `XDG_CACHE_HOME` — otherwise qt-rsync uses its own
 cannot find the qpy-rsync profile.
 
 ```sh
@@ -100,7 +100,7 @@ change counts if anything differs.
   pass either flag — load the profile instead.
 - SSH endpoints typed directly into the fields are parsed as
   `user@host:/path`; profile-loaded endpoints already carry the correct kind.
-- The apps use separate profile copies after migration; edits made in one are
+- The apps use separate profile copies; edits made in one are
   not reflected in the other during the same session.
 - Compare is a dry run and safe; **Synchronize is write-capable** — do not click
   it on the real tree while comparing.

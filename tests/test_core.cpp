@@ -93,7 +93,6 @@ class CoreTest : public QObject {
   void legacyProfileFieldsMigrate();
   void settingsAreSplitByPrefix();
   void pidLocksDetectLiveOwnersAndTakeOverStaleOnes();
-  void legacyPathsAreMigrated();
   void sshEndpointTextIsParsed();
   void planMismatchReportsMissingAndUnexpected();
 
@@ -699,33 +698,6 @@ void CoreTest::endpointOperandKeepsSshSyntax() {
   QCOMPARE(endpoint.rsyncOperand(), QStringLiteral("user@example:/home/user/src"));
 }
 
-void CoreTest::legacyPathsAreMigrated() {
-  QTemporaryDir dir;
-  qputenv("XDG_CONFIG_HOME", dir.path().toUtf8());
-  qputenv("XDG_STATE_HOME", dir.path().toUtf8());
-
-  const QString oldConfig = QString::fromLocal8Bit(qgetenv("XDG_CONFIG_HOME")) +
-                            QStringLiteral("/qpy-rsync");
-  const QString oldProfiles = oldConfig + QStringLiteral("/profiles");
-  QDir().mkpath(oldProfiles);
-  const QString profile = oldProfiles + QStringLiteral("/old.json");
-  SyncProfile original;
-  original.name = QStringLiteral("old");
-  original.source.path = QStringLiteral("/src");
-  original.destination.path = QStringLiteral("/dst");
-  storage::saveProfile(profile, original);
-  QSettings oldSettings(oldConfig + QStringLiteral("/settingsrc"),
-                        QSettings::IniFormat);
-  oldSettings.setValue(QStringLiteral("profile/current_path"), profile);
-  oldSettings.sync();
-
-  storage::migrateLegacyPaths();
-  QVERIFY(QFile::exists(qt_rsync::core::paths::profilesDirectory() + QStringLiteral("/old.json")));
-  QVERIFY(QFile::exists(qt_rsync::core::paths::configSettingsPath()));
-  QVERIFY(QFile::exists(qt_rsync::core::paths::logDirectory()));
-  QVERIFY(storage::currentProfilePath().contains(QStringLiteral("/qt-rsync/profiles/")));
-}
-
 void CoreTest::sshEndpointTextIsParsed() {
   const Endpoint remote = parseEndpoint(QStringLiteral("alice@example.test:/home/user/src"));
   QCOMPARE(remote.kind, EndpointKind::Ssh);
@@ -1006,17 +978,14 @@ void CoreTest::fetchSpecAndToolPersistence() {
   QCOMPARE(loaded.first().command, QStringLiteral("kate %d/%f"));
   QCOMPARE(loaded.first().options, QStringLiteral("--wait"));
 
-  // qpy stores tool JSON base64-encoded for KDE's INI parser; legacy payloads
-  // written by qpy must still load in the C++ port.
-  const QByteArray json =
-      R"([{"name":"Kate","command":"kate %d/%f","options":"","enabled":true}])";
+  // Tool settings are plain INI scalars, editable and sync-friendly.
   storage::Settings settings;
-  settings.setValue(QStringLiteral("tools/external"),
-                    QByteArray("b64:") + json.toBase64());
-  const auto legacy = loadExternalTools();
-  QCOMPARE(legacy.size(), 1);
-  QCOMPARE(legacy.first().name, QStringLiteral("Kate"));
-  QCOMPARE(legacy.first().command, QStringLiteral("kate %d/%f"));
+  QCOMPARE(settings.value(QStringLiteral("tools/external/count")).toInt(), 1);
+  QCOMPARE(settings.value(QStringLiteral("tools/external/1/name")).toString(),
+           QStringLiteral("Kate"));
+  QCOMPARE(settings.value(QStringLiteral("tools/external/1/command")).toString(),
+           QStringLiteral("kate %d/%f"));
+  QVERIFY(!settings.allKeys().join(' ').contains(QStringLiteral("b64:")));
 }
 
 QTEST_MAIN(CoreTest)

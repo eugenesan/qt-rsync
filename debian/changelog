@@ -25,8 +25,8 @@ qt-rsync (0.2.0-0) resolute; urgency=medium
     paths and inverted clicks are fixed, directories can become Source or
     Destination, sync starts disabled, modified profiles prompt to be saved
     (Save / Save As... / Don't Save), external tools and remote diff staging
-    are ported, qpy-encoded tool settings are decoded, folding repaints all
-    panes, and timings report real wall-clock values;
+    are ported, all settings are plain text with no base64 or qpy import,
+    folding repaints all panes, and timings report real wall-clock values;
     example profile installed under
     /usr/share/doc/qt-rsync/examples.
 

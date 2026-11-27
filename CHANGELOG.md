@@ -11,8 +11,9 @@ and refreshed documentation and packaging.
 
 ### Fixed
 
-- Tools written by qpy with the `b64:` text prefix are decoded correctly, so
-  "Open with" no longer tries to start a command named `b64:...`.
+- All settings are now plain text. Base64 is gone: tools use indexed INI keys,
+  colours use one key per action, and window/splitter state uses comma-separated
+  integers. There is no settings or profile import from qpy-rsync.
 - Collapsing a folder forces a full repaint of all three comparison panes and
   refreshes the overview, removing stale cells painted over the panes below.
 

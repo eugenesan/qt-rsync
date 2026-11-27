@@ -122,7 +122,7 @@ Delivered so far: profile menu, cached-profile startup, locked-profile dialog
 with in-place retry and a no-changes quit path, and PID locks. The settings
 pages and XDG split were ported in earlier phases.
 
-Temporary-file cleanup, log promotion and the XDG path migration are now in
+Temporary-file cleanup and log promotion are now in
 place. Phase 4 is complete.
 
 Exit criterion: two instances can run against different profiles; a locked

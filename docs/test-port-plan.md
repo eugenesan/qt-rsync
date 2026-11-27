@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
 qpy-rsync currently collects 488 pytest cases. qt-rsync has 119 QtTest cases
-(52 core, 67 UI) and three CTest targets (`core`, `ui`, `install`). This file
+(51 core, 68 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -24,7 +24,7 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 | `test_flat_filtering.py` | 31 | Mostly ported: action masks, ancestors, unchanged gate, search, path/glob filters and directory-only mode. |
 | `test_action_filters.py` | 19 | Ported: initial state, tooltips, focus policy, separators, ancestors, Ctrl+click inversion, exhaustive state combinations and reset defaults. |
 | `test_command.py` | 13 | Ported: compare/verify/sync/fetch argv, modes, filters, delete timing and remote shell. |
-| `test_app_startup_options.py` | 12 | Ported at the CLI level: complete argument set, Qt-only arguments, log-file/no-log-file, compare pair and invalid mode. Qt environment/migration cases are N/A in the C++ port. |
+| `test_app_startup_options.py` | 12 | Ported at the CLI level: complete argument set, Qt-only arguments, log-file/no-log-file, compare pair and invalid mode. Qt environment cases are N/A; there is no qpy settings/profile migration in the C++ port. |
 | `test_external_tools.py` | 11 | Ported: placeholders, options and bad commands at the core level, JSON tool persistence, and an "Open with" submenu in every comparison context menu with shortcuts 2-9. |
 | `test_changes.py` | 11 | Ported: decision reconcile/exclude/include/delete. |
 | `test_overview.py` | 10 | Ported: totals, share, sorting, expansion, jump callback and action-filter propagation. |
@@ -127,6 +127,14 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 8. Golden screenshots — `goldenScreenshotsAreValidImages` verifies the three
    committed reference images; the profile editor is covered by the widget
    round-trip instead of a separate image.
+
+## Plain settings format
+
+Settings are INI-native plain text in both apps: indexed `tools/external/*`
+keys, per-action `colours/actions/<name>` keys, `main-window/geometry` as
+`x,y,w,h`, splitter sizes as comma-separated integers, and booleans/strings
+verbatim. `settingsUsePlainTextFormats` asserts the Qt side contains no base64
+and no legacy `main-window/state` blob. There is no qpy settings/profile import.
 
 ## Final gap closure
 

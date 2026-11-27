@@ -2376,26 +2376,21 @@ void MainWindow::resetProfile() {
 }
 
 void MainWindow::applyActionColours() {
-  static const QStringList keys{
-      QStringLiteral("Create"), QStringLiteral("Update"),
-      QStringLiteral("Metadata only"), QStringLiteral("Delete"),
-      QStringLiteral("Keep in Destination")};
   static const QStringList defaults{
       QStringLiteral("#208020"), QStringLiteral("#eab308"),
       QStringLiteral("#7c3aed"), QStringLiteral("#ef4444"),
       QStringLiteral("#a05020")};
   core::storage::Settings settings;
-  const QJsonObject stored = QJsonDocument::fromJson(
-      settings.value(QStringLiteral("colours/actions")).toByteArray()).object();
+  const QStringList keys = core::storage::actionColourKeys();
   QVector<QString> colours;
   for (int index = 0; index < keys.size(); ++index) {
-    if (!stored.contains(keys.at(index))) {
-      colours.append(defaults.at(index));
-      continue;
-    }
-    const QJsonValue value = stored.value(keys.at(index));
-    // A JSON null is the user's "do not mark this action" choice.
-    colours.append(value.isNull() ? QString() : value.toString());
+    const QString value =
+        settings
+            .value(QStringLiteral("colours/actions/") + keys.at(index),
+                   defaults.at(index))
+            .toString();
+    // An empty value is the user's "do not mark this action" choice.
+    colours.append(value);
   }
   if (d_->comparison != nullptr) d_->comparison->setActionColours(colours);
   if (d_->filterBar != nullptr) d_->filterBar->setActionColours(colours);
@@ -2440,40 +2435,43 @@ void MainWindow::applyLayoutMode(const QString& mode) {
 
 void MainWindow::restoreWindowState() {
   core::storage::Settings settings;
-  const auto decode = [&settings](const QString& key) {
-    const QString encoded = settings.value(key).toString();
-    if (encoded.isEmpty()) return QByteArray();
-    return QByteArray::fromBase64(encoded.toLatin1());
-  };
-  const QByteArray geometry = decode(QStringLiteral("main-window/geometry"));
-  if (!geometry.isEmpty()) restoreGeometry(geometry);
-  const QByteArray state = decode(QStringLiteral("main-window/state"));
-  if (!state.isEmpty()) restoreState(state);
+  const QList<int> geometry = core::storage::decodeIntList(
+      settings.value(QStringLiteral("main-window/geometry")).toString());
+  if (geometry.size() == 4) {
+    setGeometry(geometry.at(0), geometry.at(1), geometry.at(2), geometry.at(3));
+  }
+  if (settings.value(QStringLiteral("main-window/maximized"), false).toBool()) {
+    showMaximized();
+  }
   const QString mode =
       settings.value(QStringLiteral("main-window/layout-mode"),
                      QStringLiteral("normal"))
           .toString();
   applyLayoutMode(mode);
-  const QByteArray splitter = decode(
+  const QList<int> splitter = core::storage::decodeIntList(settings.value(
       QStringLiteral("main-window/layout-state-") +
-      (d_->layoutMode.isEmpty() ? QStringLiteral("normal") : d_->layoutMode));
-  if (!splitter.isEmpty()) d_->mainSplitter->restoreState(splitter);
-  const QByteArray logSplitter = decode(QStringLiteral("main-window/log-splitter"));
-  if (!logSplitter.isEmpty()) d_->logSplitter->restoreState(logSplitter);
+      (d_->layoutMode.isEmpty() ? QStringLiteral("normal") : d_->layoutMode))
+                                                                 .toString());
+  if (!splitter.isEmpty()) d_->mainSplitter->setSizes(splitter);
+  const QList<int> logSplitter = core::storage::decodeIntList(
+      settings.value(QStringLiteral("main-window/log-splitter")).toString());
+  if (!logSplitter.isEmpty()) d_->logSplitter->setSizes(logSplitter);
 }
 
 void MainWindow::saveWindowState() {
   core::storage::Settings settings;
+  const QRect rect = geometry();
   settings.setValue(QStringLiteral("main-window/geometry"),
-                    QString::fromLatin1(saveGeometry().toBase64()));
-  settings.setValue(QStringLiteral("main-window/state"),
-                    QString::fromLatin1(saveState().toBase64()));
+                    core::storage::encodeIntList(
+                        {rect.x(), rect.y(), rect.width(), rect.height()}));
+  settings.setValue(QStringLiteral("main-window/maximized"),
+                    isMaximized());
   settings.setValue(QStringLiteral("main-window/layout-mode"), d_->layoutMode);
   settings.setValue(
       QStringLiteral("main-window/layout-state-") + d_->layoutMode,
-      QString::fromLatin1(d_->mainSplitter->saveState().toBase64()));
+      core::storage::encodeIntList(d_->mainSplitter->sizes()));
   settings.setValue(QStringLiteral("main-window/log-splitter"),
-                    QString::fromLatin1(d_->logSplitter->saveState().toBase64()));
+                    core::storage::encodeIntList(d_->logSplitter->sizes()));
   settings.sync();
 }
 

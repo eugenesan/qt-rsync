@@ -28,6 +28,10 @@ bool pidAlive(qint64 pid);
 
 // Stable preferences live in config; transient state in state. The split is
 // inherited from qpy-rsync and keyed on the same prefixes.
+QStringList actionColourKeys();
+QString encodeIntList(const QList<int>& values);
+QList<int> decodeIntList(const QString& text);
+
 class Settings {
  public:
   Settings();
@@ -38,6 +42,7 @@ class Settings {
   void remove(const QString& key);
   void sync();
   void clear();
+  [[nodiscard]] QStringList allKeys() const;
 
   [[nodiscard]] QString statePath() const;
   [[nodiscard]] QString configPath() const;
@@ -53,7 +58,6 @@ SyncProfile profileFromJson(const QString& payload);
 void saveProfile(const QString& path, const SyncProfile& profile);
 SyncProfile loadProfile(const QString& path);
 QStringList listProfiles();
-void migrateLegacyPaths();
 QString currentProfilePath();
 void setCurrentProfilePath(const QString& path);
 

@@ -128,6 +128,7 @@ class UiTest : public QObject {
   void overviewFollowsActionFilters();
   void contextMenuOffersExternalTools();
   void foldingRefreshesViewsAndOverview();
+  void settingsUsePlainTextFormats();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -2591,6 +2592,26 @@ void UiTest::foldingRefreshesViewsAndOverview() {
   view.foldCurrent(0, false);
   QCOMPARE(changes, 2);
   QVERIFY(!view.store().is_collapsed(docs->second));
+}
+
+void UiTest::settingsUsePlainTextFormats() {
+  const QList<int> values{100, 200, 300, 400};
+  QCOMPARE(core::storage::decodeIntList(core::storage::encodeIntList(values)),
+           values);
+  QCOMPARE(core::storage::actionColourKeys().first(),
+           QStringLiteral("create"));
+
+  ui::MainWindow window;
+  window.resize(900, 700);
+  window.close();
+  core::storage::Settings settings;
+  const QStringList keys = settings.allKeys();
+  QVERIFY(keys.contains(QStringLiteral("main-window/geometry")));
+  QVERIFY(!keys.contains(QStringLiteral("main-window/state")));
+  const QList<int> geometry = core::storage::decodeIntList(
+      settings.value(QStringLiteral("main-window/geometry")).toString());
+  QCOMPARE(geometry.size(), 4);
+  QVERIFY(!keys.join(' ').contains(QStringLiteral("b64:")));
 }
 
 QTEST_MAIN(UiTest)

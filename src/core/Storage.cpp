@@ -152,6 +152,28 @@ void FileLock::release() {
   owned_ = false;
 }
 
+QStringList actionColourKeys() {
+  return {QStringLiteral("create"), QStringLiteral("update_content"),
+          QStringLiteral("update_metadata"), QStringLiteral("delete"),
+          QStringLiteral("destination_only")};
+}
+
+QString encodeIntList(const QList<int>& values) {
+  QStringList parts;
+  for (int value : values) parts.append(QString::number(value));
+  return parts.join(QLatin1Char(','));
+}
+
+QList<int> decodeIntList(const QString& text) {
+  QList<int> values;
+  for (const QString& part : text.split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+    bool ok = false;
+    const int value = part.trimmed().toInt(&ok);
+    if (ok) values.append(value);
+  }
+  return values;
+}
+
 Settings::Settings()
     : state_(paths::settingsPath(), QSettings::IniFormat),
       config_(paths::configSettingsPath(), QSettings::IniFormat) {}
@@ -200,6 +222,13 @@ void Settings::sync() {
 void Settings::clear() {
   state_.clear();
   config_.clear();
+}
+
+QStringList Settings::allKeys() const {
+  QStringList keys = state_.allKeys();
+  keys.append(config_.allKeys());
+  keys.removeDuplicates();
+  return keys;
 }
 
 QString Settings::statePath() const { return state_.fileName(); }
@@ -349,65 +378,6 @@ QStringList listProfiles() {
   QStringList names = directory.entryList({QStringLiteral("*.json")},
                                           QDir::Files, QDir::Name);
   return names;
-}
-
-void migrateLegacyPaths() {
-  const QString oldConfig = paths::configHome() + QStringLiteral("/qpy-rsync");
-  const QString newConfig = paths::configHome() + QStringLiteral("/qt-rsync");
-  QDir().mkpath(newConfig);
-  QDir().mkpath(paths::profilesDirectory());
-  QDir().mkpath(paths::logDirectory());
-
-  auto copyFile = [](const QString& from, const QString& to) {
-    if (!QFile::exists(to) && QFile::exists(from)) QFile::copy(from, to);
-  };
-  copyFile(oldConfig + QStringLiteral("/settingsrc"),
-           newConfig + QStringLiteral("/settingsrc"));
-  copyFile(paths::stateHome() + QStringLiteral("/qpy-rsyncstaterc"),
-           paths::statePath());
-
-  // Merge rather than only copy: qt-rsync may have created its settings file
-  // during earlier runs. Missing qpy keys (including window geometry and
-  // splitter state) are brought over without overwriting qt values.
-  const auto mergeSettings = [](const QString& oldPath, const QString& newPath) {
-    if (!QFile::exists(oldPath) || oldPath == newPath) return;
-    QSettings oldSettings(oldPath, QSettings::IniFormat);
-    QSettings newSettings(newPath, QSettings::IniFormat);
-    for (const QString& key : oldSettings.allKeys()) {
-      if (!newSettings.contains(key)) {
-        newSettings.setValue(key, oldSettings.value(key));
-      }
-    }
-    newSettings.sync();
-  };
-  mergeSettings(oldConfig + QStringLiteral("/settingsrc"),
-                paths::configSettingsPath());
-  mergeSettings(paths::stateHome() + QStringLiteral("/qpy-rsyncstaterc"),
-                paths::statePath());
-
-  const QString oldProfiles = oldConfig + QStringLiteral("/profiles");
-  if (QFileInfo(oldProfiles).isDir()) {
-    for (const QString& name : QDir(oldProfiles).entryList({"*.json"}, QDir::Files)) {
-      copyFile(oldProfiles + '/' + name, paths::profilesDirectory() + '/' + name);
-    }
-  }
-
-  const QString oldCache = paths::cacheHome() + QStringLiteral("/qpy-rsync");
-  if (QFileInfo(oldCache).isDir()) {
-    for (const QString& name :
-         QDir(oldCache).entryList({"*.log"}, QDir::Files)) {
-      copyFile(oldCache + '/' + name, paths::logDirectory() + '/' + name);
-    }
-  }
-
-  Settings settings;
-  QString current = settings.value(QStringLiteral("profile/current_path")).toString();
-  if (current.contains(QStringLiteral("/qpy-rsync/profiles/"))) {
-    current.replace(QStringLiteral("/qpy-rsync/profiles/"),
-                    QStringLiteral("/qt-rsync/profiles/"));
-    settings.setValue(QStringLiteral("profile/current_path"), current);
-    settings.sync();
-  }
 }
 
 QString currentProfilePath() {

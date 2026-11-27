@@ -1,5 +1,7 @@
 #include "ui/SettingsDialog.h"
 
+#include "core/ExternalTools.h"
+
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QDialogButtonBox>
@@ -182,12 +184,15 @@ SettingsDialog::SettingsDialog(QWidget* parent, const QString& defaultLogPath)
       {QStringLiteral("Delete"), QStringLiteral("#ef4444")},
       {QStringLiteral("Keep in Destination"), QStringLiteral("#a05020")},
   };
-  QJsonObject stored = QJsonDocument::fromJson(
-      settings.value(QStringLiteral("colours/actions")).toByteArray()).object();
+  const QStringList colourKeys = core::storage::actionColourKeys();
   colours_->setRowCount(defaultColours.size());
   for (int row = 0; row < defaultColours.size(); ++row) {
-    const QString colour = stored.value(defaultColours.at(row).first).toString(
-        defaultColours.at(row).second);
+    const QString value = settings
+                              .value(QStringLiteral("colours/actions/") +
+                                     colourKeys.at(row),
+                                     defaultColours.at(row).second)
+                              .toString();
+    const QString colour = value.isEmpty() ? defaultColours.at(row).second : value;
     colours_->setItem(row, 0, new QTableWidgetItem(defaultColours.at(row).first));
     colours_->setItem(row, 1, new QTableWidgetItem(colour));
     colours_->item(row, 1)->setBackground(QColor(colour));
@@ -314,13 +319,13 @@ SettingsDialog::SettingsDialog(QWidget* parent, const QString& defaultLogPath)
   };
 
   QVector<ExternalTool> loadedTools;
-  const QJsonArray storedTools =
-      QJsonDocument::fromJson(
-          settings.value(QStringLiteral("tools/external")).toByteArray())
-          .array();
-  for (const QJsonValue& value : storedTools) {
-    const ExternalTool tool = toolFromJson(value.toObject());
-    if (!tool.name.isEmpty() && !tool.command.isEmpty()) loadedTools.append(tool);
+  for (const core::ExternalTool& stored : core::loadExternalTools()) {
+    ExternalTool tool;
+    tool.name = stored.name;
+    tool.command = stored.command;
+    tool.options = stored.options;
+    tool.enabled = stored.enabled;
+    loadedTools.append(tool);
   }
   if (loadedTools.isEmpty()) {
     for (const QString& command :
@@ -536,17 +541,14 @@ SettingsDialog::SettingsDialog(QWidget* parent, const QString& defaultLogPath)
 void SettingsDialog::save() {
   core::storage::Settings settings;
   settings.setValue(QStringLiteral("sound/enabled"), sound_->isChecked());
-  QJsonObject colours;
-  for (int row = 0; row < colours_->rowCount(); ++row) {
+  const QStringList colourKeys = core::storage::actionColourKeys();
+  for (int row = 0; row < colours_->rowCount() && row < colourKeys.size(); ++row) {
     const bool marked =
         colours_->item(row, 2) != nullptr &&
         colours_->item(row, 2)->checkState() == Qt::Checked;
-    colours.insert(colours_->item(row, 0)->text(),
-                   marked ? QJsonValue(colours_->item(row, 1)->text())
-                          : QJsonValue(QJsonValue::Null));
+    settings.setValue(QStringLiteral("colours/actions/") + colourKeys.at(row),
+                      marked ? colours_->item(row, 1)->text() : QString());
   }
-  settings.setValue(QStringLiteral("colours/actions"),
-                    QJsonDocument(colours).toJson(QJsonDocument::Compact));
   settings.setValue(QStringLiteral("logging/timing"), timing_->isChecked());
   settings.setValue(QStringLiteral("logging/debug"), debug_->isChecked());
   settings.setValue(QStringLiteral("verification/enabled"),
@@ -556,20 +558,19 @@ void SettingsDialog::save() {
   settings.setValue(QStringLiteral("logging/enabled"),
                     sessionLogging_->isChecked());
   settings.setValue(QStringLiteral("logging/file"), logFile_->text().trimmed());
-  QJsonArray tools;
+  QVector<core::ExternalTool> tools;
   QStringList commands;
   for (int row = 0; row < tools_->rowCount(); ++row) {
-    ExternalTool tool;
+    core::ExternalTool tool;
     tool.name = tools_->item(row, 0)->text();
     tool.command = tools_->item(row, 1)->text();
     tool.options = tools_->item(row, 2)->text();
     tool.enabled = tools_->item(row, 3) != nullptr &&
                    tools_->item(row, 3)->checkState() == Qt::Checked;
-    tools.append(toolToJson(tool));
+    tools.append(tool);
     commands << tool.command;
   }
-  settings.setValue(QStringLiteral("tools/external"),
-                    QJsonDocument(tools).toJson(QJsonDocument::Compact));
+  core::saveExternalTools(tools);
   settings.setValue(QStringLiteral("tools/diff-command"),
                     diffCommand_->text().trimmed());
   settings.setValue(QStringLiteral("tools/commands"), commands);
