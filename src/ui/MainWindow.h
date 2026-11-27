@@ -35,6 +35,8 @@ class MainWindow : public QMainWindow {
 
  protected:
   void closeEvent(QCloseEvent* event) override;
+  bool eventFilter(QObject* watched, QEvent* event) override;
+  void resizeEvent(QResizeEvent* event) override;
 
  private slots:
   void startCompare();
@@ -61,8 +63,11 @@ class MainWindow : public QMainWindow {
   void runExternalTool(const QString& name, const QString& path, int pane);
   void openDiff(const QString& path);
   void setStatus(const QString& text);
+  void setProgressStatus(const QString& text);
   void appendJournalLine(const QString& line);
   void setCommandPreview(const core::ProcessSpec& spec);
+  void showCommandPreview();
+  void clearCommandPreview();
   void cancelOperation();
   void setProfilePath(const QString& path);
   void openSessionLog(const QString& name);

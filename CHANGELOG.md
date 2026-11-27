@@ -9,6 +9,17 @@ rather than every commit; the port started at 0.0.1 and reached 0.2.0 on
 Parity follow-up: decision terminology, directory filters, overview totals,
 and refreshed documentation and packaging.
 
+### Changed
+
+- The progress pane is gone. A fixed-width progress bar (15% of the window)
+  sits at the right end of the status bar, and progress messages share the
+  status field instead of a separate label. Streaming updates do not spam the
+  journal.
+- The rsync command preview is now a temporary, selectable last entry in the
+  journal: no timestamp, not written to the log file. It shows Compare by
+  default, switches to Verify on hover (when enabled), clears when a command
+  starts and returns when the app is idle.
+
 ### Fixed
 
 - Clear Log now asks for Approve/Cancel before truncating the session log.

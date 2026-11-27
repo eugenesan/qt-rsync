@@ -27,6 +27,7 @@
 #include <QTextCursor>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QStatusBar>
 #include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QTableView>
@@ -130,6 +131,7 @@ class UiTest : public QObject {
   void foldingRefreshesViewsAndOverview();
   void settingsUsePlainTextFormats();
   void startupControlsAndDialogDefaults();
+  void commandPreviewIsTemporaryJournalEntry();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -1811,20 +1813,14 @@ void UiTest::compareProgressShowsItemsFound() {
   for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
     if (button->text() == QLatin1String("Compare")) button->click();
   }
-  const auto progressText = [&window]() {
-    for (QLabel* label : window.findChildren<QLabel*>()) {
-      if (label->text().contains(QStringLiteral("item(s) found"))) {
-        return label->text();
-      }
-    }
-    return QString();
-  };
+  auto* status = window.findChild<QLineEdit*>("status-label");
+  QVERIFY(status != nullptr);
+  const auto progressText = [status]() { return status->text(); };
   auto* progress = window.findChild<QProgressBar*>();
   QVERIFY(progress != nullptr);
   QTRY_VERIFY_WITH_TIMEOUT(!progressText().isEmpty(), 3000);
   QTRY_VERIFY_WITH_TIMEOUT(progressText().contains(QStringLiteral("1000 item(s) found")), 5000);
   QVERIFY(progress->isVisible() || progress->maximum() == 0);
-  auto* status = window.findChild<QLineEdit*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 8000);
   qputenv("PATH", oldPath);
 }
@@ -1868,6 +1864,9 @@ void UiTest::journalEntriesHaveTimestamps() {
   int checked = 0;
   for (const QString& line : lines) {
     if (line.trimmed().isEmpty()) continue;
+    // The command preview is a temporary journal entry: no timestamp and no
+    // log-file persistence.
+    if (line.startsWith(QStringLiteral("$ "))) continue;
     QVERIFY2(stamped.match(line).hasMatch(), qPrintable(line));
     ++checked;
   }
@@ -2668,6 +2667,31 @@ void UiTest::startupControlsAndDialogDefaults() {
   const auto plan = core::buildExecutionPlan(profile, {}, decisions);
   ui::SyncDialog dialog(profile, plan, QStringLiteral("/tmp/rules"));
   QVERIFY(dialog.compareAfterSync());
+}
+
+void UiTest::commandPreviewIsTemporaryJournalEntry() {
+  ui::MainWindow window;
+  window.show();
+  QTest::qWait(10);
+  auto* progress = window.findChild<QProgressBar*>();
+  QVERIFY(progress != nullptr);
+  QVERIFY(qobject_cast<QStatusBar*>(progress->parentWidget()) != nullptr);
+  QVERIFY(progress->width() >= window.width() * 15 / 100 - 4);
+  QVERIFY(window.findChild<QPlainTextEdit*>(QStringLiteral("command-preview-label")) ==
+          nullptr);
+
+  QVERIFY(QMetaObject::invokeMethod(&window, "showCommandPreview"));
+  auto* journal = window.findChild<QPlainTextEdit*>();
+  QVERIFY(journal != nullptr);
+  const QString text = journal->toPlainText();
+  const QStringList lines = text.split('\n');
+  QVERIFY(!lines.isEmpty());
+  const QString last = lines.last().trimmed();
+  QVERIFY2(last.startsWith(QStringLiteral("$ rsync")), qPrintable(last));
+  QVERIFY(!last.contains(QRegularExpression(QStringLiteral("^\\d{2}:"))));
+
+  QVERIFY(QMetaObject::invokeMethod(&window, "clearCommandPreview"));
+  QVERIFY(!journal->toPlainText().contains(QStringLiteral("$ rsync --dry-run")));
 }
 
 QTEST_MAIN(UiTest)

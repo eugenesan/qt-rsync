@@ -34,6 +34,8 @@
 #include <QTime>
 #include <QPlainTextEdit>
 #include <QTextCharFormat>
+#include <QTextBlock>
+#include <QTextBlockUserData>
 #include <QTextCursor>
 #include <QProgressBar>
 #include <QPushButton>
@@ -69,6 +71,8 @@
 
 namespace qt_rsync::ui {
 namespace {
+
+class PreviewBlockData : public QTextBlockUserData {};
 
 // Small chevron marks buttons that also carry a right-click menu.
 class MenuToolButton : public QToolButton {
@@ -239,8 +243,10 @@ class MainWindow::Private {
   QVector<QTemporaryDir*> diffStagingDirs;
   QLineEdit* status = nullptr;
   QLabel* stateLabel = nullptr;
-  QLabel* progressLabel = nullptr;
-  QPlainTextEdit* commandPreview = nullptr;
+  core::ProcessSpec compareSpec;
+  core::ProcessSpec verifySpec;
+  bool previewVerify = false;
+  bool operationActive = false;
   ActionFilterBar* filterBar = nullptr;
   QPlainTextEdit* journal = nullptr;
   QStringList journalLines;
@@ -1042,36 +1048,6 @@ MainWindow::MainWindow(QWidget* parent)
   logColumnLayout->setContentsMargins(0, 0, 0, 0);
   logColumnLayout->setSpacing(2);
 
-  d_->progress = new QProgressBar(logColumn);
-  d_->progress->setRange(0, 100);
-  d_->progress->setValue(0);
-  d_->progress->setFormat(QStringLiteral("%p%"));
-  d_->progress->hide();
-  logColumnLayout->addWidget(d_->progress);
-  d_->progressLabel = new QLabel(logColumn);
-  logColumnLayout->addWidget(d_->progressLabel);
-
-  d_->commandPreview = new QPlainTextEdit(logColumn);
-  d_->commandPreview->setObjectName(QStringLiteral("command-preview-label"));
-  d_->commandPreview->setReadOnly(true);
-  d_->commandPreview->setLineWrapMode(QPlainTextEdit::WidgetWidth);
-  d_->commandPreview->setWordWrapMode(
-      QTextOption::WrapAtWordBoundaryOrAnywhere);
-  d_->commandPreview->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  d_->commandPreview->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-  d_->commandPreview->setTabChangesFocus(true);
-  d_->commandPreview->setMinimumWidth(0);
-  d_->commandPreview->setSizePolicy(QSizePolicy::Ignored,
-                                    QSizePolicy::Preferred);
-  // Grow with the command, but cap at three lines like qpy; longer commands
-  // scroll vertically instead of pushing the journal out of the window.
-  d_->commandPreview->setMinimumHeight(
-      d_->commandPreview->fontMetrics().lineSpacing() + 12);
-  d_->commandPreview->setMaximumHeight(
-      d_->commandPreview->fontMetrics().lineSpacing() * 3 + 12);
-  d_->commandPreview->setPlaceholderText(QStringLiteral("Command preview appears here."));
-  logColumnLayout->addWidget(d_->commandPreview);
-
   d_->journal = new QPlainTextEdit(logColumn);
   d_->journal->setReadOnly(true);
   d_->journal->setMaximumBlockCount(5000);
@@ -1117,12 +1093,23 @@ MainWindow::MainWindow(QWidget* parent)
   statusBar()->setSizeGripEnabled(false);
   statusBar()->addWidget(d_->stateLabel);
   statusBar()->addWidget(d_->status, 1);
+  d_->progress = new QProgressBar(statusBar());
+  d_->progress->setRange(0, 100);
+  d_->progress->setValue(0);
+  d_->progress->setFormat(QStringLiteral("%p%"));
+  d_->progress->setFixedWidth(qMax(80, width() * 15 / 100));
+  d_->progress->hide();
+  statusBar()->addPermanentWidget(d_->progress);
 
   d_->compareProcess = new QProcess(this);
   d_->operationProcess = new QProcess(this);
   d_->inventoryProcess = new QProcess(this);
   d_->destinationInventoryProcess = new QProcess(this);
+  d_->compare->setAttribute(Qt::WA_Hover, true);
+  d_->compare->installEventFilter(this);
   connect(d_->compare, &QAbstractButton::clicked, this, &MainWindow::startCompare);
+  d_->verify->setAttribute(Qt::WA_Hover, true);
+  d_->verify->installEventFilter(this);
   connect(d_->verify, &QAbstractButton::clicked, this, &MainWindow::verifyPlan);
   connect(d_->sync, &QAbstractButton::clicked, this, &MainWindow::synchronize);
   connect(d_->cancel, &QAbstractButton::clicked, this, &MainWindow::cancelOperation);
@@ -1176,7 +1163,7 @@ MainWindow::MainWindow(QWidget* parent)
     if (d_->compareItemsFound != d_->compareItemsReported &&
         (batchReady || timeReady)) {
       d_->compareItemsReported = d_->compareItemsFound;
-      d_->progressLabel->setText(
+      setStatus(
           QStringLiteral("Comparing... %1 item(s) found").arg(d_->compareItemsFound));
       d_->compareProgressClock.restart();
     }
@@ -1203,7 +1190,7 @@ MainWindow::MainWindow(QWidget* parent)
           if (d_->syncing && (changed || timeReady)) {
             d_->lastSyncPercent = progress->percent;
             d_->syncProgressClock.restart();
-            d_->progressLabel->setText(
+            setProgressStatus(
                 QStringLiteral("Synchronizing... %1% (%2 transferred, %3 remaining)")
                     .arg(progress->percent)
                     .arg(progress->filesCompleted)
@@ -1443,8 +1430,67 @@ void MainWindow::appendJournalLine(const QString& rawLine) {
 }
 
 void MainWindow::setCommandPreview(const core::ProcessSpec& spec) {
-  d_->commandPreview->setPlainText(QStringLiteral("$ ") + spec.argv().join(' '));
-  d_->commandPreview->setToolTip(d_->commandPreview->toPlainText());
+  d_->compareSpec = spec;
+  clearCommandPreview();
+}
+
+void MainWindow::clearCommandPreview() {
+  QTextDocument* document = d_->journal->document();
+  for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+    if (dynamic_cast<PreviewBlockData*>(block.userData()) == nullptr) continue;
+    QTextCursor cursor(block);
+    cursor.movePosition(QTextCursor::StartOfBlock);
+    if (!cursor.movePosition(QTextCursor::NextBlock, QTextCursor::KeepAnchor)) {
+      cursor.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
+    }
+    cursor.removeSelectedText();
+    break;
+  }
+}
+
+void MainWindow::showCommandPreview() {
+  if (d_->operationActive) return;
+  core::ProcessSpec spec = d_->previewVerify ? d_->verifySpec : d_->compareSpec;
+  if (spec.program.isEmpty()) {
+    spec = d_->previewVerify
+               ? core::buildVerifySpec(
+                     d_->profile,
+                     d_->filterFile != nullptr ? d_->filterFile->fileName() : QString())
+               : core::buildCompareSpec(d_->profile);
+  }
+  if (spec.program.isEmpty()) return;
+  clearCommandPreview();
+  QTextCursor cursor(d_->journal->document());
+  cursor.movePosition(QTextCursor::End);
+  if (!d_->journal->document()->isEmpty()) cursor.insertBlock();
+  QTextCharFormat format;
+  format.setForeground(d_->journal->palette().color(QPalette::Text));
+  format.setFontItalic(true);
+  cursor.insertText(QStringLiteral("$ ") + spec.argv().join(QLatin1Char(' ')),
+                    format);
+  cursor.block().setUserData(new PreviewBlockData);
+  d_->journal->setTextCursor(cursor);
+  d_->journal->ensureCursorVisible();
+  QTimer::singleShot(0, d_->journal, [journal = d_->journal]() {
+    auto* bar = journal->verticalScrollBar();
+    if (bar != nullptr) bar->setValue(bar->maximum());
+  });
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
+  if (event->type() == QEvent::HoverEnter) {
+    if (watched == d_->compare) d_->previewVerify = false;
+    else if (watched == d_->verify) d_->previewVerify = true;
+    else return QMainWindow::eventFilter(watched, event);
+    showCommandPreview();
+  }
+  return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::setProgressStatus(const QString& text) {
+  d_->status->setText(text);
+  d_->status->setToolTip(text);
+  d_->status->setCursorPosition(0);
 }
 
 void MainWindow::setStatus(const QString& text) {
@@ -1540,7 +1586,7 @@ void MainWindow::startCompare() {
   d_->progress->setRange(0, 0);
   d_->progress->setValue(0);
   d_->progress->show();
-  d_->progressLabel->setText(QStringLiteral("Comparing... 0 item(s) found"));
+  setStatus(QStringLiteral("Comparing... 0 item(s) found"));
   d_->pauseButton->setChecked(false);
   d_->compareProcess->start(spec.program, spec.arguments);
 }
@@ -1649,7 +1695,6 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   // after Compare was a visible mismatch.
   d_->comparisonAwaitingMetadata = true;
   d_->progress->hide();
-  d_->progressLabel->setText(QStringLiteral("Gathering destination metadata..."));
   setStatus(QStringLiteral("Gathering destination metadata..."));
 }
 
@@ -1804,7 +1849,7 @@ void MainWindow::finishComparison() {
     d_->compare->setEnabled(true);
     setOperationControls(false);
     d_->progress->hide();
-    d_->progressLabel->setText(QStringLiteral("Comparison completed"));
+    setStatus(QStringLiteral("Comparison completed"));
     appendJournalLine(QStringLiteral("STATE comparison-complete changes=%1")
                           .arg(d_->pendingCompareChanges));
     setStatus(QStringLiteral("Comparison complete: %1 changed item(s)")
@@ -1816,6 +1861,7 @@ void MainWindow::finishComparison() {
     playCompletionSound(QStringLiteral("success"));
   }
   d_->progress->hide();
+  showCommandPreview();
 }
 
 void MainWindow::updateOpenButtonStates() {
@@ -1835,6 +1881,8 @@ void MainWindow::updateOpenButtonStates() {
 }
 
 void MainWindow::setOperationControls(bool enabled) {
+  d_->operationActive = enabled;
+  if (enabled) clearCommandPreview();
   if (d_->cancel != nullptr) d_->cancel->setEnabled(enabled);
   if (d_->pauseButton != nullptr) {
     d_->pauseButton->setEnabled(enabled);
@@ -1891,7 +1939,8 @@ void MainWindow::verifyPlan() {
   const core::ProcessSpec spec =
       core::buildVerifySpec(d_->profile, d_->filterFile->fileName());
   setProcessEnvironment(spec, d_->operationProcess);
-  setCommandPreview(spec);
+  d_->verifySpec = spec;
+  clearCommandPreview();
   d_->syncing = false;
   d_->verifying = true;
   d_->operationOutput.clear();
@@ -1921,7 +1970,7 @@ void MainWindow::synchronize() {
   const core::ProcessSpec spec =
       core::buildSyncSpec(d_->profile, d_->filterFile->fileName());
   setProcessEnvironment(spec, d_->operationProcess);
-  setCommandPreview(spec);
+  clearCommandPreview();
   d_->syncing = true;
   d_->verifying = false;
   d_->syncProgressClock.restart();
@@ -1941,7 +1990,7 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
     d_->syncing = false;
     d_->verifying = false;
     d_->progress->hide();
-    d_->progressLabel->setText(QStringLiteral("Operation cancelled"));
+    setStatus(QStringLiteral("Operation cancelled"));
     setStatus(QStringLiteral("Operation cancelled"));
     return;
   }
@@ -1951,7 +2000,7 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
   if (d_->syncing) {
     d_->syncing = false;
     if (!ok) {
-      d_->progressLabel->setText(QStringLiteral("Synchronization failed"));
+      setStatus(QStringLiteral("Synchronization failed"));
       setStatus(QStringLiteral("Synchronization failed: %1")
                               .arg(stderr.trimmed()));
       playCompletionSound(QStringLiteral("error"));
@@ -1972,7 +2021,7 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
         QStringLiteral("Synchronized: %1 item(s), %2")
             .arg(summary.included)
             .arg(model::qpy_format_size(summary.includedSize)));
-    d_->progressLabel->setText(QStringLiteral("Synchronization completed"));
+    setStatus(QStringLiteral("Synchronization completed"));
     setStatus(d_->compareAfterSync
                   ? QStringLiteral("Synchronization complete: comparing again.")
                   : QStringLiteral(
@@ -1982,7 +2031,7 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
     return;
   }
   d_->verifying = false;
-  d_->progressLabel->setText(QStringLiteral("Verification finished"));
+  setStatus(QStringLiteral("Verification finished"));
   if (!ok) {
     d_->verified = false;
     setStatus(QStringLiteral("Verification failed: %1").arg(stderr.trimmed()));
@@ -2007,6 +2056,7 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
       appendJournalLine(QStringLiteral("unexpected: ") + line);
     }
   }
+  showCommandPreview();
 }
 
 void MainWindow::onOperationError(QProcess::ProcessError error) {
@@ -2090,7 +2140,7 @@ void MainWindow::openDiff(const QString& path) {
   if (sourceRemote || destinationRemote) {
     d_->progress->setRange(0, 0);
     d_->progress->show();
-    d_->progressLabel->setText(QStringLiteral("Preparing the diff tool..."));
+    setStatus(QStringLiteral("Preparing the diff tool..."));
     setStatus(QStringLiteral("Preparing diff for %1...").arg(path));
     QApplication::setOverrideCursor(Qt::WaitCursor);
     QApplication::processEvents();
@@ -2616,6 +2666,13 @@ MainWindow::SaveChoice MainWindow::askSaveProfile(QWidget* parent,
   if (prompt.clickedButton() == saveAs) return SaveChoice::SaveAs;
   Q_UNUSED(discard)
   return SaveChoice::Discard;
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event) {
+  QMainWindow::resizeEvent(event);
+  if (d_->progress != nullptr) {
+    d_->progress->setFixedWidth(qMax(80, width() * 15 / 100));
+  }
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
