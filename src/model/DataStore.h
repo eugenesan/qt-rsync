@@ -172,54 +172,6 @@ struct DataStore {
     std::iota(visible.begin(), visible.end(), 0);
   }
 
-  bool load_binary(const std::string& file, qint64* read_ms, qint64* parse_ms) {
-    QElapsedTimer timer;
-    timer.start();
-    std::ifstream input(file, std::ios::binary | std::ios::ate);
-    if (!input) return false;
-    std::streamsize size = input.tellg();
-    input.seekg(0);
-    std::vector<char> raw(static_cast<std::size_t>(size));
-    input.read(raw.data(), size);
-    *read_ms = timer.elapsed();
-    timer.restart();
-    if (size < 16 || std::memcmp(raw.data(), "QPYN", 4) != 0) return false;
-    unsigned version = 0;
-    std::memcpy(&version, raw.data() + 4, 4);
-    unsigned long long count64 = 0;
-    std::memcpy(&count64, raw.data() + 8, 8);
-    if (version != 1 || count64 > 100000000ULL) return false;
-    const int count = static_cast<int>(count64);
-    std::size_t at = 16;
-    std::vector<unsigned> offsets(count + 1);
-    std::memcpy(offsets.data(), raw.data() + at, (count + 1) * 4);
-    at += (count + 1) * 4;
-    const char* blob = raw.data() + at;
-    at += offsets[count];
-    paths.clear();
-    paths.reserve(count);
-    for (int i = 0; i < count; ++i) {
-      paths.emplace_back(blob + offsets[i], offsets[i + 1] - offsets[i]);
-    }
-    actions.resize(count);
-    kinds.resize(count);
-    sizes.resize(count);
-    decisions.resize(count);
-    std::memcpy(actions.data(), raw.data() + at, count);
-    at += count;
-    std::memcpy(kinds.data(), raw.data() + at, count);
-    at += count;
-    std::memcpy(sizes.data(), raw.data() + at, count * 4);
-    at += count * 4;
-    std::memcpy(decisions.data(), raw.data() + at, count);
-    decision_log.clear();
-    synthetic.assign(count, 0);
-    visible.resize(count);
-    std::iota(visible.begin(), visible.end(), 0);
-    *parse_ms = timer.elapsed();
-    return true;
-  }
-
   void derive_structure(int start, int end) {
     for (int i = start; i < end; ++i) {
       const std::string& path = paths[i];

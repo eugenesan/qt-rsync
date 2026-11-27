@@ -11,6 +11,9 @@ and refreshed documentation and packaging.
 
 ### Fixed
 
+- The last qpy model-import experiment was removed: `DataStore::load_binary()`
+  (the `QPYN` native dump reader) was dead code. Nothing imports qpy settings,
+  profiles or model dumps now.
 - The profile menu lists the ten most recently modified profiles (name as tie
   break) instead of a name-sorted list; the old recent-profile keys are gone.
 - All settings are now plain text. Base64 is gone: tools use indexed INI keys,
