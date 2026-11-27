@@ -43,6 +43,7 @@
 
 #include "ui/MainWindow.h"
 #include "app/StartupOptions.h"
+#include "app/Application.h"
 #include "model/DataStore.h"
 #include "ui/ComparisonView.h"
 #include "ui/DecisionDelegate.h"
@@ -63,6 +64,7 @@ class UiTest : public QObject {
   Q_OBJECT
 
  private slots:
+  void initTestCase();
   void compareRendersFakeRsyncOutput();
   void spaceExcludesEverySelectedItem();
   void settingsDialogPersistsDiagnostics();
@@ -136,6 +138,12 @@ class UiTest : public QObject {
   void overviewWidthStableAcrossLayouts();
   void toolbarOrderAndLocationStaleness();
 };
+
+void UiTest::initTestCase() {
+  qt_rsync::app::installTooltipStyle(*qApp);
+  QCOMPARE(qApp->style()->styleHint(QStyle::SH_ToolTip_WakeUpDelay), 250);
+  QCOMPARE(qApp->style()->styleHint(QStyle::SH_ToolTip_FallAsleepDelay), 0);
+}
 
 void UiTest::compareRendersFakeRsyncOutput() {
   QTemporaryDir dir;
@@ -2641,6 +2649,10 @@ void UiTest::startupControlsAndDialogDefaults() {
   QVERIFY(cancel != nullptr && pause != nullptr);
   QVERIFY(!cancel->isEnabled());
   QVERIFY(!pause->isEnabled());
+  const QList<QTableView*> tables = window.findChildren<QTableView*>();
+  QVERIFY(tables.size() == 3);
+  QVERIFY(tables[1]->horizontalHeader()->styleSheet().contains(
+      QStringLiteral("border")));
 
   int rightClickHints = 0;
   for (QToolButton* button : window.findChildren<QToolButton*>()) {

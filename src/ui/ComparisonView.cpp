@@ -191,6 +191,8 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   QHeaderView* decisionHeader = views_[1]->horizontalHeader();
   decisionHeader->setStretchLastSection(false);
   decisionHeader->setSectionResizeMode(4, QHeaderView::Stretch);
+  decisionHeader->setStyleSheet(QStringLiteral(
+      "QHeaderView::section { border: 1px solid palette(mid); }"));
   // The sort indicator belongs to the shared tree, so show it on every pane
   // that has the corresponding column.
   for (int pane = 0; pane < 3; ++pane) {

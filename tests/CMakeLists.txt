@@ -9,7 +9,8 @@ target_link_libraries(ui_tests PRIVATE Qt6::Test qt_rsync_ui qt_rsync_model qt_r
 target_compile_definitions(ui_tests PRIVATE QT_RSYNC_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_sources(ui_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/resources/resources.qrc"
-    "${CMAKE_SOURCE_DIR}/src/app/StartupOptions.cpp")
+    "${CMAKE_SOURCE_DIR}/src/app/StartupOptions.cpp"
+    "${CMAKE_SOURCE_DIR}/src/app/Application.cpp")
 add_test(NAME ui COMMAND ui_tests)
 add_test(NAME install COMMAND "${CMAKE_COMMAND}"
          "-DQT_RSYNC_BINARY_DIR=${CMAKE_BINARY_DIR}"

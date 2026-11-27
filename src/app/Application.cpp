@@ -1,6 +1,8 @@
 #include "app/Application.h"
 
 #include <QApplication>
+#include <QProxyStyle>
+#include <QStyleHintReturn>
 #include <QCoreApplication>
 #include <QIcon>
 
@@ -9,9 +11,30 @@
 #include "core/Storage.h"
 
 namespace qt_rsync::app {
+namespace {
+
+class TooltipStyle : public QProxyStyle {
+ public:
+  using QProxyStyle::QProxyStyle;
+
+  int styleHint(StyleHint hint, const QStyleOption* option = nullptr,
+                const QWidget* widget = nullptr,
+                QStyleHintReturn* returnData = nullptr) const override {
+    if (hint == QStyle::SH_ToolTip_WakeUpDelay) return 250;
+    if (hint == QStyle::SH_ToolTip_FallAsleepDelay) return 0;
+    return QProxyStyle::styleHint(hint, option, widget, returnData);
+  }
+};
+
+}  // namespace
+
+void installTooltipStyle(QApplication& app) {
+  app.setStyle(new TooltipStyle(app.style()));
+}
 
 int run(int argc, char** argv) {
   QApplication application(argc, argv);
+  installTooltipStyle(application);
   // Do not force a widget style. qpy-rsync inherits the platform theme, so
   // under KDE both apps use Breeze and the same dark palette. Forcing Fusion
   // here produced the wrong colours, separators and button frames.
