@@ -11,6 +11,8 @@ and refreshed documentation and packaging.
 
 ### Changed
 
+- "Apply decisions filter to directories too" sits to the right of "Show
+  unchanged" and has Alt+9 / Ctrl+9 shortcuts.
 - Pane shortcuts Ctrl+S / Ctrl+D / Ctrl+N / Ctrl+W focus Source, Destination,
   Decisions and Overview. Alt/Ctrl+1..8 filter shortcuts are application-wide,
   and repeated Ctrl+1 correctly toggles "only excluded" back to defaults.

@@ -75,15 +75,7 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
           "Alt+1 clicks this checkbox; Ctrl+1 inverts it."),
       icons::toolbarIcon(QStringLiteral("excluded")), 1, false);
   excluded_->setAccessibleName(QStringLiteral("Show excluded items"));
-  separator();
-  directories_ = check(
-      QStringLiteral(
-          "Apply the decision filters to reported directories too.\n"
-          "A directory whose own change is filtered out stays as a faded "
-          "parent when it holds visible items, and is not counted."),
-      icons::folderIcon(), 0, false);
-  directories_->setAccessibleName(
-      QStringLiteral("Apply filters to directories"));
+  excluded_->setObjectName(QStringLiteral("excluded-checkbox"));
   separator();
   const QVector<QPair<QString, int>> actionLabels{
       {QStringLiteral("Create"), 0},
@@ -110,6 +102,11 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
         icons::actionIcon(entry.second), shortcutNumber);
     box->setAccessibleName(
         QStringLiteral("Show %1 items").arg(entry.first));
+    static const QStringList actionObjectNames{
+        QStringLiteral("create-checkbox"), QStringLiteral("update-checkbox"),
+        QStringLiteral("metadata-checkbox"), QStringLiteral("delete-checkbox"),
+        QStringLiteral("keep-checkbox")};
+    box->setObjectName(actionObjectNames.at(index));
     actions_.append(box);
     if (index < actionLabels.size() - 1) separator();
   }
@@ -124,8 +121,20 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
           "Shortcut: F6"),
       icons::toolbarIcon(QStringLiteral("unchanged")), 8, false);
   unchanged_->setAccessibleName(QStringLiteral("Show unchanged items"));
+  unchanged_->setObjectName(QStringLiteral("unchanged-checkbox"));
   connect(unchanged_, &QCheckBox::toggled, this,
           &ActionFilterBar::unchangedToggled);
+  separator();
+  directories_ = check(
+      QStringLiteral(
+          "Apply the decision filters to reported directories too.\n"
+          "A directory whose own change is filtered out stays as a faded "
+          "parent when it holds visible items, and is not counted.\n"
+          "Alt+9 clicks this checkbox; Ctrl+9 inverts it."),
+      icons::folderIcon(), 9, false);
+  directories_->setAccessibleName(
+      QStringLiteral("Apply filters to directories"));
+  directories_->setObjectName(QStringLiteral("directories-checkbox"));
   separator();
   conflicts_ = check(
       QStringLiteral(

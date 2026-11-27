@@ -798,7 +798,7 @@ void UiTest::excludedCheckboxShowsExcludedRows() {
   const int hidden = tables.at(0)->model()->rowCount();
   QVERIFY(hidden < before);
 
-  auto* excludedBox = window.findChild<QCheckBox*>("filter-box-1");
+  auto* excludedBox = window.findChild<QCheckBox*>(QStringLiteral("excluded-checkbox"));
   QVERIFY(excludedBox != nullptr);
   excludedBox->setChecked(true);
   QVERIFY(tables.at(0)->model()->rowCount() > hidden);
@@ -951,10 +951,12 @@ void UiTest::actionFiltersHideAndKeepAncestors() {
   view.setChanges(changes);
   const auto tables = view.findChildren<QTableView*>();
   QCOMPARE(tables.size(), 3);
-  // filter-box-3 is Create; switch the other four action filters off.
-  for (int box = 4; box <= 7; ++box) {
-    auto* check = bar.findChild<QCheckBox*>(
-        QStringLiteral("filter-box-%1").arg(box));
+  // Switch the other four action filters off.
+  for (const QString& name : {QStringLiteral("update-checkbox"),
+                              QStringLiteral("metadata-checkbox"),
+                              QStringLiteral("delete-checkbox"),
+                              QStringLiteral("keep-checkbox")}) {
+    auto* check = bar.findChild<QCheckBox*>(name);
     if (check != nullptr) check->setChecked(false);
   }
   QSet<QString> names;
@@ -1061,7 +1063,7 @@ void UiTest::directoryFiltersApplyOnlyWhenEnabled() {
     return paths;
   };
   // Turn the Metadata action filter off.
-  auto* metadataBox = bar.findChild<QCheckBox*>(QStringLiteral("filter-box-5"));
+  auto* metadataBox = bar.findChild<QCheckBox*>(QStringLiteral("metadata-checkbox"));
   QVERIFY(metadataBox != nullptr);
   metadataBox->setChecked(false);
   QTest::qWait(1);
@@ -1520,10 +1522,10 @@ void UiTest::leftRightFoldAndNavigateFolders() {
 
 void UiTest::filterCheckboxesSupportInvertedClicks() {
   ui::ActionFilterBar bar;
-  auto* create = bar.findChild<QCheckBox*>(QStringLiteral("filter-box-3"));
+  auto* create = bar.findChild<QCheckBox*>(QStringLiteral("create-checkbox"));
   QVERIFY(create != nullptr);
   QCOMPARE(create->contextMenuPolicy(), Qt::CustomContextMenu);
-  auto* excluded = bar.findChild<QCheckBox*>(QStringLiteral("filter-box-1"));
+  auto* excluded = bar.findChild<QCheckBox*>(QStringLiteral("excluded-checkbox"));
   QVERIFY(excluded != nullptr);
   QCOMPARE(excluded->contextMenuPolicy(), Qt::CustomContextMenu);
   QVERIFY(bar.actionVisible(0));
@@ -2082,8 +2084,8 @@ void UiTest::syncIsDisabledOnStartup() {
 
 void UiTest::invertedClicksCoverStateCombinations() {
   ui::ActionFilterBar bar;
-  const auto box = [&bar](int number) {
-    return bar.findChild<QCheckBox*>(QStringLiteral("filter-box-%1").arg(number));
+  const auto box = [&bar](const QString& name) {
+    return bar.findChild<QCheckBox*>(name);
   };
   const auto ctrlClick = [](QCheckBox* target) {
     QPointF point(5, 5);
@@ -2100,9 +2102,9 @@ void UiTest::invertedClicksCoverStateCombinations() {
     }
     return true;
   };
-  QCheckBox* excluded = box(1);
-  QCheckBox* create = box(3);
-  QCheckBox* update = box(4);
+  QCheckBox* excluded = box(QStringLiteral("excluded-checkbox"));
+  QCheckBox* create = box(QStringLiteral("create-checkbox"));
+  QCheckBox* update = box(QStringLiteral("update-checkbox"));
   QVERIFY(excluded != nullptr && create != nullptr && update != nullptr);
 
   ctrlClick(create);
@@ -2563,7 +2565,7 @@ void UiTest::overviewFollowsActionFilters() {
   QVERIFY(summary != nullptr);
   QVERIFY(summary->text().startsWith(QStringLiteral("2 item(s)")));
 
-  auto* update = bar.findChild<QCheckBox*>(QStringLiteral("filter-box-4"));
+  auto* update = bar.findChild<QCheckBox*>(QStringLiteral("update-checkbox"));
   QVERIFY(update != nullptr);
   QTest::mouseClick(update, Qt::LeftButton);
   QVERIFY(!bar.actionVisible(1));
@@ -2867,8 +2869,8 @@ void UiTest::paneAndFilterShortcutsWork() {
   QVERIFY(focusedTable() != sourceFocus);
 
   auto* excluded =
-      window.findChild<QCheckBox*>(QStringLiteral("filter-box-1"));
-  auto* create = window.findChild<QCheckBox*>(QStringLiteral("filter-box-3"));
+      window.findChild<QCheckBox*>(QStringLiteral("excluded-checkbox"));
+  auto* create = window.findChild<QCheckBox*>(QStringLiteral("create-checkbox"));
   QVERIFY(excluded != nullptr && create != nullptr);
   QVERIFY(create->isChecked());
   QTest::keyClick(&window, Qt::Key_1, Qt::ControlModifier);
@@ -2877,6 +2879,17 @@ void UiTest::paneAndFilterShortcutsWork() {
   QTest::keyClick(&window, Qt::Key_1, Qt::ControlModifier);
   QVERIFY(!excluded->isChecked());
   QVERIFY(create->isChecked());
+
+  auto* unchanged =
+      window.findChild<QCheckBox*>(QStringLiteral("unchanged-checkbox"));
+  auto* directories =
+      window.findChild<QCheckBox*>(QStringLiteral("directories-checkbox"));
+  QVERIFY(unchanged != nullptr && directories != nullptr);
+  QVERIFY(directories->x() > unchanged->x());
+  QTest::keyClick(&window, Qt::Key_9, Qt::AltModifier);
+  QVERIFY(directories->isChecked());
+  QTest::keyClick(&window, Qt::Key_9, Qt::AltModifier);
+  QVERIFY(!directories->isChecked());
 }
 
 QTEST_MAIN(UiTest)
