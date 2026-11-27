@@ -27,6 +27,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QProcessEnvironment>
+#include <QProcess>
+#include <QTemporaryDir>
 #include <QTime>
 #include <QPlainTextEdit>
 #include <QTextCharFormat>
@@ -210,6 +212,8 @@ class MainWindow::Private {
   bool planDirty = false;
   QTimer* settingsTimer = nullptr;
   QHash<QString, QVariant> pendingSettings;
+  QVector<core::ExternalTool> externalTools;
+  QVector<QTemporaryDir*> diffStagingDirs;
   QLineEdit* status = nullptr;
   QLabel* stateLabel = nullptr;
   QLabel* progressLabel = nullptr;
@@ -507,6 +511,8 @@ MainWindow::MainWindow(QWidget* parent)
                         settings.value(QStringLiteral("sound/enabled"), true)
                             .toBool();
                     refreshDiagnosticsSettings();
+                    d_->externalTools = core::loadExternalTools();
+                    d_->comparison->setExternalTools(d_->externalTools);
                     applyActionColours();
                     updateVerificationVisibility();
                   }
@@ -546,6 +552,8 @@ MainWindow::MainWindow(QWidget* parent)
       d_->soundEnabled =
           settings.value(QStringLiteral("sound/enabled"), true).toBool();
       refreshDiagnosticsSettings();
+      d_->externalTools = core::loadExternalTools();
+      d_->comparison->setExternalTools(d_->externalTools);
       applyActionColours();
       updateVerificationVisibility();
     }
@@ -1218,6 +1226,8 @@ MainWindow::MainWindow(QWidget* parent)
     queueSetting(QStringLiteral("comparison/filter-directories"),
                  d_->filterBar->filterDirectories());
   });
+  d_->externalTools = core::loadExternalTools();
+  d_->comparison->setExternalTools(d_->externalTools);
   applyActionColours();
   updateVerificationVisibility();
   updateStateIcons();
@@ -1259,61 +1269,11 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->comparison, &ComparisonView::deleteRequested, this,
           [this](const QString& path) { d_->comparison->markDelete(path); });
   connect(d_->comparison, &ComparisonView::diffRequested, this,
-          [this](const QString& path) {
-            if (d_->profile.source.kind != core::EndpointKind::Local ||
-                d_->profile.destination.kind != core::EndpointKind::Local) {
-              QMessageBox::information(
-                  this, QStringLiteral("Diff tool unavailable"),
-                  QStringLiteral(
-                      "Comparing the contents of remote endpoints requires "
-                      "staging the files locally, which this build does not "
-                      "do yet."));
-              return;
-            }
-            const QString source =
-                QDir(d_->profile.source.path).filePath(path);
-            const QString destination =
-                QDir(d_->profile.destination.path).filePath(path);
-            if (!QFileInfo::exists(source) || !QFileInfo::exists(destination)) {
-              QMessageBox::information(
-                  this, QStringLiteral("Diff tool unavailable"),
-                  QStringLiteral(
-                      "Both sides must have the file. Choose a changed item "
-                      "that exists on Source and Destination."));
-              return;
-            }
-            core::storage::Settings settings;
-            const QString configuredCommand =
-                settings.value(QStringLiteral("tools/diff-command"))
-                    .toString()
-                    .trimmed();
-            const QString command = configuredCommand.isEmpty()
-                                        ? QStringLiteral("meld %a %A")
-                                        : configuredCommand;
-            const core::ToolContext toolContext =
-                core::itemContext(path, false, d_->profile.source.path,
-                                  d_->profile.destination.path,
-                                  d_->profile.source, d_->profile.destination,
-                                  QStringLiteral("Diff"));
-            QString toolError;
-            const QStringList argv = core::buildToolCommand(
-                command, core::placeholderValues(toolContext), &toolError);
-            if (argv.isEmpty() || !toolError.isEmpty()) {
-              QMessageBox::information(
-                  this, QStringLiteral("Diff tool unavailable"), toolError);
-              return;
-            }
-            if (!QProcess::startDetached(argv.first(), argv.mid(1))) {
-              QMessageBox::information(
-                  this, QStringLiteral("Diff tool unavailable"),
-                  QStringLiteral("Could not start %1.").arg(argv.first()));
-              return;
-            }
-            appendJournalLine(QStringLiteral("Opened diff for ") + path);
-            setStatus(QStringLiteral("Opened diff for %1").arg(path));
-          });
+          [this](const QString& path) { openDiff(path); });
   connect(d_->comparison, &ComparisonView::useAsLocationRequested, this,
           &MainWindow::useAsLocation);
+  connect(d_->comparison, &ComparisonView::toolRequested, this,
+          &MainWindow::runExternalTool);
   connect(d_->comparison, &ComparisonView::openDirectoryRequested, this,
           [this](int pane, const QString& path) {
     const QString root = pane == 2 ? d_->profile.destination.path
@@ -2006,6 +1966,154 @@ void MainWindow::addFilterPattern(const QString& pattern, const QString& path) {
   }
 }
 
+void MainWindow::openDiff(const QString& path) {
+  const auto& store = d_->comparison->store();
+  const auto found = store.path_to_id.find(path.toStdString());
+  const bool isDirectory =
+      found != store.path_to_id.end() &&
+      found->second < static_cast<int>(store.is_dir.size()) &&
+      store.is_dir[found->second] != 0;
+  if (path.isEmpty() || isDirectory) {
+    QMessageBox::information(this, QStringLiteral("Diff tool unavailable"),
+                             QStringLiteral(
+                                 "Only changed regular files can be opened in "
+                                 "a diff tool."));
+    return;
+  }
+  const bool sourceRemote = d_->profile.source.kind == core::EndpointKind::Ssh;
+  const bool destinationRemote =
+      d_->profile.destination.kind == core::EndpointKind::Ssh;
+  if (sourceRemote && destinationRemote) {
+    QMessageBox::information(this, QStringLiteral("Diff tool unavailable"),
+                             QStringLiteral("At most one endpoint may be remote."));
+    return;
+  }
+
+  QString source = QDir(d_->profile.source.path).filePath(path);
+  QString destination = QDir(d_->profile.destination.path).filePath(path);
+  if (sourceRemote || destinationRemote) {
+    d_->progress->setRange(0, 0);
+    d_->progress->show();
+    d_->progressLabel->setText(QStringLiteral("Preparing the diff tool..."));
+    setStatus(QStringLiteral("Preparing diff for %1...").arg(path));
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    QApplication::processEvents();
+
+    auto* stage = new QTemporaryDir(
+        QDir::tempPath() + QStringLiteral("/qt-rsync-diff-XXXXXX"));
+    d_->diffStagingDirs.append(stage);
+    const QString target =
+        stage->path() + QLatin1Char('/') + QFileInfo(path).fileName();
+    const core::Endpoint& remote =
+        sourceRemote ? d_->profile.source : d_->profile.destination;
+    const core::ProcessSpec spec =
+        core::buildFetchSpec(d_->profile, remote, path, target);
+    appendJournalLine(QStringLiteral("$ ") + spec.argv().join(QLatin1Char(' ')));
+    QProcess fetch(this);
+    setProcessEnvironment(spec, &fetch);
+    fetch.start(spec.program, spec.arguments);
+    if (!fetch.waitForFinished(120000) || fetch.exitCode() != 0 ||
+        !QFileInfo::exists(target)) {
+      const QString detail = QString::fromLocal8Bit(fetch.readAllStandardError())
+                                 .trimmed();
+      QApplication::restoreOverrideCursor();
+      d_->progress->hide();
+      QMessageBox::information(
+          this, QStringLiteral("Diff tool unavailable"),
+          QStringLiteral("Could not fetch %1 from the remote endpoint: %2")
+              .arg(path, detail.isEmpty() ? QStringLiteral("rsync failed")
+                                          : detail));
+      return;
+    }
+    if (sourceRemote) source = target;
+    else destination = target;
+    QApplication::restoreOverrideCursor();
+    d_->progress->hide();
+  }
+  if (!QFileInfo::exists(source) || !QFileInfo::exists(destination)) {
+    QMessageBox::information(
+        this, QStringLiteral("Diff tool unavailable"),
+        QStringLiteral("Both sides must have the file. Choose a changed item "
+                       "that exists on Source and Destination."));
+    return;
+  }
+
+  core::storage::Settings settings;
+  const QString configured =
+      settings.value(QStringLiteral("tools/diff-command")).toString().trimmed();
+  QString command = configured;
+  if (command.isEmpty()) {
+    for (const char* candidate : {"meld", "kdiff3", "kompare", "vimdiff"}) {
+      if (!QStandardPaths::findExecutable(QString::fromLatin1(candidate)).isEmpty()) {
+        command = QString::fromLatin1(candidate) + QStringLiteral(" %a %A");
+        break;
+      }
+    }
+    if (command.isEmpty()) command = QStringLiteral("meld %a %A");
+  }
+  const core::ToolContext context = core::itemContext(
+      path, false, QFileInfo(source).absolutePath(),
+      QFileInfo(destination).absolutePath(), d_->profile.source,
+      d_->profile.destination, QStringLiteral("Diff"));
+  QString toolError;
+  const QStringList argv = core::buildToolCommand(
+      command, core::placeholderValues(context), &toolError);
+  if (argv.isEmpty() || !toolError.isEmpty()) {
+    QMessageBox::information(this, QStringLiteral("Diff tool unavailable"),
+                             toolError);
+    return;
+  }
+  if (!QProcess::startDetached(argv.first(), argv.mid(1))) {
+    QMessageBox::information(this, QStringLiteral("Diff tool unavailable"),
+                             QStringLiteral("Could not start %1.").arg(argv.first()));
+    return;
+  }
+  appendJournalLine(QStringLiteral("Opened diff for ") + path);
+  setStatus(QStringLiteral("Opened diff for %1").arg(path));
+}
+
+void MainWindow::runExternalTool(const QString& name, const QString& path,
+                                 int pane) {
+  core::ExternalTool tool;
+  bool found = false;
+  for (const core::ExternalTool& candidate : d_->externalTools) {
+    if (candidate.name == name && candidate.enabled) {
+      tool = candidate;
+      found = true;
+      break;
+    }
+  }
+  if (!found) return;
+  const core::Endpoint& picked = pane == 2 ? d_->profile.destination
+                                           : d_->profile.source;
+  const core::Endpoint& other = pane == 2 ? d_->profile.source
+                                           : d_->profile.destination;
+  const auto& store = d_->comparison->store();
+  const auto it = store.path_to_id.find(path.toStdString());
+  const bool isDirectory =
+      it != store.path_to_id.end() &&
+      it->second < static_cast<int>(store.is_dir.size()) && store.is_dir[it->second];
+  const core::ToolContext context = core::itemContext(
+      path, isDirectory, picked.path, other.path, picked, other, tool.name,
+      tool.options);
+  QString error;
+  const QStringList argv = core::buildToolCommand(
+      tool.command, core::placeholderValues(context), &error);
+  if (argv.isEmpty() || !error.isEmpty()) {
+    setStatus(error.isEmpty() ? QStringLiteral("The tool command cannot be used")
+                              : error);
+    return;
+  }
+  QString workingDirectory = context.pickedDirectory;
+  if (!QFileInfo(workingDirectory).isDir()) workingDirectory.clear();
+  appendJournalLine(QStringLiteral("$ ") + argv.join(QLatin1Char(' ')));
+  if (!QProcess::startDetached(argv.first(), argv.mid(1), workingDirectory)) {
+    setStatus(QStringLiteral("Could not start %1").arg(tool.name));
+    return;
+  }
+  setStatus(QStringLiteral("Started %1.").arg(tool.name));
+}
+
 void MainWindow::useAsLocation(const QString& path) {
   QString relative = path.trimmed();
   while (relative.endsWith('/')) relative.chop(1);
@@ -2416,6 +2524,8 @@ MainWindow::SaveChoice MainWindow::askSaveProfile(QWidget* parent,
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
+  qDeleteAll(d_->diffStagingDirs);
+  d_->diffStagingDirs.clear();
   flushSettings();
   saveWindowState();
   if (!d_->tempProfile && d_->hasBaseline &&

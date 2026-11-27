@@ -2,11 +2,25 @@
 
 #include <QHash>
 #include <QString>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QVector>
 #include <QStringList>
 
 #include "core/Profile.h"
 
 namespace qt_rsync::core {
+
+struct ExternalTool {
+  QString name;
+  QString command;
+  QString options;
+  bool enabled = true;
+};
+
+QVector<ExternalTool> loadExternalTools();
+void saveExternalTools(const QVector<ExternalTool>& tools);
 
 struct ToolContext {
   QString pickedFullPath;

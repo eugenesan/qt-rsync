@@ -138,6 +138,21 @@ QStringList syncArguments(const SyncProfile& profile, const QString& filterFile)
 
 }  // namespace
 
+ProcessSpec buildFetchSpec(const SyncProfile& profile, const Endpoint& endpoint,
+                           const QString& remotePath, const QString& localPath) {
+  QStringList args{QStringLiteral("--archive"), QStringLiteral("--no-compress")};
+  if (hasRemoteEndpoint(profile)) {
+    args << QStringLiteral("-e") << remoteShellArgument();
+  }
+  QString operand = endpoint.rsyncOperand();
+  while (operand.endsWith('/')) operand.chop(1);
+  QString relative = remotePath;
+  while (relative.startsWith('/')) relative.remove(0, 1);
+  args << QStringLiteral("--") << operand + QLatin1Char('/') + relative
+       << localPath;
+  return processSpec(profile, args);
+}
+
 QStringList ProcessSpec::argv() const {
   QStringList result{program};
   result << arguments;

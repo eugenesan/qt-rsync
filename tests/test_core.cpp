@@ -42,6 +42,7 @@ class CoreTest : public QObject {
   void shortenFilterPrefixes();
   void endpointEdgeCases();
   void profileValidationMessages();
+  void fetchSpecAndToolPersistence();
   // Decisions (ported from qpy-rsync tests/unit/test_changes.py)
   void changeProperties();
   void inheritedExclusionAndChildOverride();
@@ -978,6 +979,32 @@ void CoreTest::profileValidationMessages() {
   profile.backup.protectNested = true;
   QVERIFY(!validateProfile(profile).join('\n').contains(
       QStringLiteral("backup.directory.unprotected")));
+}
+
+void CoreTest::fetchSpecAndToolPersistence() {
+  SyncProfile profile;
+  profile.source = parseEndpoint(QStringLiteral("/src/"));
+  profile.destination = parseEndpoint(QStringLiteral("server:/dst/"));
+  const auto spec = buildFetchSpec(profile, profile.destination,
+                                   QStringLiteral("docs/a.txt"),
+                                   QStringLiteral("/tmp/stage/a.txt"));
+  QCOMPARE(spec.program, QStringLiteral("setsid"));
+  QVERIFY(spec.arguments.contains(QStringLiteral("server:/dst/docs/a.txt")));
+  QVERIFY(spec.arguments.contains(QStringLiteral("/tmp/stage/a.txt")));
+  QVERIFY(spec.arguments.contains(QStringLiteral("--archive")));
+
+  QVector<ExternalTool> tools;
+  ExternalTool tool;
+  tool.name = QStringLiteral("Kate");
+  tool.command = QStringLiteral("kate %d/%f");
+  tool.options = QStringLiteral("--wait");
+  tools.append(tool);
+  saveExternalTools(tools);
+  const auto loaded = loadExternalTools();
+  QCOMPARE(loaded.size(), 1);
+  QCOMPARE(loaded.first().name, QStringLiteral("Kate"));
+  QCOMPARE(loaded.first().command, QStringLiteral("kate %d/%f"));
+  QCOMPARE(loaded.first().options, QStringLiteral("--wait"));
 }
 
 QTEST_MAIN(CoreTest)

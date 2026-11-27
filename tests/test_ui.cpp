@@ -125,6 +125,8 @@ class UiTest : public QObject {
   void contextMenuOpenActionsFollowEndpointKind();
   void cellRolesAndPresenceMatchPython();
   void swapEndpointTexts();
+  void overviewFollowsActionFilters();
+  void contextMenuOffersExternalTools();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -2518,6 +2520,57 @@ void UiTest::swapEndpointTexts() {
   }
   QCOMPARE(edits[0]->text(), QStringLiteral("/dst/"));
   QCOMPARE(edits[1]->text(), QStringLiteral("/src/"));
+}
+
+void UiTest::overviewFollowsActionFilters() {
+  QVector<core::Change> changes = fileChanges(
+      {QStringLiteral("a.txt"), QStringLiteral("b.txt")});
+  changes[1].action = core::Action::UpdateContent;
+
+  ui::ComparisonView view;
+  view.setChanges(changes);
+  ui::ActionFilterBar bar;
+  view.setFilterBar(&bar);
+  ui::OverviewPane overview;
+  connect(&view, &ui::ComparisonView::viewChanged, &overview,
+          [&overview, &view]() { overview.rebuildForDecision(view.store()); });
+  overview.rebuild(view.store());
+  auto* summary = overview.findChild<QLabel*>(QStringLiteral("statistics-summary"));
+  QVERIFY(summary != nullptr);
+  QVERIFY(summary->text().startsWith(QStringLiteral("2 item(s)")));
+
+  auto* update = bar.findChild<QCheckBox*>(QStringLiteral("filter-box-4"));
+  QVERIFY(update != nullptr);
+  QTest::mouseClick(update, Qt::LeftButton);
+  QVERIFY(!bar.actionVisible(1));
+  QVERIFY(summary->text().startsWith(QStringLiteral("1 item(s)")));
+}
+
+void UiTest::contextMenuOffersExternalTools() {
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("docs/a.txt")}));
+  core::ExternalTool tool;
+  tool.name = QStringLiteral("Kate");
+  tool.command = QStringLiteral("kate %d/%f");
+  tool.enabled = true;
+  view.setExternalTools({tool});
+
+  QStringList submenuLabels;
+  QTimer::singleShot(15, [&submenuLabels]() {
+    auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+    if (menu == nullptr) return;
+    for (QMenu* submenu : menu->findChildren<QMenu*>()) {
+      if (submenu->title() != QStringLiteral("Open with")) continue;
+      for (QAction* action : submenu->actions()) {
+        submenuLabels.append(action->text());
+        QVERIFY2(!action->shortcut().isEmpty(), qPrintable(action->text()));
+      }
+    }
+    menu->close();
+  });
+  QVERIFY(QMetaObject::invokeMethod(&view, "showContextMenu", Q_ARG(int, 0),
+                                    Q_ARG(QPoint, QPoint(30, 30))));
+  QVERIFY(submenuLabels.contains(QStringLiteral("Kate")));
 }
 
 QTEST_MAIN(UiTest)

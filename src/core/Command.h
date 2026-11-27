@@ -25,6 +25,9 @@ ProcessSpec buildVerifySpec(const SyncProfile& profile,
 ProcessSpec buildSyncSpec(const SyncProfile& profile,
                           const QString& filterFile = {});
 ProcessSpec buildInventorySpec(const SyncProfile& profile, const Endpoint& endpoint);
+// Fetch one file from either endpoint into a local staging path for diffing.
+ProcessSpec buildFetchSpec(const SyncProfile& profile, const Endpoint& endpoint,
+                           const QString& remotePath, const QString& localPath);
 QStringList buildSyncArgv(const SyncProfile& profile,
                           const QString& filterFile = {});
 QString explainRsyncExit(int code);

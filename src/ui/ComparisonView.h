@@ -6,6 +6,7 @@
 #include <QWidget>
 
 #include "core/Change.h"
+#include "core/ExternalTools.h"
 #include "core/Decision.h"
 #include "model/DataStore.h"
 #include "ui/ActionFilterBar.h"
@@ -28,6 +29,7 @@ class ComparisonView : public QWidget {
   void applyFilters();
   void refreshDecisionHeader();
   void setFilterBar(ActionFilterBar* bar);
+  void setExternalTools(const QVector<core::ExternalTool>& tools);
   [[nodiscard]] core::Decisions& decisions() { return decisions_; }
   void setChanges(const QVector<core::Change>& changes);
   void setShowUnchanged(bool show);
@@ -70,6 +72,7 @@ class ComparisonView : public QWidget {
   void openDirectoryRequested(int pane, const QString& path);
   void openFileRequested(int pane, const QString& path);
   void useAsLocationRequested(const QString& path);
+  void toolRequested(const QString& name, const QString& path, int pane);
 
  public slots:
   void showContextMenu(int pane, const QPoint& position);
@@ -87,6 +90,7 @@ class ComparisonView : public QWidget {
   void restoreFocusAfterDecision(const std::vector<int>& oldVisible,
                                  const QStringList& affectedPaths);
 
+  QVector<core::ExternalTool> externalTools_;
   bool sourceLocal_ = true;
   bool destinationLocal_ = true;
   bool batching_ = false;

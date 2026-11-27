@@ -1,5 +1,7 @@
 #include "core/ExternalTools.h"
 
+#include "core/Storage.h"
+
 #include <QDir>
 #include <QProcess>
 #include <QRegularExpression>
@@ -30,6 +32,41 @@ void splitName(const QString& name, QString* stem, QString* extension) {
 }
 
 }  // namespace
+
+QVector<ExternalTool> loadExternalTools() {
+  QVector<ExternalTool> tools;
+  core::storage::Settings settings;
+  const QByteArray payload =
+      settings.value(QStringLiteral("tools/external")).toByteArray();
+  if (payload.isEmpty()) return tools;
+  const QJsonArray array = QJsonDocument::fromJson(payload).array();
+  for (const QJsonValue& value : array) {
+    const QJsonObject object = value.toObject();
+    ExternalTool tool;
+    tool.name = object.value(QStringLiteral("name")).toString();
+    tool.command = object.value(QStringLiteral("command")).toString();
+    tool.options = object.value(QStringLiteral("options")).toString();
+    tool.enabled = object.value(QStringLiteral("enabled")).toBool(true);
+    if (!tool.name.isEmpty() && !tool.command.isEmpty()) tools.append(tool);
+  }
+  return tools;
+}
+
+void saveExternalTools(const QVector<ExternalTool>& tools) {
+  QJsonArray array;
+  for (const ExternalTool& tool : tools) {
+    QJsonObject object;
+    object.insert(QStringLiteral("name"), tool.name);
+    object.insert(QStringLiteral("command"), tool.command);
+    object.insert(QStringLiteral("options"), tool.options);
+    object.insert(QStringLiteral("enabled"), tool.enabled);
+    array.append(object);
+  }
+  core::storage::Settings settings;
+  settings.setValue(QStringLiteral("tools/external"),
+                    QJsonDocument(array).toJson(QJsonDocument::Compact));
+  settings.sync();
+}
 
 QString joinToolPath(const QString& root, const QString& path) {
   const QString cleanRoot = root;

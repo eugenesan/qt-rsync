@@ -226,6 +226,10 @@ ComparisonView::ComparisonView(QWidget* parent) : QWidget(parent) {
   }
 }
 
+void ComparisonView::setExternalTools(const QVector<core::ExternalTool>& tools) {
+  externalTools_ = tools;
+}
+
 void ComparisonView::setFilterBar(ActionFilterBar* bar) {
   filterBar_ = bar;
   if (filterBar_ != nullptr) {
@@ -886,6 +890,21 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
   menu.addAction(QStringLiteral("Open in Diff Tool\t1"), [this, path]() {
     emit diffRequested(path);
   });
+  QVector<core::ExternalTool> enabledTools;
+  for (const core::ExternalTool& tool : externalTools_) {
+    if (tool.enabled) enabledTools.append(tool);
+  }
+  if (!path.isEmpty() && !enabledTools.isEmpty()) {
+    menu.addSeparator();
+    auto* toolMenu = menu.addMenu(QStringLiteral("Open with"));
+    for (int index = 0; index < enabledTools.size() && index < 8; ++index) {
+      const core::ExternalTool& tool = enabledTools.at(index);
+      QAction* action = toolMenu->addAction(tool.name);
+      action->setShortcut(QKeySequence(QString::number(index + 2)));
+      action->setToolTip(QStringLiteral("Shortcut: %1").arg(index + 2));
+      action->setData(QStringList{tool.name, path, QString::number(pane)});
+    }
+  }
   menu.addSeparator();
 
   if (pane == 1 && !path.isEmpty()) {
@@ -958,7 +977,13 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
     fold->addAction(QStringLiteral("Expand All Folders"),
                     [this]() { foldAll(false); });
   }
-  menu.exec(view->viewport()->mapToGlobal(position));
+  QAction* chosen = menu.exec(view->viewport()->mapToGlobal(position));
+  if (chosen != nullptr && chosen->data().isValid()) {
+    const QStringList data = chosen->data().toStringList();
+    if (data.size() == 3) {
+      emit toolRequested(data.at(0), data.at(1), data.at(2).toInt());
+    }
+  }
 }
 
 void ComparisonView::showHeaderMenu(int pane, const QPoint& position) {

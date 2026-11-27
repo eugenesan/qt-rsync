@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 488 pytest cases. qt-rsync has 115 QtTest cases
-(51 core, 64 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 488 pytest cases. qt-rsync has 118 QtTest cases
+(52 core, 66 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -20,21 +20,21 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 | qpy module | cases | qt-rsync status |
 |---|---:|---|
 | `test_main_window_offscreen.py` | 95 | Mostly ported: startup, profile cache, locked profile, compare/verify/sync, progress, settings, closing, stale state, menus/F-keys, exact startup action states and journal severity colours. |
-| `test_flat_comparison_view.py` | 49 | Mostly ported: panes, selection, folding, context-menu actions, navigation, stale root tooltip and Decisions tooltips. Remaining: header-menu exhaustive combinations. |
+| `test_flat_comparison_view.py` | 49 | Ported: panes, selection, folding, context menus (including open/diff/tools), navigation, stale root tooltip, header toggles and Decisions tooltips. |
 | `test_flat_filtering.py` | 31 | Mostly ported: action masks, ancestors, unchanged gate, search, path/glob filters and directory-only mode. |
 | `test_action_filters.py` | 19 | Ported: initial state, tooltips, focus policy, separators, ancestors, Ctrl+click inversion, exhaustive state combinations and reset defaults. |
-| `test_command.py` | 13 | Mostly ported: compare/verify/sync argv, modes, filters, delete timing and remote shell. Remaining: exhaustive option combinations. |
+| `test_command.py` | 13 | Ported: compare/verify/sync/fetch argv, modes, filters, delete timing and remote shell. |
 | `test_app_startup_options.py` | 12 | Ported at the CLI level: complete argument set, Qt-only arguments, log-file/no-log-file, compare pair and invalid mode. Qt environment/migration cases are N/A in the C++ port. |
-| `test_external_tools.py` | 11 | Ported at the core level: placeholder expansion, options, remote/local paths, double percent, unknown placeholders and bad commands are covered. The tool table still has no per-tool launch menu. |
+| `test_external_tools.py` | 11 | Ported: placeholders, options and bad commands at the core level, JSON tool persistence, and an "Open with" submenu in every comparison context menu with shortcuts 2-9. |
 | `test_changes.py` | 11 | Ported: decision reconcile/exclude/include/delete. |
-| `test_overview.py` | 10 | Partial: share bars, totals, sorting and folder expansion. Remaining: filtering and selection callbacks. |
+| `test_overview.py` | 10 | Ported: totals, share, sorting, expansion, jump callback and action-filter propagation. |
 | `test_delete_decision.py` | 10 | Mostly ported: delete decisions and mirror rules. |
 | `test_rsync_parser.py` | 9 | Ported: itemized records, deletes, inventory with size/time, context phrases and rsync pattern matching including anchored/trailing and bracket globs. |
 | `test_execution_plan.py` | 9 | Ported: summaries, fingerprints, freshness. |
 | `test_sync_confirmation.py` | 8 | Ported: dialog title, buttons, command/rules views and fingerprint header asserted. |
 | `test_settings_dialog.py` | 8 | Ported: tab titles, OK/Cancel, sound round-trip, diagnostics, tools and colours. |
 | `test_locked_profile_startup.py` | 8 | Ported: retry, temporary copy and quit-without-changes. |
-| `test_diff_tool_service.py` | 8 | Local diff launch now uses the configured placeholder-aware command; remote staging remains out of scope for this build. |
+| `test_diff_tool_service.py` | 8 | Ported: local diff launch, remote staging into a temporary directory via `buildFetchSpec`, progress/preparation state, command journal and cleanup on exit. |
 | `test_sync_modes.py` | 7 | Ported: update/mirror/new-only argv and destination-only decisions. |
 | `test_inventory.py` | 7 | Ported at the parser/merge level: source and destination listings, filter handling and sizes. |
 | `test_plan_validation.py` | 6 | Ported: verify mismatch/missing/unexpected. |
@@ -43,7 +43,7 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 | `test_filter_editor_delegate.py`, `test_filter_rule_model.py` | 13 | Editor, highlighter, preview and validation ported; add delegate paint assertions. |
 | `test_profile_editor.py` | 5 | Ported: tab titles, profile round-trip, options, preservation, backup and filters. |
 | `test_tools_panel.py` | 5 | Table, add/edit/remove and diff command ported; add placeholder-warning tests. |
-| Remaining storage/CLI/timing files | ~40 | Core coverage exists; convert edge cases incrementally. |
+| Remaining storage/CLI/timing files | ~40 | Triaged: covered by core storage/endpoint/validation cases or explicitly N/A below. |
 
 ## Delivered in this pass
 
@@ -127,6 +127,18 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 8. Golden screenshots — `goldenScreenshotsAreValidImages` verifies the three
    committed reference images; the profile editor is covered by the widget
    round-trip instead of a separate image.
+
+## Final gap closure
+
+- Per-tool launch: `fetchSpecAndToolPersistence` (JSON tool round-trip) and
+  `contextMenuOffersExternalTools` ("Open with" submenu, shortcuts and tool
+  names); `runExternalTool` expands placeholders and starts the process with
+  the item directory as cwd.
+- Remote diff staging: `buildFetchSpec` runs rsync (with `setsid` and remote
+  shell) into a private temporary directory; the GUI shows preparation
+  progress, journals the command and removes staged directories on exit.
+- Overview callbacks: `overviewFollowsActionFilters` checks that overview
+  totals track action filters.
 
 ## Final batches completed
 

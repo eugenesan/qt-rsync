@@ -56,6 +56,8 @@ class MainWindow : public QMainWindow {
   void refreshDiagnosticsSettings();
   void addFilterPattern(const QString& pattern, const QString& path);
   void useAsLocation(const QString& path);
+  void runExternalTool(const QString& name, const QString& path, int pane);
+  void openDiff(const QString& path);
   void setStatus(const QString& text);
   void appendJournalLine(const QString& line);
   void setCommandPreview(const core::ProcessSpec& spec);
