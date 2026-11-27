@@ -137,6 +137,7 @@ class UiTest : public QObject {
   void commandPreviewIsTemporaryJournalEntry();
   void overviewWidthStableAcrossLayouts();
   void toolbarOrderAndLocationStaleness();
+  void escapeClearsSearchAndSearchSelectionReplaces();
 };
 
 void UiTest::initTestCase() {
@@ -2819,6 +2820,33 @@ void UiTest::toolbarOrderAndLocationStaleness() {
   QCOMPARE(edits.at(0)->text(), QStringLiteral("/src/"));
   QCOMPARE(edits.at(1)->text(), QStringLiteral("/dst/"));
   qputenv("PATH", oldPath);
+}
+
+void UiTest::escapeClearsSearchAndSearchSelectionReplaces() {
+  ui::MainWindow window;
+  window.show();
+  QTest::qWait(10);
+  auto* search = window.findChild<QLineEdit*>(QStringLiteral("search-edit"));
+  QVERIFY(search != nullptr);
+  search->setText(QStringLiteral("needle"));
+  QCOMPARE(search->text(), QStringLiteral("needle"));
+  QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+  QApplication::sendEvent(search, &escape);
+  QVERIFY(search->text().isEmpty());
+  auto* status = window.findChild<QLabel*>(QStringLiteral("search-status"));
+  QVERIFY(status == nullptr || !status->isVisible());
+
+  ui::ComparisonView view;
+  view.setChanges(fileChanges({QStringLiteral("a.txt"), QStringLiteral("b.txt"),
+                               QStringLiteral("c.txt")}));
+  view.selectPath(QStringLiteral("a.txt"));
+  view.selectPath(QStringLiteral("b.txt"));
+  auto* source = view.findChildren<QTableView*>().first();
+  QCOMPARE(source->selectionModel()->selectedRows().size(), 1);
+  const QModelIndex current = source->currentIndex();
+  QVERIFY(current.isValid());
+  QCOMPARE(source->model()->data(current, Qt::UserRole).toString(),
+           QStringLiteral("b.txt"));
 }
 
 QTEST_MAIN(UiTest)

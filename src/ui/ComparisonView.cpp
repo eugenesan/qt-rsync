@@ -745,7 +745,12 @@ void ComparisonView::selectPath(const QString& path) {
   }
   if (row < 0) return;
   for (QTableView* view : views_) {
-    view->setCurrentIndex(view->model()->index(row, 0));
+    const QModelIndex index = view->model()->index(row, 0);
+    // setCurrentIndex alone leaves the previous row selected; search results
+    // must replace the selection, not accumulate it.
+    view->selectionModel()->setCurrentIndex(
+        index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    view->scrollTo(index, QAbstractItemView::EnsureVisible);
   }
 }
 

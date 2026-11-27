@@ -11,6 +11,9 @@ and refreshed documentation and packaging.
 
 ### Changed
 
+- Escape in the search field clears the search like clicking the field's clear
+  button. Stepping between search results replaces the selection instead of
+  leaving previous results selected.
 - Tooltips use a uniform 250 ms wake-up delay with no fall-asleep grace, so
   moving between widgets no longer shows the next tooltip instantly.
 - The Decisions header now draws section borders.

@@ -686,6 +686,7 @@ MainWindow::MainWindow(QWidget* parent)
   toolbarLayout->addWidget(d_->searchNextButton);
   d_->search = new QLineEdit(toolbarRow);
   d_->search->setObjectName(QStringLiteral("search-edit"));
+  d_->search->installEventFilter(this);
   d_->search->setPlaceholderText(QStringLiteral("Search the list..."));
   d_->search->setClearButtonEnabled(true);
   d_->search->setMinimumWidth(120);
@@ -1507,6 +1508,13 @@ void MainWindow::showCommandPreview() {
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
+  if (watched == d_->search && event->type() == QEvent::KeyPress) {
+    auto* key = static_cast<QKeyEvent*>(event);
+    if (key->key() == Qt::Key_Escape) {
+      d_->search->clear();
+      return true;
+    }
+  }
   if (event->type() == QEvent::HoverEnter) {
     if (watched == d_->compare) d_->previewVerify = false;
     else if (watched == d_->verify) d_->previewVerify = true;
