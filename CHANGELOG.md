@@ -19,7 +19,9 @@ and refreshed documentation and packaging.
   journal: no timestamp, not written to the log file. It shows Compare by
   default, switches to Verify on hover (when enabled), clears when a command
   starts and returns when the app is idle. Repeated hover events replace the
-  single entry, and any real journal line removes the preview first.
+  single entry with no blank line, any real journal line removes the preview
+  first, and it is shown in a faded italic colour with a "compare rsync
+  preview:" or "verify rsync preview:" marker.
 
 ### Fixed
 

@@ -1866,7 +1866,7 @@ void UiTest::journalEntriesHaveTimestamps() {
     if (line.trimmed().isEmpty()) continue;
     // The command preview is a temporary journal entry: no timestamp and no
     // log-file persistence.
-    if (line.startsWith(QStringLiteral("$ "))) continue;
+    if (line.contains(QStringLiteral("rsync preview: $ "))) continue;
     QVERIFY2(stamped.match(line).hasMatch(), qPrintable(line));
     ++checked;
   }
@@ -2687,13 +2687,15 @@ void UiTest::commandPreviewIsTemporaryJournalEntry() {
   const QStringList lines = text.split('\n');
   QVERIFY(!lines.isEmpty());
   const QString last = lines.last().trimmed();
-  QVERIFY2(last.startsWith(QStringLiteral("$ rsync")), qPrintable(last));
+  QVERIFY2(last.startsWith(QStringLiteral("compare rsync preview: $ rsync")),
+           qPrintable(last));
   QVERIFY(!last.contains(QRegularExpression(QStringLiteral("^\\d{2}:"))));
 
   // Repeated hovers replace the same single entry.
   QVERIFY(QMetaObject::invokeMethod(&window, "showCommandPreview"));
   QVERIFY(QMetaObject::invokeMethod(&window, "showCommandPreview"));
   QCOMPARE(journal->toPlainText().count(QStringLiteral("$ rsync")), 1);
+  QVERIFY(!journal->toPlainText().split('\n').contains(QString()));
 
   // Any real journal entry removes the temporary preview first.
   QVERIFY(QMetaObject::invokeMethod(

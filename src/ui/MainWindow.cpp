@@ -1445,11 +1445,10 @@ void MainWindow::clearCommandPreview() {
   while (block.isValid()) {
     QTextBlock next = block.next();
     if (dynamic_cast<PreviewBlockData*>(block.userData()) != nullptr) {
-      QTextCursor cursor(block);
-      cursor.movePosition(QTextCursor::StartOfBlock);
-      if (!cursor.movePosition(QTextCursor::NextBlock, QTextCursor::KeepAnchor)) {
-        cursor.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
-      }
+      QTextCursor cursor(document);
+      const int end = next.isValid() ? next.position() : document->characterCount() - 1;
+      cursor.setPosition(block.position());
+      cursor.setPosition(end, QTextCursor::KeepAnchor);
       cursor.removeSelectedText();
     }
     block = next;
@@ -1468,13 +1467,23 @@ void MainWindow::showCommandPreview() {
   }
   if (spec.program.isEmpty()) return;
   clearCommandPreview();
-  QTextCursor cursor(d_->journal->document());
+  QTextDocument* document = d_->journal->document();
+  QTextCursor cursor(document);
   cursor.movePosition(QTextCursor::End);
-  if (!d_->journal->document()->isEmpty()) cursor.insertBlock();
+  // Do not add a blank line when the cleared preview left an empty document.
+  if (cursor.block().length() > 1) cursor.insertBlock();
   QTextCharFormat format;
-  format.setForeground(d_->journal->palette().color(QPalette::Text));
+  const QColor text = d_->journal->palette().color(QPalette::Text);
+  const QColor base = d_->journal->palette().color(QPalette::Base);
+  format.setForeground(QColor::fromRgb((text.red() + base.red()) / 2,
+                                       (text.green() + base.green()) / 2,
+                                       (text.blue() + base.blue()) / 2));
   format.setFontItalic(true);
-  cursor.insertText(QStringLiteral("$ ") + spec.argv().join(QLatin1Char(' ')),
+  const QString marker = d_->previewVerify
+                             ? QStringLiteral("verify rsync preview: ")
+                             : QStringLiteral("compare rsync preview: ");
+  cursor.insertText(marker + QStringLiteral("$ ") +
+                        spec.argv().join(QLatin1Char(' ')),
                     format);
   cursor.block().setUserData(new PreviewBlockData);
   d_->journal->setTextCursor(cursor);
