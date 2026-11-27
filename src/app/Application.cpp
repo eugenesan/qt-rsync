@@ -44,6 +44,7 @@ int run(int argc, char** argv) {
     return 0;
   }
 
+  core::storage::removeObsoleteEncodedSettings();
   ui::MainWindow window;
   if (window.startupAborted()) return 0;
   window.applyStartupOptions(options);

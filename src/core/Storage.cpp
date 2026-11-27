@@ -152,6 +152,20 @@ void FileLock::release() {
   owned_ = false;
 }
 
+void removeObsoleteEncodedSettings() {
+  Settings settings;
+  for (const QString& key : {QStringLiteral("tools/external"),
+                             QStringLiteral("colours/actions"),
+                             QStringLiteral("main-window/state"),
+                             QStringLiteral("comparison/flat-splitter"),
+                             QStringLiteral("comparison/flat-source-header"),
+                             QStringLiteral("comparison/flat-destination-header"),
+                             QStringLiteral("command-preview/splitter")}) {
+    settings.remove(key);
+  }
+  settings.sync();
+}
+
 QStringList actionColourKeys() {
   return {QStringLiteral("create"), QStringLiteral("update_content"),
           QStringLiteral("update_metadata"), QStringLiteral("delete"),

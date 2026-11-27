@@ -43,6 +43,7 @@ class CoreTest : public QObject {
   void endpointEdgeCases();
   void profileValidationMessages();
   void fetchSpecAndToolPersistence();
+  void obsoleteEncodedSettingsAreRemoved();
   // Decisions (ported from qpy-rsync tests/unit/test_changes.py)
   void changeProperties();
   void inheritedExclusionAndChildOverride();
@@ -986,6 +987,23 @@ void CoreTest::fetchSpecAndToolPersistence() {
   QCOMPARE(settings.value(QStringLiteral("tools/external/1/command")).toString(),
            QStringLiteral("kate %d/%f"));
   QVERIFY(!settings.allKeys().join(' ').contains(QStringLiteral("b64:")));
+}
+
+void CoreTest::obsoleteEncodedSettingsAreRemoved() {
+  storage::Settings settings;
+  settings.setValue(QStringLiteral("tools/external"),
+                    QStringLiteral("b64:W10="));
+  settings.setValue(QStringLiteral("colours/actions"),
+                    QStringLiteral("b64:e30="));
+  settings.setValue(QStringLiteral("main-window/state"),
+                    QStringLiteral("AAAA/w=="));
+  settings.sync();
+  storage::removeObsoleteEncodedSettings();
+  const QStringList keys = storage::Settings().allKeys();
+  QVERIFY(!keys.contains(QStringLiteral("tools/external")));
+  QVERIFY(!keys.contains(QStringLiteral("colours/actions")));
+  QVERIFY(!keys.contains(QStringLiteral("main-window/state")));
+  QVERIFY(!keys.join(' ').contains(QStringLiteral("b64:")));
 }
 
 QTEST_MAIN(CoreTest)

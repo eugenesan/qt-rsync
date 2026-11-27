@@ -29,6 +29,7 @@ bool pidAlive(qint64 pid);
 // Stable preferences live in config; transient state in state. The split is
 // inherited from qpy-rsync and keyed on the same prefixes.
 QStringList actionColourKeys();
+void removeObsoleteEncodedSettings();
 QString encodeIntList(const QList<int>& values);
 QList<int> decodeIntList(const QString& text);
 

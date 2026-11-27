@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 488 pytest cases. qt-rsync has 119 QtTest cases
-(51 core, 68 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 488 pytest cases. qt-rsync has 120 QtTest cases
+(52 core, 68 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -133,8 +133,8 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 Settings are INI-native plain text in both apps: indexed `tools/external/*`
 keys, per-action `colours/actions/<name>` keys, `main-window/geometry` as
 `x,y,w,h`, splitter sizes as comma-separated integers, and booleans/strings
-verbatim. `settingsUsePlainTextFormats` asserts the Qt side contains no base64
-and no legacy `main-window/state` blob. There is no qpy settings/profile import.
+verbatim. `settingsUsePlainTextFormats` and `obsoleteEncodedSettingsAreRemoved`
+assert the Qt side contains no base64 and legacy blobs are cleaned up. There is no qpy settings/profile import.
 
 ## Final gap closure
 
