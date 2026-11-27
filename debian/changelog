@@ -28,7 +28,8 @@ qt-rsync (0.2.0-0) resolute; urgency=medium
     are ported, all settings are plain text with no base64 or qpy import,
     folding repaints all panes, profiles are listed by recent use, no qpy
     import code remains, log clearing is confirmed, operation buttons start
-    disabled, sync can re-compare automatically, and
+    disabled, sync can re-compare automatically, progress is in the status
+    bar and the command preview is a temporary journal entry, and
     timings report real wall-clock values;
     example profile installed under
     /usr/share/doc/qt-rsync/examples.
