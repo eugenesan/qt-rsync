@@ -11,6 +11,24 @@ and refreshed documentation and packaging.
 
 ### Fixed
 
+- Clear Log now asks for Approve/Cancel before truncating the session log.
+- Cancel and Pause start disabled and are only enabled while an rsync operation
+  runs; Pause no longer stays active after Compare.
+- Buttons with right-click menus show a small chevron and a tooltip hint.
+- The log button opens Settings when no log is configured; the backup button
+  opens the backup editor when no backup directory is set. Tooltips reflect
+  that state.
+- The profile menu lists Edit... directly under Save.
+- Journal default text follows the palette text colour used by the overview.
+
+### Added
+
+- The sync confirmation dialog has an enabled-by-default "Compare again after
+  synchronization" option.
+- The Filters button and dialog state that rules are stored in the profile.
+
+### Fixed
+
 - The last qpy model-import experiment was removed: `DataStore::load_binary()`
   (the `QPYN` native dump reader) was dead code. Nothing imports qpy settings,
   profiles or model dumps now.

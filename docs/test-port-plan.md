@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 489 pytest cases. qt-rsync has 121 QtTest cases
-(53 core, 68 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 489 pytest cases. qt-rsync has 122 QtTest cases
+(53 core, 69 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -127,6 +127,12 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 8. Golden screenshots — `goldenScreenshotsAreValidImages` verifies the three
    committed reference images; the profile editor is covered by the widget
    round-trip instead of a separate image.
+
+## UI behaviour fixes
+
+`startupControlsAndDialogDefaults` covers disabled Cancel/Pause on startup,
+right-click hints, profile-menu order and the sync dialog's automatic Compare
+option. Sync tests disable that option so their status assertions stay stable.
 
 ## Recent profiles
 
