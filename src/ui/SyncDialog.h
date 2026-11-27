@@ -2,6 +2,8 @@
 
 #include <QDialog>
 
+class QCheckBox;
+
 #include "core/Command.h"
 #include "core/Plan.h"
 
@@ -16,6 +18,11 @@ class SyncDialog : public QDialog {
                       const core::ExecutionPlan& plan,
                       const QString& filterFilePath,
                       QWidget* parent = nullptr);
+
+  [[nodiscard]] bool compareAfterSync() const;
+
+ private:
+  QCheckBox* compareAfter_ = nullptr;
 };
 
 }  // namespace qt_rsync::ui

@@ -19,6 +19,8 @@
 #include <QKeyEvent>
 #include <QActionGroup>
 #include <QMenu>
+#include <QPainter>
+#include <QPolygon>
 #include <QMenuBar>
 #include <QMessageBox>
 
@@ -67,6 +69,26 @@
 
 namespace qt_rsync::ui {
 namespace {
+
+// Small chevron marks buttons that also carry a right-click menu.
+class MenuToolButton : public QToolButton {
+ public:
+  using QToolButton::QToolButton;
+
+ protected:
+  void paintEvent(QPaintEvent* event) override {
+    QToolButton::paintEvent(event);
+    QPainter painter(this);
+    const int x = 2;
+    const int y = 2;
+    painter.setPen(palette().color(QPalette::Text));
+    painter.setBrush(palette().color(QPalette::Text));
+    QPolygon triangle;
+    triangle << QPoint(x, y + 5) << QPoint(x + 5, y + 5) << QPoint(x + 2, y);
+    painter.drawPolygon(triangle);
+  }
+};
+
 
 // qpy updates the item label every thousand parsed records; doing it for
 // every rsync line is visible work in the GUI on a large comparison.
@@ -209,6 +231,7 @@ class MainWindow::Private {
   QString searchText;
   int searchPosition = -1;
   bool cancelled = false;
+  bool compareAfterSync = true;
   bool planDirty = false;
   QTimer* settingsTimer = nullptr;
   QHash<QString, QVariant> pendingSettings;
@@ -262,6 +285,8 @@ class MainWindow::Private {
   QString profilePath;
   std::unique_ptr<core::storage::FileLock> profileLock;
   QToolButton* profileButton = nullptr;
+  QToolButton* backupButton = nullptr;
+  QToolButton* logButton = nullptr;
   QString logPath;
   QFile* logFile = nullptr;
 };
@@ -406,10 +431,12 @@ MainWindow::MainWindow(QWidget* parent)
           "Shortcut: F9"));
   d_->verify->setEnabled(false);
   d_->sync->setEnabled(false);
+  setOperationControls(false);
   addTool(d_->cancel, QStringLiteral("Cancel"), QStringLiteral("cancel"),
           QStringLiteral(
               "Cancel the running operation\n\nShortcut: F10"));
   d_->pauseButton = new QToolButton(toolbarRow);
+  d_->pauseButton->setEnabled(false);
   d_->pauseButton->setText(QStringLiteral("Pause"));
   d_->pauseButton->setAccessibleName(
       QStringLiteral("Pause the running operation"));
@@ -453,28 +480,43 @@ MainWindow::MainWindow(QWidget* parent)
   });
   styleTool(d_->pauseButton);
   toolbarLayout->addWidget(d_->pauseButton);
+  setOperationControls(false);
 
   toolbarLayout->addWidget(verticalSeparator(toolbarRow));
   addTool(d_->filtersButton, QStringLiteral("Filters"), QStringLiteral("filters"),
           QStringLiteral(
-              "Edit the persistent filter rules\n\nShortcut: F7"));
+              "Edit the filter rules stored in the current profile. Save the "
+          "profile to keep them.\n\nShortcut: F7"));
 
-  d_->profileButton = new QToolButton(toolbarRow);
+  d_->profileButton = new MenuToolButton(toolbarRow);
   d_->profileButton->setIcon(icons::toolbarIcon(QStringLiteral("profile")));
   d_->profileButton->setAccessibleName(QStringLiteral("Manage Profiles"));
   d_->profileButton->setMenu(new QMenu(d_->profileButton));
   d_->profileButton->setPopupMode(QToolButton::InstantPopup);
   d_->profileButton->setToolTip(
-      QStringLiteral("Manage profiles (F2/F3, edit F4)"));
+      QStringLiteral("Manage profiles (F2/F3, edit F4)\nRight-click for more options."));
   connect(d_->profileButton->menu(), &QMenu::aboutToShow,
           this, &MainWindow::updateProfileMenu);
   styleTool(d_->profileButton);
   toolbarLayout->addWidget(d_->profileButton);
-  auto* backupButton = new QToolButton(toolbarRow);
+  auto* backupButton = new MenuToolButton(toolbarRow);
+  d_->backupButton = backupButton;
   backupButton->setIcon(icons::toolbarIcon(QStringLiteral("backup")));
   backupButton->setAccessibleName(QStringLiteral("Open the backup directory"));
   backupButton->setToolTip(QStringLiteral("Open the backup directory"));
   connect(backupButton, &QToolButton::clicked, this, [this]() {
+    if (d_->profile.backup.directory.trimmed().isEmpty()) {
+      ProfileEditorDialog dialog(d_->profile, this, QStringLiteral("backup"));
+      if (dialog.exec() == QDialog::Accepted) {
+        const core::SyncProfile updated = dialog.profile();
+        d_->profile.backup = updated.backup;
+        d_->profile.transfer = updated.transfer;
+        d_->profile.preservation = updated.preservation;
+        updateOpenButtonStates();
+        updateStateIcons();
+      }
+      return;
+    }
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->profile.backup.directory));
   });
   styleTool(backupButton);
@@ -493,6 +535,18 @@ MainWindow::MainWindow(QWidget* parent)
               if (selected == open) {
                 button->click();
               } else if (selected == clear) {
+                QMessageBox prompt(this);
+                prompt.setIcon(QMessageBox::Question);
+                prompt.setWindowTitle(QStringLiteral("Clear Log"));
+                prompt.setText(QStringLiteral(
+                    "Clear the current session log? This cannot be undone."));
+                auto* approve =
+                    prompt.addButton(QStringLiteral("Approve"),
+                                     QMessageBox::AcceptRole);
+                prompt.addButton(QStringLiteral("Cancel"),
+                                 QMessageBox::RejectRole);
+                prompt.setDefaultButton(approve);
+                if (prompt.exec() != QDialog::Accepted) return;
                 if (d_->logFile != nullptr) {
                   d_->logFile->close();
                   d_->logFile->open(QIODevice::WriteOnly | QIODevice::Truncate);
@@ -531,11 +585,19 @@ MainWindow::MainWindow(QWidget* parent)
             });
   };
   configureOpenMenu(backupButton, false);
-  auto* logButton = new QToolButton(toolbarRow);
+  auto* logButton = new MenuToolButton(toolbarRow);
+  d_->logButton = logButton;
   logButton->setIcon(icons::toolbarIcon(QStringLiteral("log")));
   logButton->setAccessibleName(QStringLiteral("Open the log file"));
   logButton->setToolTip(QStringLiteral("Open the log file"));
   connect(logButton, &QToolButton::clicked, this, [this]() {
+    if (d_->logPath.isEmpty()) {
+      SettingsDialog dialog(
+          this, core::paths::appLogPath(
+                    QFileInfo(d_->profilePath).completeBaseName()));
+      if (dialog.exec() == QDialog::Accepted) updateOpenButtonStates();
+      return;
+    }
     QDesktopServices::openUrl(QUrl::fromLocalFile(d_->logPath));
   });
   styleTool(logButton);
@@ -563,6 +625,11 @@ MainWindow::MainWindow(QWidget* parent)
     dialog.setWindowTitle(QStringLiteral("Filters"));
     dialog.resize(640, 560);
     auto* layout = new QVBoxLayout(&dialog);
+    auto* note = new QLabel(
+        QStringLiteral("Filter rules belong to the current profile. Save or "
+                       "Save As to keep them for the next session."), &dialog);
+    note->setWordWrap(true);
+    layout->addWidget(note);
     auto* editor = new FilterEditorWidget(&dialog, d_->profile.filterText);
     layout->addWidget(editor, 1);
     auto* buttons = new QDialogButtonBox(
@@ -1232,6 +1299,7 @@ MainWindow::MainWindow(QWidget* parent)
   updateVerificationVisibility();
   updateStateIcons();
   restoreProfile();
+  updateOpenButtonStates();
   restoreWindowState();
 
   connect(d_->comparison, &ComparisonView::viewChanged, this, [this]() {
@@ -1339,11 +1407,11 @@ void MainWindow::appendJournalLine(const QString& rawLine) {
                            : QTime::currentTime().toString(
                                  QStringLiteral("HH:mm:ss.zz")) +
                                  QLatin1Char(' ') + rawLine;
-  QString colour = QStringLiteral("#9CA3AF");
+  QString colour = d_->journal->palette().color(QPalette::Text).name();
   // Shell commands are informational, even when their arguments happen to
   // contain a word like "error" or "failed" in a path or filter rule.
   if (rawLine.startsWith(QStringLiteral("$ "))) {
-    colour = QStringLiteral("#9CA3AF");
+    colour = d_->journal->palette().color(QPalette::Text).name();
   } else if (line.contains(QStringLiteral("fail"), Qt::CaseInsensitive) ||
       line.contains(QStringLiteral("error"), Qt::CaseInsensitive) ||
       line.contains(QStringLiteral("cancel"), Qt::CaseInsensitive) ||
@@ -1458,7 +1526,7 @@ void MainWindow::startCompare() {
   d_->compareClock.start();
   d_->compareTotalClock.start();
   d_->compare->setEnabled(false);
-  d_->cancel->setEnabled(true);
+  setOperationControls(true);
   d_->stateLabel->setText(QStringLiteral("State:"));
   d_->stateLabel->setStyleSheet(QString());
   setStatus(QStringLiteral("Comparing..."));
@@ -1479,7 +1547,7 @@ void MainWindow::startCompare() {
 
 void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   d_->compare->setEnabled(true);
-  d_->cancel->setEnabled(false);
+  setOperationControls(false);
   if (d_->cancelled) {
     d_->cancelled = false;
     setStatus(QStringLiteral("Comparison cancelled"));
@@ -1588,7 +1656,7 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
 void MainWindow::onCompareError(QProcess::ProcessError error) {
   Q_UNUSED(error)
   d_->compare->setEnabled(true);
-  d_->cancel->setEnabled(false);
+  setOperationControls(false);
   d_->progress->setRange(0, 100);
   d_->progress->hide();
   setStatus(QStringLiteral("Could not start rsync: %1")
@@ -1734,7 +1802,7 @@ void MainWindow::finishComparison() {
     setVerifyEnabled(actionable);
     setSyncEnabled(actionable);
     d_->compare->setEnabled(true);
-    d_->cancel->setEnabled(false);
+    setOperationControls(false);
     d_->progress->hide();
     d_->progressLabel->setText(QStringLiteral("Comparison completed"));
     appendJournalLine(QStringLiteral("STATE comparison-complete changes=%1")
@@ -1748,6 +1816,30 @@ void MainWindow::finishComparison() {
     playCompletionSound(QStringLiteral("success"));
   }
   d_->progress->hide();
+}
+
+void MainWindow::updateOpenButtonStates() {
+  if (d_->backupButton != nullptr) {
+    const bool configured = !d_->profile.backup.directory.trimmed().isEmpty();
+    d_->backupButton->setToolTip(
+        configured
+            ? QStringLiteral("Open the backup directory\nRight-click for more options.")
+            : QStringLiteral("Configure the backup directory\nRight-click for more options."));
+  }
+  if (d_->logButton != nullptr) {
+    const bool configured = !d_->logPath.isEmpty();
+    d_->logButton->setToolTip(
+        configured ? QStringLiteral("Open the log file\nRight-click for more options.")
+                   : QStringLiteral("Configure logging\nRight-click for more options."));
+  }
+}
+
+void MainWindow::setOperationControls(bool enabled) {
+  if (d_->cancel != nullptr) d_->cancel->setEnabled(enabled);
+  if (d_->pauseButton != nullptr) {
+    d_->pauseButton->setEnabled(enabled);
+    if (!enabled) d_->pauseButton->setChecked(false);
+  }
 }
 
 void MainWindow::setSyncEnabled(bool enabled) {
@@ -1803,7 +1895,7 @@ void MainWindow::verifyPlan() {
   d_->syncing = false;
   d_->verifying = true;
   d_->operationOutput.clear();
-  d_->cancel->setEnabled(true);
+  setOperationControls(true);
   setStatus(QStringLiteral("Verifying..."));
   d_->operationProcess->start(spec.program, spec.arguments);
 }
@@ -1824,6 +1916,7 @@ void MainWindow::synchronize() {
 
   SyncDialog dialog(d_->profile, d_->plan, d_->filterFile->fileName(), this);
   if (dialog.exec() != QDialog::Accepted) return;
+  d_->compareAfterSync = dialog.compareAfterSync();
 
   const core::ProcessSpec spec =
       core::buildSyncSpec(d_->profile, d_->filterFile->fileName());
@@ -1833,7 +1926,7 @@ void MainWindow::synchronize() {
   d_->verifying = false;
   d_->syncProgressClock.restart();
   d_->operationOutput.clear();
-  d_->cancel->setEnabled(true);
+  setOperationControls(true);
   d_->progress->show();
   d_->progress->setValue(0);
   setStatus(QStringLiteral("Synchronizing..."));
@@ -1841,7 +1934,7 @@ void MainWindow::synchronize() {
 }
 
 void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) {
-  d_->cancel->setEnabled(false);
+  setOperationControls(false);
   d_->pauseButton->setChecked(false);
   if (d_->cancelled) {
     d_->cancelled = false;
@@ -1880,9 +1973,12 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
             .arg(summary.included)
             .arg(model::qpy_format_size(summary.includedSize)));
     d_->progressLabel->setText(QStringLiteral("Synchronization completed"));
-    setStatus(QStringLiteral(
-        "Synchronization complete: click Compare to refresh results."));
+    setStatus(d_->compareAfterSync
+                  ? QStringLiteral("Synchronization complete: comparing again.")
+                  : QStringLiteral(
+                        "Synchronization complete: click Compare to refresh results."));
     playCompletionSound(QStringLiteral("success"));
+    if (d_->compareAfterSync) startCompare();
     return;
   }
   d_->verifying = false;
@@ -1915,7 +2011,7 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
 
 void MainWindow::onOperationError(QProcess::ProcessError error) {
   Q_UNUSED(error)
-  d_->cancel->setEnabled(false);
+  setOperationControls(false);
   setStatus(QStringLiteral("Operation failed: %1")
                           .arg(d_->operationProcess->errorString()));
   playCompletionSound(QStringLiteral("error"));
@@ -1932,7 +2028,7 @@ void MainWindow::cancelOperation() {
   }
   if (target == nullptr) return;
   d_->cancelled = true;
-  d_->cancel->setEnabled(false);
+  setOperationControls(false);
   setStatus(QStringLiteral("Cancelling..."));
   target->kill();
 }
@@ -2187,6 +2283,7 @@ void MainWindow::openSessionLog(const QString& name) {
     d_->logFile->write(QStringLiteral("\n===== qt-rsync session =====\n").toUtf8());
     d_->logFile->flush();
   }
+  updateOpenButtonStates();
 }
 
 void MainWindow::promoteTempProfile(const QString& newName) {
@@ -2709,6 +2806,8 @@ void MainWindow::updateProfileMenu() {
           this, &MainWindow::loadProfile);
   connect(menu->addAction(QStringLiteral("Save")), &QAction::triggered,
           this, &MainWindow::saveCurrentProfile);
+  connect(menu->addAction(QStringLiteral("Edit...")), &QAction::triggered,
+          this, &MainWindow::editProfile);
   menu->addSeparator();
   const QStringList profiles = core::storage::listProfiles();
   if (profiles.isEmpty()) {
@@ -2733,8 +2832,6 @@ void MainWindow::updateProfileMenu() {
     }
   }
   menu->addSeparator();
-  connect(menu->addAction(QStringLiteral("Edit...")), &QAction::triggered,
-          this, &MainWindow::editProfile);
   connect(menu->addAction(QStringLiteral("Save As...")), &QAction::triggered,
           this, &MainWindow::saveProfileAs);
   connect(menu->addAction(QStringLiteral("Open profiles directory")),

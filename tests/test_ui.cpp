@@ -129,6 +129,7 @@ class UiTest : public QObject {
   void contextMenuOffersExternalTools();
   void foldingRefreshesViewsAndOverview();
   void settingsUsePlainTextFormats();
+  void startupControlsAndDialogDefaults();
 };
 
 void UiTest::compareRendersFakeRsyncOutput() {
@@ -337,6 +338,9 @@ void UiTest::verifyAndSyncKeepComparisonStale() {
       if (dialog == nullptr || !dialog->isVisible() ||
           !dialog->windowTitle().contains(QStringLiteral("synchronization"))) {
         continue;
+      }
+      for (QCheckBox* box : dialog->findChildren<QCheckBox*>()) {
+        if (box->text().contains(QStringLiteral("Compare again"))) box->setChecked(false);
       }
       for (QAbstractButton* button : dialog->findChildren<QAbstractButton*>()) {
         if (button->text().contains(QStringLiteral("Synchronize"))) {
@@ -651,6 +655,9 @@ void UiTest::realMirrorSyncDeletesDestinationOnlyFiles() {
           !dialog->windowTitle().contains(QStringLiteral("synchronization"))) {
         continue;
       }
+      for (QCheckBox* box : dialog->findChildren<QCheckBox*>()) {
+        if (box->text().contains(QStringLiteral("Compare again"))) box->setChecked(false);
+      }
       for (QAbstractButton* button : dialog->findChildren<QAbstractButton*>()) {
         if (button->text().contains(QStringLiteral("Synchronize"))) {
           button->click();
@@ -719,6 +726,9 @@ void UiTest::excludedFileIsNotTransferredByRealSync() {
       auto* dialog = dynamic_cast<QDialog*>(widget);
       if (dialog == nullptr ||
           !dialog->windowTitle().contains(QStringLiteral("synchronization"))) continue;
+      for (QCheckBox* box : dialog->findChildren<QCheckBox*>()) {
+        if (box->text().contains(QStringLiteral("Compare again"))) box->setChecked(false);
+      }
       for (QAbstractButton* button : dialog->findChildren<QAbstractButton*>()) {
         if (button->text().contains(QStringLiteral("Synchronize"))) {
           button->click();
@@ -1952,8 +1962,8 @@ void UiTest::journalCommandLinesAreNeutral() {
   QVERIFY(journal != nullptr);
   QTextCursor cursor = journal->document()->find(QStringLiteral("$ rsync"));
   QVERIFY(!cursor.isNull());
-  QCOMPARE(cursor.charFormat().foreground().color().name().toLower(),
-           QStringLiteral("#9ca3af"));
+  QCOMPARE(cursor.charFormat().foreground().color(),
+           journal->palette().color(QPalette::Text));
   qputenv("PATH", oldPath);
 }
 
@@ -2230,7 +2240,7 @@ void UiTest::journalSeverityColoursMatchPython() {
   };
   QVERIFY(!colourOf(0).isEmpty());
   QVERIFY(colourOf(0) != colourOf(1));
-  QCOMPARE(colourOf(3), QStringLiteral("#9ca3af"));
+  QCOMPARE(colourOf(3), journal->palette().color(QPalette::Text).name().toLower());
 }
 
 void UiTest::staleRootTooltipAndContextMenuActions() {
@@ -2612,6 +2622,52 @@ void UiTest::settingsUsePlainTextFormats() {
       settings.value(QStringLiteral("main-window/geometry")).toString());
   QCOMPARE(geometry.size(), 4);
   QVERIFY(!keys.join(' ').contains(QStringLiteral("b64:")));
+}
+
+void UiTest::startupControlsAndDialogDefaults() {
+  ui::MainWindow window;
+  window.show();
+  QTest::qWait(10);
+  const auto buttonByText = [&window](const QString& text) -> QAbstractButton* {
+    for (QAbstractButton* button : window.findChildren<QAbstractButton*>()) {
+      if (button->text() == text) return button;
+    }
+    return nullptr;
+  };
+  QAbstractButton* cancel = buttonByText(QStringLiteral("Cancel"));
+  QAbstractButton* pause = buttonByText(QStringLiteral("Pause"));
+  QVERIFY(cancel != nullptr && pause != nullptr);
+  QVERIFY(!cancel->isEnabled());
+  QVERIFY(!pause->isEnabled());
+
+  int rightClickHints = 0;
+  for (QToolButton* button : window.findChildren<QToolButton*>()) {
+    if (button->toolTip().contains(QStringLiteral("Right-click"))) {
+      ++rightClickHints;
+    }
+  }
+  QVERIFY(rightClickHints >= 3);
+
+  QMenu* profileMenu = nullptr;
+  for (QToolButton* button : window.findChildren<QToolButton*>()) {
+    if (button->accessibleName() == QStringLiteral("Manage Profiles")) {
+      profileMenu = button->menu();
+    }
+  }
+  QVERIFY(profileMenu != nullptr);
+  QMetaObject::invokeMethod(profileMenu, "aboutToShow");
+  QStringList labels;
+  for (QAction* action : profileMenu->actions()) labels.append(action->text());
+  QVERIFY(labels.indexOf(QStringLiteral("Edit...")) <
+          labels.indexOf(QStringLiteral("Save As...")));
+
+  core::SyncProfile profile;
+  profile.source = core::parseEndpoint(QStringLiteral("/src/"));
+  profile.destination = core::parseEndpoint(QStringLiteral("/dst/"));
+  core::Decisions decisions;
+  const auto plan = core::buildExecutionPlan(profile, {}, decisions);
+  ui::SyncDialog dialog(profile, plan, QStringLiteral("/tmp/rules"));
+  QVERIFY(dialog.compareAfterSync());
 }
 
 QTEST_MAIN(UiTest)

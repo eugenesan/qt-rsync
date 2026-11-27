@@ -50,6 +50,8 @@ class MainWindow : public QMainWindow {
   void onOperationError(QProcess::ProcessError error);
   void refreshPlan(bool quick = false);
   void setSyncEnabled(bool enabled);
+  void setOperationControls(bool enabled);
+  void updateOpenButtonStates();
   void setVerifyEnabled(bool enabled);
   void queueSetting(const QString& key, const QVariant& value);
   void flushSettings();

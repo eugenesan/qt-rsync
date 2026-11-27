@@ -1,5 +1,6 @@
 #include "ui/SyncDialog.h"
 
+#include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -138,6 +139,14 @@ SyncDialog::SyncDialog(const core::SyncProfile& profile,
   confirmation->setWordWrap(true);
   layout->addWidget(confirmation);
 
+  compareAfter_ = new QCheckBox(
+      QStringLiteral("Compare again after synchronization"), this);
+  compareAfter_->setChecked(true);
+  compareAfter_->setToolTip(QStringLiteral(
+      "Run a fresh dry run as soon as the transfer completes so the "
+      "comparison and overview reflect the new state."));
+  layout->addWidget(compareAfter_);
+
   auto* buttons = new QDialogButtonBox(
       QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
   buttons->button(QDialogButtonBox::Ok)
@@ -145,6 +154,10 @@ SyncDialog::SyncDialog(const core::SyncProfile& profile,
   connect(buttons, &QDialogButtonBox::accepted, this, &SyncDialog::accept);
   connect(buttons, &QDialogButtonBox::rejected, this, &SyncDialog::reject);
   layout->addWidget(buttons);
+}
+
+bool SyncDialog::compareAfterSync() const {
+  return compareAfter_ != nullptr && compareAfter_->isChecked();
 }
 
 }  // namespace qt_rsync::ui
