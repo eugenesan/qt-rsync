@@ -11,6 +11,9 @@ and refreshed documentation and packaging.
 
 ### Changed
 
+- Keyboard navigation after Ctrl+N (and any pane focus change) works: the
+  Decisions pane now keeps its current index in the visible column instead of
+  a hidden one, so arrow keys move the selection again.
 - "Apply decisions filter to directories too" sits to the right of "Show
   unchanged" and has Alt+9 / Ctrl+9 shortcuts.
 - Pane shortcuts Ctrl+S / Ctrl+D / Ctrl+N / Ctrl+W focus Source, Destination,

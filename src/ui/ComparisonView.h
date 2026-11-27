@@ -88,6 +88,7 @@ class ComparisonView : public QWidget {
   void onSortIndicatorChanged(int pane, int section, Qt::SortOrder order);
   void onCurrentChanged(int origin, const QModelIndex& index);
   void selectRow(int row);
+  int visibleColumn(int pane) const;
   void restoreFocusAfterDecision(const std::vector<int>& oldVisible,
                                  const QStringList& affectedPaths);
 

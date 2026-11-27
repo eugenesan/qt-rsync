@@ -406,12 +406,17 @@ void ComparisonView::endDecisionBatch() {
   batchAffectedPaths_.clear();
 }
 
+int ComparisonView::visibleColumn(int pane) const {
+  return pane == 1 ? 4 : 0;
+}
+
 void ComparisonView::selectRow(int row) {
   if (row < 0 || row >= static_cast<int>(store_.visible.size())) return;
   selecting_ = true;
   for (QTableView* view : views_) {
     if (view == nullptr || view->model() == nullptr) continue;
-    const QModelIndex index = view->model()->index(row, 0);
+    const QModelIndex index =
+        view->model()->index(row, visibleColumn(views_.indexOf(view)));
     if (!index.isValid()) continue;
     view->selectionModel()->setCurrentIndex(
         index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
@@ -593,7 +598,8 @@ void ComparisonView::onCurrentChanged(int origin, const QModelIndex& index) {
   selecting_ = true;
   for (int pane = 0; pane < 3; ++pane) {
     if (pane == origin) continue;
-    const QModelIndex target = views_[pane]->model()->index(index.row(), 0);
+    const QModelIndex target =
+        views_[pane]->model()->index(index.row(), visibleColumn(pane));
     views_[pane]->setCurrentIndex(target);
   }
   selecting_ = false;
@@ -745,7 +751,8 @@ void ComparisonView::selectPath(const QString& path) {
   }
   if (row < 0) return;
   for (QTableView* view : views_) {
-    const QModelIndex index = view->model()->index(row, 0);
+    const QModelIndex index =
+        view->model()->index(row, visibleColumn(views_.indexOf(view)));
     // setCurrentIndex alone leaves the previous row selected; search results
     // must replace the selection, not accumulate it.
     view->selectionModel()->setCurrentIndex(
@@ -759,7 +766,7 @@ void ComparisonView::focusPane(int pane) {
   QTableView* view = views_[pane];
   QModelIndex index = view->currentIndex();
   if (!index.isValid() && view->model()->rowCount() > 0) {
-    index = view->model()->index(0, 0);
+    index = view->model()->index(0, visibleColumn(pane));
     view->selectionModel()->setCurrentIndex(
         index, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
   }
@@ -792,7 +799,8 @@ void ComparisonView::activatePath(const QString& path) {
   if (row < 0) return;
   for (QTableView* view : views_) {
     if (view == nullptr || view->model() == nullptr) continue;
-    const QModelIndex index = view->model()->index(row, 0);
+    const QModelIndex index =
+        view->model()->index(row, visibleColumn(views_.indexOf(view)));
     if (!index.isValid()) continue;
     view->setCurrentIndex(index);
     view->scrollTo(index, QAbstractItemView::PositionAtCenter);

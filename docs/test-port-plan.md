@@ -1,7 +1,7 @@
 # qpy-rsync test port tracker
 
-qpy-rsync currently collects 490 pytest cases. qt-rsync has 128 QtTest cases
-(53 core, 75 UI) and three CTest targets (`core`, `ui`, `install`). This file
+qpy-rsync currently collects 490 pytest cases. qt-rsync has 129 QtTest cases
+(53 core, 76 UI) and three CTest targets (`core`, `ui`, `install`). This file
 tracks the conversion so a missing behaviour is explicit rather than implied.
 
 ## Conversion rules
@@ -129,6 +129,10 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
    round-trip instead of a separate image.
 
 ## Keyboard shortcuts
+
+`keyboardNavigationAfterPaneShortcut` checks that arrow navigation still works
+after Ctrl+N switches focus to the Decisions pane.
+
 
 `paneAndFilterShortcutsWork` verifies Ctrl+S/D pane focus and the two-way
 Ctrl+1 inverse filter toggle; shortcuts use ApplicationShortcut context.
