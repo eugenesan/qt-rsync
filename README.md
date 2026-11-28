@@ -197,6 +197,9 @@ tool that the system offers, with the preference of Git.
 | F12 | cycle the synchronization method |
 | Ctrl+F | focus the filter field |
 | Ctrl+G / Ctrl+Shift+G | find next / previous |
+| Ctrl+S / Ctrl+D / Ctrl+N / Ctrl+W | focus the Source / Destination / Decisions / Overview pane |
+| Ctrl+[ / Ctrl+] | focus the Source / Destination location field (Esc ends editing) |
+| Alt+1..8 / Ctrl+1..8 | click / invert a decision filter; 9 is the directory filter |
 | Ctrl+Tab / Ctrl+Shift+Tab | next / previous layout |
 | Ctrl+, | the settings |
 | Ctrl+Z / Ctrl+Shift+Z | undo / redo a decision |
@@ -205,6 +208,7 @@ tool that the system offers, with the preference of Git.
 | Ctrl+Up / Ctrl+Down | jump to the parent / first child |
 | Left / Right | fold/unfold a folder, then move to its parent / first child |
 | Ctrl+click | invert the decision filter |
+| Esc | clear the filter field, or end editing in a location field |
 | Ctrl+Q | quit |
 
 ## Requirements
