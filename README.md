@@ -242,7 +242,7 @@ binary can be identified.
 
 ```sh
 dpkg-buildpackage -us -uc -b -d
-sudo apt install ../qt-rsync_0.2.0-0_amd64.deb
+sudo apt install ../qt-rsync_0.2.1-0_amd64.deb
 ```
 
 The package installs `/usr/bin/qt-rsync`, the desktop entry and the scalable

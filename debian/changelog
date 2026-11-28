@@ -1,3 +1,14 @@
+qt-rsync (0.2.1-0) resolute; urgency=medium
+
+  * 0.2.1: post-0.2.0 maintenance release. UI parity corrections and button
+    menus, stale-location handling, status-bar progress and temporary command
+    preview, first-match search and keyboard shortcut fixes, visible-column
+    navigation, plain INI settings with no qpy import, flat external-tool
+    storage with placeholders and remote diff staging, incremental decisions
+    and overview updates, and 129 QtTest cases.
+
+ -- Eugene San (eugenesan) <eugenesan@gmail.com>  Fri, 27 Nov 2026 12:00:00 -0700
+
 qt-rsync (0.2.0-0) resolute; urgency=medium
 
   * 0.2.0: refreshed README and KDE-theme screenshots; screenshots, icon and

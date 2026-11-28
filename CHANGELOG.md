@@ -2,7 +2,38 @@
 
 All notable changes to qt-rsync. Versions group a few related milestones
 rather than every commit; the port started at 0.0.1 and reached 0.2.0 on
-2026-11-24.
+2026-11-24, with the 0.2.1 maintenance release on 2026-11-27.
+
+## 0.2.1 — 2026-11-27
+
+Maintenance release carrying the post-0.2.0 parity and stability work.
+
+### Changed
+
+- UI parity corrections: Clear Log and profile-save confirmations, Cancel and
+  Pause disabled until an operation runs, button-owned left-click menus,
+  Profile Edit... under Save, an optional re-compare after synchronization,
+  a reordered toolbar and a removed standalone Find button.
+- Change Source or Destination marks the comparison stale and swapping back
+  restores the previous state. Progress moved into the status bar (15% width)
+  and the rsync command became a temporary, selectable journal entry.
+- Search focuses the first match after the debounce; Escape clears the field;
+  results replace the selection. Tooltips use a uniform 250 ms wake-up and the
+  Decisions header has section borders.
+- Pane shortcuts Ctrl+S/D/N/W, location shortcuts Ctrl+[ / Ctrl+], two-way
+  Ctrl+1 inversion, Alt/Ctrl+9 for the directory filter, and application-wide
+  filter shortcuts. Keyboard navigation after pane focus works in the
+  Decisions pane.
+- All settings and widget state are plain INI scalars (no base64, no qpy
+  import or migration); profiles remain JSON. External tools use flat keys,
+  placeholders, a per-tool "Open with" submenu and remote diff staging.
+- Incremental decisions and overview updates, parallel destination metadata,
+  batched progress and opt-in phase timing improve large-tree responsiveness.
+
+### Tests
+
+- 129 QtTest cases (53 core, 76 UI) plus the `install` target; all pass
+  offscreen with no Python runtime involved.
 
 ## 0.2.0 — 2026-11-24
 
