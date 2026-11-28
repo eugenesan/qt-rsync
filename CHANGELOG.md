@@ -42,6 +42,12 @@ and refreshed documentation and packaging.
 
 ### Changed
 
+- Documentation trimmed to the minimum needed for maintenance: new
+  `docs/code-map.md` indexes every subsystem, `docs/decisions.md` keeps only the
+  decisions still in force, `docs/testing.md` carries the current test status
+  and the explicit N/A differences, and the CLI options moved into README.
+  Fifteen historical qpy research copies, completed plans and stale runbooks
+  were removed; that background remains available in qpy-rsync.
 - Searching focuses the first match after the debounce, like qpy; explicit
   next/previous cancels a pending debounce so it cannot step twice.
 - Alt+S/D shortcut idea dropped: Ctrl+[ / Ctrl+] now focus the Source and

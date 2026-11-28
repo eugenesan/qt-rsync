@@ -11,7 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC OFF)  # UIs are constructed in C++; see docs/DECISIONS.md
+set(CMAKE_AUTOUIC OFF)  # UIs are constructed in C++; see docs/decisions.md
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets)
 qt_standard_project_setup()

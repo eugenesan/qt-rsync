@@ -11,6 +11,9 @@ qt-rsync (0.2.1-0) resolute; urgency=medium
 
 qt-rsync (0.2.0-0) resolute; urgency=medium
 
+  * Documentation reduced to a code map, current architecture decisions and a
+    testing guide; historical qpy research and completed plans dropped in
+    favour of the qpy-rsync repository; CLI options documented in README.
   * 0.2.0: refreshed README and KDE-theme screenshots; screenshots, icon and
     desktop entry live in resources/; obsolete Actions labels renamed to
     Decisions; directory decision filters and directory-aware Items counts;

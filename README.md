@@ -238,6 +238,24 @@ cmake --install ./build --prefix /usr/local
 `./build/bin/qt-rsync --version` includes the checkout commit, so a shared
 binary can be identified.
 
+### Command line options
+
+There is one executable, `qt-rsync`; startup options are carried over from the
+qpy-rsync GUI launcher, and unrecognised arguments are forwarded to Qt.
+
+| Option | Meaning |
+|---|---|
+| `--dir-pair SOURCE DESTINATION`, `-d` | Populate Source and Destination. Required with `--compare`. |
+| `--backup DIRECTORY` | Populate the backup directory. |
+| `--mode MODE` | `update` (default), `mirror` or `new-only`. |
+| `--compare` | Start a comparison once the event loop initializes. |
+| `--log-file PATH` | Override the persistent session log path. |
+| `--no-log-file` | Disable persistent session logging for this launch. |
+| `--version` | Print version and build, then exit. |
+| `--help` | Print usage. |
+
+`--log-file` and `--no-log-file` are mutually exclusive.
+
 ## Debian package
 
 ```sh
@@ -258,7 +276,7 @@ src/model/   Qt item models over one C++ DataStore (lifted from native-hybrid)
 src/ui/      main window, comparison panes, overview, settings, dialogs
 resources/   icon, desktop entry and README screenshots
 tests/       QtTest suite (core + UI)
-docs/        port plan, decisions and the inherited qpy-rsync specification
+docs/        architecture decisions, code map and testing notes
 ```
 
 ## Design constraint
@@ -272,12 +290,15 @@ qpy-rsync hybrid phase and is documented in ADR-002
 
 | Document | Content |
 |---|---|
-| [`docs/design.md`](docs/design.md) | the design, the architecture and the specifications |
-| [`docs/port-plan.md`](docs/port-plan.md) | the migration plan and the exit criteria |
+| [`docs/code-map.md`](docs/code-map.md) | where each class, model, dialog and rule lives |
 | [`docs/decisions.md`](docs/decisions.md) | the architecture decisions, including ADR-002 |
-| [`docs/test-port-plan.md`](docs/test-port-plan.md) | the qpy → Qt test-port tracker |
-| [`docs/TESTING.md`](docs/TESTING.md) | the test commands and the validation strategy |
+| [`docs/testing.md`](docs/testing.md) | test commands, oracle strategy and deliberate differences |
 | [`CHANGELOG.md`](CHANGELOG.md) | the history of every change |
+
+Detailed product specifications, performance research and the native-view
+experiment remain in the [qpy-rsync repository](https://github.com/eugenesan/qpy-rsync)
+(`docs/design.md`, `docs/performance-analysis.md`, `native-hybrid/README.md`,
+`native-qt-model/CONCLUSION.md`) and are not duplicated here.
 
 ## Safety status
 
