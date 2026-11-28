@@ -172,12 +172,15 @@ QIcon toolbarIcon(const QString& name) {
     return QApplication::style()->standardIcon(fallback);
   };
 
+  // Pane and navigation icons.
   if (name == QLatin1String("swap")) {
     return themed({"swap-panels-symbolic", "swap-panels"}, QStyle::SP_BrowserReload);
   }
   if (name == QLatin1String("go-jump")) {
     return themed({"go-jump-symbolic", "go-jump"}, QStyle::SP_ArrowForward);
   }
+
+  // Decision markers are drawn in-grid when the theme has no icon.
   if (name == QLatin1String("excluded")) {
     // Eye with a slash, the marker qpy uses on the Excluded toggle.
     return makeGrid([](QPainter& p) {
@@ -205,6 +208,8 @@ QIcon toolbarIcon(const QString& name) {
       p.drawPoint(QPointF(8.0, 12.0));
     });
   }
+
+  // Application menu, then search and layout icons.
   if (name == QLatin1String("appmenu")) {
     const QIcon themed = QIcon::fromTheme(QStringLiteral("open-menu-symbolic"));
     if (!themed.isNull()) return themed;
@@ -225,6 +230,8 @@ QIcon toolbarIcon(const QString& name) {
     return themed({"view-fullscreen", "view-restore", "window-maximize"},
                   QStyle::SP_ComputerIcon);
   }
+
+  // Endpoint and profile icons.
   if (name == QLatin1String("cloud-upload")) {
     return themed({"cloud-upload-symbolic", "cloud-upload", "go-up"},
                   QStyle::SP_ArrowUp);
@@ -242,6 +249,8 @@ QIcon toolbarIcon(const QString& name) {
     return themed({"quickopen-file-symbolic", "quickopen-file", "document-open"},
                   QStyle::SP_DialogOpenButton);
   }
+
+  // Operation controls.
   if (name == QLatin1String("compare")) {
     return themed({"refreshstructure-symbolic", "kr_comparedirs",
                    "kr_comparedir", "document-compareright",
@@ -265,6 +274,8 @@ QIcon toolbarIcon(const QString& name) {
   if (name == QLatin1String("undo")) {
     return themed({"anchor-symbolic", "anchor"}, QStyle::SP_BrowserReload);
   }
+
+  // General toolbar icons: undo, find, settings, folders, filters and logs.
   if (name == QLatin1String("edit-undo")) {
     return themed({"edit-undo-symbolic", "edit-undo", "undo"},
                   QStyle::SP_ArrowBack);

@@ -139,6 +139,7 @@ SettingsDialog::SettingsDialog(QWidget* parent, const QString& defaultLogPath)
   auto* tabs = new QTabWidget(this);
   layout->addWidget(tabs);
 
+  // General tab: sound and decision colours.
   auto* general = new QWidget(tabs);
   auto* generalLayout = new QVBoxLayout(general);
   sound_ = new QCheckBox(
@@ -213,8 +214,10 @@ SettingsDialog::SettingsDialog(QWidget* parent, const QString& defaultLogPath)
   coloursLayout->addWidget(colours_);
   generalLayout->addWidget(coloursBox, 1);
   generalLayout->addStretch(0);
+
   tabs->addTab(general, QStringLiteral("General"));
 
+  // Logging tab: session log file and its toolbar button.
   auto* logging = new QWidget(tabs);
   auto* loggingForm = new QFormLayout(logging);
   sessionLogging_ = new QCheckBox(QStringLiteral("Enable logging"), logging);
@@ -248,8 +251,10 @@ SettingsDialog::SettingsDialog(QWidget* parent, const QString& defaultLogPath)
   });
   logFile_->setEnabled(sessionLogging_->isChecked());
   logBrowse_->setEnabled(sessionLogging_->isChecked());
+
   tabs->addTab(logging, QStringLiteral("Logging"));
 
+  // Tools tab: external tools and the diff command.
   auto* tools = new QWidget(tabs);
   auto* toolsLayout = new QVBoxLayout(tools);
   auto* toolsCaption = new QLabel(
@@ -289,6 +294,7 @@ SettingsDialog::SettingsDialog(QWidget* parent, const QString& defaultLogPath)
       settings.value(QStringLiteral("tools/diff-command")).toString());
   toolsLayout->addWidget(diffCommand_);
 
+  // These two helpers bridge QVector<ExternalTool> and the table widget.
   const auto setTools = [this](const QVector<ExternalTool>& tools) {
     tools_->setRowCount(0);
     for (const ExternalTool& tool : tools) {
@@ -378,8 +384,10 @@ SettingsDialog::SettingsDialog(QWidget* parent, const QString& defaultLogPath)
             }
             setTools(list);
           });
+
   tabs->addTab(tools, QStringLiteral("Tools"));
 
+  // Advanced tab: diagnostics and metadata options (all off by default).
   auto* advanced = new QWidget(tabs);
   auto* advancedLayout = new QVBoxLayout(advanced);
   verification_ = new QCheckBox(
@@ -504,8 +512,10 @@ SettingsDialog::SettingsDialog(QWidget* parent, const QString& defaultLogPath)
     if (checked && !verification_->isChecked()) verification_->setChecked(true);
   });
   verificationRsync_->setEnabled(verification_->isChecked());
+
   tabs->addTab(advanced, QStringLiteral("Advanced"));
 
+  // Button row: Defaults restores the built-in values.
   auto* buttonRow = new QHBoxLayout();
   auto* defaults = new QPushButton(QStringLiteral("Defaults"), this);
   buttonRow->addWidget(defaults);

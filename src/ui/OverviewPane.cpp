@@ -235,9 +235,9 @@ void OverviewPane::rebuild(const model::DataStore& store, bool reuseExpanded) {
     walk(QModelIndex());
   }
 
-  // The overview describes every row the filters leave, after action
-  // filters, unchanged gating and exclusions. Folded compare rows stay in
-  // the totals, like qpy's overview.
+  // The overview still scans every data-store row; filtering happens inside
+  // OverviewModel::build via counts_as_item. Folded compare rows stay in the
+  // totals, like qpy's overview.
   const int sortSection = tree_->header()->sortIndicatorSection();
   const Qt::SortOrder sortOrder = tree_->header()->sortIndicatorOrder();
   model_->build(store, false);

@@ -66,9 +66,11 @@ ProfileEditorDialog::ProfileEditorDialog(const core::SyncProfile& profile,
   auto* tabs = new QTabWidget(this);
   layout->addWidget(tabs, 1);
 
+  // Options tab.
   auto* options = new QWidget(tabs);
   auto* optionsLayout = new QVBoxLayout(options);
 
+  // Transfer: sync mode and delete timing.
   auto* transferGroup = new QGroupBox(QStringLiteral("Transfer"), options);
   auto* transferForm = new QFormLayout(transferGroup);
   auto* mode = addCombo(
@@ -106,6 +108,7 @@ ProfileEditorDialog::ProfileEditorDialog(const core::SyncProfile& profile,
           });
   optionsLayout->addWidget(transferGroup);
 
+  // Transfer options: the per-run rsync switches.
   auto* behavioursGroup = new QGroupBox(QStringLiteral("Transfer options"),
                                         options);
   auto* behaviours = new QVBoxLayout(behavioursGroup);
@@ -165,6 +168,7 @@ ProfileEditorDialog::ProfileEditorDialog(const core::SyncProfile& profile,
            QStringLiteral("--sparse\nStore sequences of zeroes efficiently."));
   optionsLayout->addWidget(behavioursGroup);
 
+  // Conflict policy.
   auto* conflictGroup = new QGroupBox(QStringLiteral("Conflict policy"),
                                       options);
   auto* conflictLayout = new QFormLayout(conflictGroup);
@@ -192,6 +196,7 @@ ProfileEditorDialog::ProfileEditorDialog(const core::SyncProfile& profile,
   conflictLayout->addRow(QString(), conflictHint);
   optionsLayout->addWidget(conflictGroup);
 
+  // Comparison: fetch the unchanged inventory after a compare.
   auto* comparisonGroup = new QGroupBox(QStringLiteral("Comparison"), options);
   auto* comparisonLayout = new QVBoxLayout(comparisonGroup);
   addCheck(comparisonLayout,
@@ -203,6 +208,7 @@ ProfileEditorDialog::ProfileEditorDialog(const core::SyncProfile& profile,
   optionsLayout->addStretch(1);
   tabs->addTab(options, QStringLiteral("Options"));
 
+  // Preservation tab.
   auto* preservation = new QWidget(tabs);
   auto* preservationLayout = new QVBoxLayout(preservation);
   addCheck(preservationLayout, QStringLiteral("Archive mode"),
@@ -229,6 +235,7 @@ ProfileEditorDialog::ProfileEditorDialog(const core::SyncProfile& profile,
   preservationLayout->addStretch(1);
   tabs->addTab(preservation, QStringLiteral("Preservation"));
 
+  // Backup tab.
   auto* backup = new QWidget(tabs);
   auto* backupLayout = new QVBoxLayout(backup);
   auto* backupRow = new QHBoxLayout();
@@ -278,6 +285,7 @@ ProfileEditorDialog::ProfileEditorDialog(const core::SyncProfile& profile,
   });
   tabs->addTab(backup, QStringLiteral("Backup"));
 
+  // Filters tab.
   auto* filters = new QWidget(tabs);
   auto* filtersLayout = new QVBoxLayout(filters);
   filtersLayout->setContentsMargins(0, 0, 0, 0);
@@ -290,6 +298,7 @@ ProfileEditorDialog::ProfileEditorDialog(const core::SyncProfile& profile,
           });
   tabs->addTab(filters, QStringLiteral("Filters"));
 
+  // Buttons: OK validates the filter text before accepting.
   auto* buttons = new QDialogButtonBox(
       QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
   connect(buttons, &QDialogButtonBox::accepted, this,

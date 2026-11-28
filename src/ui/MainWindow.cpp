@@ -421,6 +421,8 @@ MainWindow::MainWindow(QWidget* parent)
           "changed ones. The unchanged button then reuses this result "
           "instead of running the inventory a second time."));
   d_->inventoryAfter->setCheckable(true);
+
+  // Toolbar: Verify/Synchronize/Cancel/Pause operation controls.
   toolbarLayout->addWidget(verticalSeparator(toolbarRow));
   addTool(
       d_->verify, QStringLiteral("Verify"), QStringLiteral("verify"),
@@ -496,6 +498,7 @@ MainWindow::MainWindow(QWidget* parent)
   toolbarLayout->addWidget(d_->pauseButton);
   setOperationControls(false);
 
+  // Toolbar: filters and the profile/backup/log menus.
   toolbarLayout->addWidget(verticalSeparator(toolbarRow));
   addTool(d_->filtersButton, QStringLiteral("Filters"), QStringLiteral("filters"),
           QStringLiteral(
@@ -762,6 +765,7 @@ MainWindow::MainWindow(QWidget* parent)
   toolbarLayout->addWidget(d_->appMenuButton);
 
   // Menu bar mirrors the actions available in qpy-rsync.
+  // Menu shortcuts are re-registered as window QShortcuts below (KDE global menu).
   auto* fileMenu = menuBar()->addMenu(QStringLiteral("File"));
   auto* loadAction = fileMenu->addAction(QStringLiteral("Load Profile..."));
   loadAction->setShortcut(QKeySequence(Qt::Key_F3));
@@ -977,6 +981,7 @@ MainWindow::MainWindow(QWidget* parent)
   sourceLayout->addWidget(sourceBrowse);
   sourceLayout->addWidget(verticalSeparator(sourcePanel));
 
+  // The action filter bar sits between the two endpoint editors.
   auto* filterColumn = new QWidget(root);
   auto* filterLayout = new QVBoxLayout(filterColumn);
   filterLayout->setContentsMargins(0, 0, 0, 0);
@@ -1056,6 +1061,7 @@ MainWindow::MainWindow(QWidget* parent)
   d_->comparison->setFilterBar(d_->filterBar);
   splitter->addWidget(d_->comparison);
 
+  // Journal and overview share a horizontal splitter under the comparison.
   auto* logPanel = new QWidget(splitter);
   d_->logPanel = logPanel;
   auto* logPanelLayout = new QHBoxLayout(logPanel);
@@ -1122,6 +1128,7 @@ MainWindow::MainWindow(QWidget* parent)
   d_->progress->hide();
   statusBar()->addPermanentWidget(d_->progress);
 
+  // One QProcess per rsync operation keeps the finished/error handlers separate.
   d_->compareProcess = new QProcess(this);
   d_->operationProcess = new QProcess(this);
   d_->inventoryProcess = new QProcess(this);
@@ -1171,6 +1178,8 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->inventoryProcess, &QProcess::finished, this, &MainWindow::onInventoryFinished);
   connect(d_->destinationInventoryProcess, &QProcess::finished, this,
           &MainWindow::onDestinationInventoryFinished);
+
+  // Compare stdout: count itemized records here; parse them in onCompareFinished().
   connect(d_->compareProcess, &QProcess::readyReadStandardOutput, this, [this]() {
     const QString text = core::cleanQtNoise(
         QString::fromLocal8Bit(d_->compareProcess->readAllStandardOutput()));
@@ -1248,6 +1257,8 @@ MainWindow::MainWindow(QWidget* parent)
       action->setShortcut(QKeySequence());
     }
   }
+
+  // Window shortcuts: F1-F12 actions plus Ctrl focus and layout keys.
   const auto addKey = [this](const QKeySequence& sequence, auto slot) {
     auto* shortcut = new QShortcut(sequence, this);
     connect(shortcut, &QShortcut::activated, this, slot);
@@ -1319,6 +1330,8 @@ MainWindow::MainWindow(QWidget* parent)
   addKey(QKeySequence(QStringLiteral("Ctrl+,")), [this]() {
     d_->settingsButton->click();
   });
+
+  // Restore persisted filters, external tools and the last open profile.
   {
     core::storage::Settings settings;
     d_->filterBar->setFilterDirectories(
@@ -1338,6 +1351,7 @@ MainWindow::MainWindow(QWidget* parent)
   updateOpenButtonStates();
   restoreWindowState();
 
+  // View signals keep the overview, filters and actions in sync.
   connect(d_->comparison, &ComparisonView::viewChanged, this, [this]() {
     d_->overview->rebuild(d_->comparison->store());
   });
@@ -1697,6 +1711,8 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
                                      : stderr.trimmed()));
     return;
   }
+
+  // Parse: journal the dry-run timings, then parse the rsync output.
   const double compareSeconds = d_->compareClock.isValid()
                                     ? d_->compareClock.elapsed() / 1000.0 : 0.0;
   const double journalSeconds = d_->journalWriteNs / 1e9;
@@ -1704,10 +1720,11 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
                           "Compare parse: %1 line(s), parsing %2 s, journal "
                           "writes %3 s.")
                           .arg(output.count('\n'));
-  // The parse time is filled in just below; the line is emitted before parsing
-  // so its position in the journal matches qpy's log.
+
+  // Qt exposes only a monotonic clock here, so there is no separate wall-clock
+  // reading to report; log one elapsed value instead of duplicating it.
   appendJournalLine(
-      QStringLiteral("rsync dry run finished in %1 s (wall %1 s).")
+      QStringLiteral("rsync dry run finished in %1 s.")
           .arg(compareSeconds, 0, 'f', 2));
   appendJournalLine(d_->preserve->isChecked()
                         ? QStringLiteral("Decisions preserved for this comparison.")
@@ -1722,8 +1739,12 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   const core::ParseResult parsed = core::parseOutput(
       QString::fromUtf8(output), d_->profile.transfer.mirrorEnabled());
   const double parseSeconds = parseClock.elapsed() / 1000.0;
+  // The parse line is prepared above and filled in here so its journal
+  // position still matches qpy's log.
   appendJournalLine(parseLine.arg(parseSeconds, 0, 'f', 2)
                         .arg(journalSeconds, 0, 'f', 2));
+
+  // Build the view: label both roots and feed the parsed changes to the models.
   d_->changes = parsed.changes;
   const auto baseName = [](const QString& operand) {
     QString clean = operand.trimmed();
@@ -1744,6 +1765,8 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   appendJournalLine(
       QStringLiteral("Comparison view built in %1 s.")
           .arg(d_->viewClock.elapsed() / 1000.0, 0, 'f', 2));
+
+  // Build the plan from the parsed changes and current decisions.
   core::ScopedPerf planPerf("compare.planBuild");
   QElapsedTimer planClock;
   planClock.start();
@@ -1751,6 +1774,8 @@ void MainWindow::onCompareFinished(int exitCode, QProcess::ExitStatus status) {
   appendJournalLine(
       QStringLiteral("Plan built in %1 s.")
           .arg(planClock.elapsed() / 1000.0, 0, 'f', 2));
+
+  // Finish the compare by waiting for destination metadata.
   // The comparison is not complete until the destination metadata listing
   // finishes. Keep Compare disabled and Sync/Verify unavailable meanwhile.
   setSyncEnabled(false);
@@ -2120,8 +2145,8 @@ void MainWindow::onOperationFinished(int exitCode, QProcess::ExitStatus status) 
       playCompletionSound(QStringLiteral("error"));
       return;
     }
-    // The destination changed: the comparison is stale until the user asks
-    // for a fresh Compare. Never refresh automatically.
+    // Writing changes the destination, so this comparison is stale immediately.
+    // An automatic re-compare runs only if the confirmation dialog asked for it.
     d_->stale = true;
     d_->verified = false;
     updateStateIcons();
@@ -2239,6 +2264,8 @@ void MainWindow::openDiff(const QString& path) {
                                  "a diff tool."));
     return;
   }
+
+  // Only regular files can be diffed; endpoints may be local or SSH.
   const bool sourceRemote = d_->profile.source.kind == core::EndpointKind::Ssh;
   const bool destinationRemote =
       d_->profile.destination.kind == core::EndpointKind::Ssh;
@@ -2248,6 +2275,7 @@ void MainWindow::openDiff(const QString& path) {
     return;
   }
 
+  // Fetch a remote side into a temporary directory before diffing.
   QString source = QDir(d_->profile.source.path).filePath(path);
   QString destination = QDir(d_->profile.destination.path).filePath(path);
   if (sourceRemote || destinationRemote) {
@@ -2289,6 +2317,8 @@ void MainWindow::openDiff(const QString& path) {
     QApplication::restoreOverrideCursor();
     d_->progress->hide();
   }
+
+  // Both files must be available locally before starting the tool.
   if (!QFileInfo::exists(source) || !QFileInfo::exists(destination)) {
     QMessageBox::information(
         this, QStringLiteral("Diff tool unavailable"),
@@ -2297,6 +2327,7 @@ void MainWindow::openDiff(const QString& path) {
     return;
   }
 
+  // Resolve the configured diff command, or the first installed fallback.
   core::storage::Settings settings;
   const QString configured =
       settings.value(QStringLiteral("tools/diff-command")).toString().trimmed();
@@ -2310,6 +2341,8 @@ void MainWindow::openDiff(const QString& path) {
     }
     if (command.isEmpty()) command = QStringLiteral("meld %a %A");
   }
+
+  // Build the tool command and launch it detached from the application.
   const core::ToolContext context = core::itemContext(
       path, false, QFileInfo(source).absolutePath(),
       QFileInfo(destination).absolutePath(), d_->profile.source,
@@ -2547,8 +2580,8 @@ void MainWindow::restoreProfile() {
       core::storage::saveProfile(path, d_->profile);
       d_->profileLock = std::move(tempLock);
       d_->tempProfile = true;
-  d_->source->setText(d_->profile.source.rsyncOperand());
-  d_->destination->setText(d_->profile.destination.rsyncOperand());
+      d_->source->setText(d_->profile.source.rsyncOperand());
+      d_->destination->setText(d_->profile.destination.rsyncOperand());
       d_->profilePath = path;
       d_->profileButton->setText(QFileInfo(path).completeBaseName() +
                                  QStringLiteral(" (temporary)"));

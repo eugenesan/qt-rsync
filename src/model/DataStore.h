@@ -720,6 +720,7 @@ struct DataStore {
     faded.assign(paths.size(), 0);
     std::vector<int> order = tree_order();
     std::vector<char> matched(paths.size(), 0);
+
     // Keep the ancestor directories of every row that passes the action
     // filters, even when the directory's own action is filtered out. This is
     // what makes a single visible file stay reachable in the tree.
@@ -738,6 +739,8 @@ struct DataStore {
         parent = parent < static_cast<int>(parents.size()) ? parents[parent] : -1;
       }
     }
+
+    // include_contents: a matched directory also matches its ancestors.
     if (include_contents) {
       for (int i = 0; i < static_cast<int>(paths.size()); ++i) {
         if (is_dir[i] && matches(i)) matched[i] = 1;
@@ -756,6 +759,8 @@ struct DataStore {
     int root_id = -1;
     auto root_it = path_to_id.find(root_path());
     if (root_it != path_to_id.end()) root_id = root_it->second;
+
+    // Only-excluded fast path: keep excluded rows and their ancestors.
     if (action_mask == -1 && show_excluded) {
       std::vector<char> keep(paths.size(), 0);
       for (int i = 0; i < static_cast<int>(paths.size()); ++i) {
@@ -781,6 +786,8 @@ struct DataStore {
       compute_stripes();
       return;
     }
+
+    // Tree-order walk: apply path, filter and fold checks to every row.
     for (int i : order) {
       if (i == root_id) {
         visible.push_back(i);
@@ -808,6 +815,8 @@ struct DataStore {
       if (folded_out(i)) continue;
       visible.push_back(i);
     }
+
+    // Sort non-tree columns, then fade directories whose own action is hidden.
     if (sort_column == 0) {
       // Column 0 keeps the natural folder-tree order built by add_directories().
     } else {
@@ -829,6 +838,8 @@ struct DataStore {
         if (!action_allowed(id)) faded[id] = 1;
       }
     }
+
+    // Recompute aggregates, destination counts and stripe flags.
     compute_aggregates();
     compute_destination_counts();
     compute_stripes();
@@ -994,6 +1005,9 @@ class TableModel : public QAbstractTableModel {
     return parent.isValid() ? 0 : 11;
   }
 
+  // Qt::UserRole carries the path; +21 depth, +22 collapsed, +23 isDir and
+  // +24 decision are view-private roles. Columns: 0/5 name, 1/6 item counts,
+  // 2/7 formatted size, 3/8 time, 9/10 raw bytes; column 4 is the decision.
   QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override {
     if (!index.isValid()) return {};
     int row = index.row();
@@ -1013,23 +1027,29 @@ class TableModel : public QAbstractTableModel {
       }
       return {};
     }
+
     if (role == Qt::UserRole) {
       return QString::fromStdString(store_->paths[id]);
     }
+
     if (role == Qt::UserRole + 21) {
       return id < static_cast<int>(store_->depth.size()) ? store_->depth[id] : 0;
     }
+
     if (role == Qt::UserRole + 22) {
       return id < static_cast<int>(store_->is_dir.size()) &&
                      store_->is_dir[id] && store_->is_collapsed(id);
     }
+
     if (role == Qt::UserRole + 23) {
       return id < static_cast<int>(store_->is_dir.size()) && store_->is_dir[id];
     }
+
     if (role == Qt::UserRole + 24) {
       return id < static_cast<int>(store_->decisions.size())
                  ? store_->decisions[id] : Inherit;
     }
+
     if (role == Qt::DecorationRole) {
       if (index.column() != 0 && index.column() != 5) return {};
       if (!store_->present_on_pane(id, pane_)) return {};
@@ -1046,6 +1066,7 @@ class TableModel : public QAbstractTableModel {
       }
       return {};
     }
+
     if (role == Qt::ToolTipRole) {
       const std::string& path = id < static_cast<int>(store_->paths.size())
                                     ? store_->paths[id] : std::string();
@@ -1095,6 +1116,7 @@ class TableModel : public QAbstractTableModel {
       }
       return shown;
     }
+
     if (role == Qt::ForegroundRole) {
       if (pane_ == 1) return {};
       int action = id < static_cast<int>(store_->actions.size())
@@ -1113,7 +1135,10 @@ class TableModel : public QAbstractTableModel {
       }
       return {};
     }
+
     if (role != Qt::DisplayRole) return {};
+
+    // Display role: the 11 columns of both panes.
     const int column = index.column();
     const int action = id < static_cast<int>(store_->actions.size())
                            ? store_->actions[id] : NoChange;
@@ -1123,6 +1148,7 @@ class TableModel : public QAbstractTableModel {
                                  ? store_->times[id] : std::string();
     const bool is_dir = id < static_cast<int>(store_->is_dir.size()) && store_->is_dir[id];
     const bool is_root = path == DataStore::root_path();
+
     // Folders keep their name and icon on both sides. Only their counts and
     // sizes are blank when that side has no items below the folder.
     if (is_dir && !is_root) {

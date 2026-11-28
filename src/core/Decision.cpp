@@ -298,17 +298,28 @@ int Decisions::reconcile(const QVector<Change>& changes, bool preserve,
     const bool identityChanged = identities_.contains(path) &&
                                  identities_.value(path) != current.value(path);
 
+    // No row and no descendants: the decision is stale.
     if (!exists && !hasDescendants) {
       stale.insert(path);
       continue;
     }
+
+    // Without preserving, changed identities and delete requests are dropped.
     if (!preserve) {
       if (identityChanged || decision == Decision::Delete) stale.insert(path);
       continue;
     }
+
+    // Delete decisions are reapplied from the current comparison.
     if (decision == Decision::Delete) continue;
+
+    // Keep an unchanged decision as it is.
     if (!identityChanged) continue;
+
+    // An exclude survives a changed reported action.
     if (decision == Decision::Exclude) continue;
+
+    // An include that now points at a destination-only item is a conflict.
     const Action newAction = exists ? current.value(path).first : Action::NoChange;
     if (newAction == Action::DestinationOnly) {
       stale.insert(path);
@@ -317,6 +328,7 @@ int Decisions::reconcile(const QVector<Change>& changes, bool preserve,
     }
   }
 
+  // Inherited conflicts: destination-only children appearing under includes.
   if (detectInherited && preserve && !identities_.isEmpty()) {
     // Index destination-only paths by every ancestor so the lookup below is
     // constant time instead of scanning all current/identity paths per folder.

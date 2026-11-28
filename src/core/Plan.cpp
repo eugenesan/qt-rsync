@@ -159,6 +159,7 @@ ExecutionPlan buildExecutionPlan(const SyncProfile& profile,
   QHash<QString, Kind> deleteKinds;
   QSet<QString> deletePaths;
 
+  // One pass: resolve each decision and accumulate items and summary counts.
   for (const Change& change : changes) {
     const Action action = change.action;
     std::optional<Decision> decision;
@@ -184,6 +185,8 @@ ExecutionPlan buildExecutionPlan(const SyncProfile& profile,
                         : action;
     }
     item.destructive = item.included && item.action == Action::Delete;
+
+    // A Delete decision on a non-delete row becomes a synthetic deletion.
     item.syntheticDelete = deleteDecision && action != Action::Delete;
     item.path = clean;
     plan.items.append(item);
@@ -214,6 +217,7 @@ ExecutionPlan buildExecutionPlan(const SyncProfile& profile,
     }
   }
 
+  // Count deleted bytes once per top-level deleted subtree.
   const QHash<QString, std::int64_t> descendantSizes =
       buildDescendantSizes(metadata);
   for (const QString& path : deletePaths) {
@@ -234,6 +238,8 @@ ExecutionPlan buildExecutionPlan(const SyncProfile& profile,
 
   plan.summary.modified = decisions.modifiedCount(changes);
   plan.summary.backupEnabled = !profile.backup.directory.isEmpty();
+
+  // Signatures let verify/sync detect stale plans.
   if (computeSignatures) {
     plan.itemsFingerprint = planItemsFingerprint(plan.items);
     plan.decisionSignature = decisionSignature(decisions);
@@ -310,6 +316,7 @@ QStringList decisionFilterLines(const ExecutionPlan& plan) {
                                                : QString());
   }
 
+  // Pass 2: collect excluded directories and the includes nested below them.
   QSet<QString> excludedDirectories;
   for (const PlanItem& item : plan.items) {
     if (!item.included && item.kind == Kind::Directory) {
@@ -328,6 +335,8 @@ QStringList decisionFilterLines(const ExecutionPlan& plan) {
       }
     }
   }
+
+  // Pass 3: traversal rules reopen those folders for the include overrides.
   QSet<QString> traversal;
   for (const PlanItem& item : includedOverrides) {
     const QStringList parts = item.path.trimmed().split('/');
@@ -341,6 +350,8 @@ QStringList decisionFilterLines(const ExecutionPlan& plan) {
   for (const PlanItem& item : includedOverrides) {
     lines << QStringLiteral("+ ") + patternFor(item);
   }
+
+  // Pass 4: protect deleted paths and exclude the remaining items.
   for (const PlanItem& item : plan.items) {
     if (item.included) continue;
     if (item.action == Action::Delete || item.action == Action::DestinationOnly) {

@@ -76,12 +76,15 @@ void NativeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
     return;
   }
   const int id = store_->visible[row];
+
+  // The decisions pane uses its own checkbox painter.
   if (pane_ == 1) {
     paintCheck(painter, option, index, id);
     return;
   }
 
   const bool dirRow = id < static_cast<int>(store_->is_dir.size()) && store_->is_dir[id];
+
   // An item is only drawn on the side where it exists. A new directory has no
   // destination row (no chevron, no folder icon, no name), and a deleted or
   // destination-only directory has no source row.
@@ -106,6 +109,7 @@ void NativeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
   QColor colour = textColor(opt, id);
   if (!colour.isValid()) colour = opt.palette.color(QPalette::Text);
 
+  // Non-name columns draw the model text directly.
   if (!nameColumn) {
     painter->save();
     painter->setPen(colour);
@@ -123,6 +127,7 @@ void NativeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
                        opt.fontMetrics.ascent() / 2 - 1;
   painter->save();
 
+  // Root row: the root/folder icon only.
   if (rootRow) {
     if (!store_->root_icon.isNull()) {
       store_->root_icon.paint(painter, QRect(x, mid - 8, 16, 16));
@@ -131,6 +136,7 @@ void NativeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
     }
     x += 20;
   } else if (isDir) {
+    // Directory row: chevron (when it has children) plus a folder icon.
     const bool expanded = !store_->is_collapsed(id);
     const bool hasChildren = id < static_cast<int>(store_->dir_has_children.size()) &&
                              store_->dir_has_children[id];
@@ -158,6 +164,7 @@ void NativeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
     }
     x = iconX + 20;
   } else {
+    // File row: connector, then the extension or a generic file icon.
     const int iconX = x + 14;
     painter->setPen(QPen(QColor("#D0D7DE"), 1));
     painter->drawLine(x + 10, opt.rect.top(), x + 10, opt.rect.bottom());
@@ -186,6 +193,8 @@ void NativeDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option
   const QString name = index.data(Qt::DisplayRole).toString();
   painter->drawText(x, baseline,
                     opt.fontMetrics.elidedText(name, Qt::ElideRight, available));
+
+  // Stale root: append the warning suffix after the name.
   if (staleRoot) {
     painter->setPen(QColor(QStringLiteral("#EA580C")));
     painter->drawText(x + opt.fontMetrics.horizontalAdvance(name), baseline,

@@ -314,6 +314,7 @@ SyncProfile profileFromJson(const QString& payload) {
   profile.name = root.value(QStringLiteral("name")).toString();
   profile.description = root.value(QStringLiteral("description")).toString();
   profile.id = root.value(QStringLiteral("profile_id")).toString();
+  // Profiles written before schema_version was stored are treated as v3.
   profile.schemaVersion = root.value(QStringLiteral("schema_version")).toInt(3);
   profile.conflict = conflictFrom(
       root.value(QStringLiteral("conflict_policy")).toString());
@@ -332,6 +333,7 @@ SyncProfile profileFromJson(const QString& payload) {
   profile.preservation.numericIds =
       preservation.value(QStringLiteral("numeric_ids")).toBool();
 
+  // Legacy: a boolean delete flag predates sync_mode; map it to Mirror.
   const QJsonObject transfer = root.value(QStringLiteral("transfer")).toObject();
   const bool legacyDelete = transfer.value(QStringLiteral("delete")).toBool();
   profile.transfer.mode = legacyDelete
@@ -356,6 +358,8 @@ SyncProfile profileFromJson(const QString& payload) {
 
   const QJsonObject backup = root.value(QStringLiteral("backup")).toObject();
   profile.backup.directory = backup.value(QStringLiteral("directory")).toString();
+
+  // Legacy: "none" backup mode is stored as an empty directory.
   if (backup.contains(QStringLiteral("mode")) &&
       backup.value(QStringLiteral("mode")).toString() == QLatin1String("none")) {
     profile.backup.directory.clear();

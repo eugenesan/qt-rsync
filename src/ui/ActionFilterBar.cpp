@@ -26,6 +26,7 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
     line->setFixedWidth(1);
     layout->addWidget(line);
   };
+  // Shared checkbox factory: Alt clicks, Ctrl inverts.
   int boxCounter = 0;
   const auto check = [&](const QString& tooltip, const QIcon& icon,
                          int shortcutNumber, bool checked = true) {
@@ -65,6 +66,7 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
     return box;
   };
 
+  // Excluded toggle.
   excluded_ = check(
       QStringLiteral(
           "Show the items excluded from this comparison.\n"
@@ -77,6 +79,8 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
   excluded_->setAccessibleName(QStringLiteral("Show excluded items"));
   excluded_->setObjectName(QStringLiteral("excluded-checkbox"));
   separator();
+
+  // Action decision filters.
   const QVector<QPair<QString, int>> actionLabels{
       {QStringLiteral("Create"), 0},
       {QStringLiteral("Update"), 1},
@@ -111,6 +115,8 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
     if (index < actionLabels.size() - 1) separator();
   }
   separator();
+
+  // Unchanged, directory and conflict toggles.
   unchanged_ = check(
       QStringLiteral(
           "Show the unchanged items of the comparison.\n"
@@ -144,6 +150,8 @@ ActionFilterBar::ActionFilterBar(QWidget* parent) : QWidget(parent) {
       icons::toolbarIcon(QStringLiteral("conflict")), 0, false);
   conflicts_->setAccessibleName(QStringLiteral("Review changed decisions"));
   conflicts_->hide();
+
+  // Undo button, inserted ahead of the excluded toggle.
   undo_ = new QToolButton(this);
   undo_->setObjectName(QStringLiteral("undo-button"));
   undo_->setText(QStringLiteral("Undo"));
@@ -246,6 +254,7 @@ void ActionFilterBar::resetDefaults() {
   directories_->setChecked(false);
 }
 
+// Ctrl+click inversion: one action per physical press.
 void ActionFilterBar::applyInverse(QCheckBox* box) {
   // The press/release filter and the clicked() fallback can both observe
   // the same physical click. Reset only on a new press, not by elapsed time:

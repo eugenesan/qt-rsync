@@ -683,6 +683,8 @@ bool ComparisonView::handleCollapseKey(int pane, int key) {
   const bool isDir = id < static_cast<int>(store_.is_dir.size()) &&
                      store_.is_dir[id];
   const bool isRoot = isDir && store_.paths[id] == model::DataStore::root_path();
+
+  // Left collapses the folder or moves to its parent; Right expands or steps in.
   if (isDir && !isRoot) {
     const bool collapsed = store_.is_collapsed(id);
     if (key == Qt::Key_Left) {
@@ -893,6 +895,8 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
     heading->setEnabled(false);
     menu.addSeparator();
   }
+
+  // Clipboard: full path, filename and path relative to the pane root.
   menu.addAction(QStringLiteral("Copy Path"), [path]() {
     QApplication::clipboard()->setText(path);
   });
@@ -904,6 +908,8 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
     while (relative.startsWith('/')) relative.remove(0, 1);
     QApplication::clipboard()->setText(relative);
   });
+
+  // Local endpoints can open the item in the file manager.
   const bool paneLocal = pane == 2 ? destinationLocal_ : sourceLocal_;
   if (paneLocal && !path.isEmpty()) {
     const auto found = store_.path_to_id.find(path.toStdString());
@@ -922,9 +928,13 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
     }
     menu.addSeparator();
   }
+
+  // Diff tool: key 1.
   menu.addAction(QStringLiteral("Open in Diff Tool\t1"), [this, path]() {
     emit diffRequested(path);
   });
+
+  // External tools submenu: keys 2-9.
   QVector<core::ExternalTool> enabledTools;
   for (const core::ExternalTool& tool : externalTools_) {
     if (tool.enabled) enabledTools.append(tool);
@@ -937,11 +947,13 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
       QAction* action = toolMenu->addAction(tool.name);
       action->setShortcut(QKeySequence(QString::number(index + 2)));
       action->setToolTip(QStringLiteral("Shortcut: %1").arg(index + 2));
+      // Tool actions carry {name, path, pane} in QAction::data().
       action->setData(QStringList{tool.name, path, QString::number(pane)});
     }
   }
   menu.addSeparator();
 
+  // Decision reset: this item, its subtree, or everything.
   if (pane == 1 && !path.isEmpty()) {
     menu.addAction(QStringLiteral("Reset This Decision"),
                    [this, path]() { resetDecision(path); });
@@ -960,6 +972,7 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
         it->second < static_cast<int>(store_.is_dir.size()) &&
         store_.is_dir[it->second] != 0;
 
+    // A real folder (not the root) can become a new endpoint.
     if (isDirectory && path != QString::fromStdString(model::DataStore::root_path())) {
       menu.addAction(QStringLiteral("Use as Source/Destination..."), [this, path]() {
         emit useAsLocationRequested(path);
@@ -967,6 +980,7 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
       menu.addSeparator();
     }
 
+    // Filter and delete phrase menus are built from the item path.
     auto* excludeMenu = menu.addMenu(QStringLiteral("Exclude via Filter"));
     for (const core::FilterPhrase& phrase : core::phrasesFor(path, isDirectory)) {
       excludeMenu->addAction(phrase.label, [this, phrase, path]() {
@@ -985,6 +999,7 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
                           [this, path]() { emit deleteRequested(path); });
     menu.addSeparator();
 
+    // Toggle this item's explicit decision.
     const int decision = static_cast<int>(decisions_.explicitDecision(path));
     if (decision == static_cast<int>(core::Decision::Exclude)) {
       menu.addAction(QStringLiteral("Include Item"),
@@ -997,6 +1012,7 @@ void ComparisonView::showContextMenu(int pane, const QPoint& position) {
                      [this, path]() { applyDecision(path, 2); });
     }
 
+    // Collapse / expand this folder or the whole tree.
     auto* fold = menu.addMenu(QStringLiteral("Collapse / Expand"));
     if (isDirectory) {
       fold->addAction(store_.is_collapsed(it->second)
