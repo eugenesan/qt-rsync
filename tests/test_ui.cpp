@@ -2891,11 +2891,19 @@ void UiTest::paneAndFilterShortcutsWork() {
   QVERIFY(directories->isChecked());
   QTest::keyClick(&window, Qt::Key_9, Qt::AltModifier);
   QVERIFY(!directories->isChecked());
+  auto* sourceField = window.findChild<QLineEdit*>(QStringLiteral("source-edit"));
+  auto* destinationField =
+      window.findChild<QLineEdit*>(QStringLiteral("destination-edit"));
+  QVERIFY(sourceField->toolTip().contains(QStringLiteral("Ctrl+[")));
+  QVERIFY(destinationField->toolTip().contains(QStringLiteral("Ctrl+]")));
   QTest::keyClick(&window, Qt::Key_BracketLeft, Qt::ControlModifier);
-  QCOMPARE(QApplication::focusWidget(), window.findChild<QLineEdit*>("source-edit"));
+  QCOMPARE(QApplication::focusWidget(), sourceField);
+  QTest::keyClick(sourceField, Qt::Key_Escape);
+  QVERIFY(QApplication::focusWidget() != sourceField);
   QTest::keyClick(&window, Qt::Key_BracketRight, Qt::ControlModifier);
-  QCOMPARE(QApplication::focusWidget(),
-           window.findChild<QLineEdit*>("destination-edit"));
+  QCOMPARE(QApplication::focusWidget(), destinationField);
+  QTest::keyClick(destinationField, Qt::Key_Escape);
+  QVERIFY(QApplication::focusWidget() != destinationField);
 }
 
 void UiTest::keyboardNavigationAfterPaneShortcut() {

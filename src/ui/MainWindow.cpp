@@ -962,7 +962,8 @@ MainWindow::MainWindow(QWidget* parent)
           "SSH examples: server:/srv/data or alice@server:/srv/data\n"
           "SSH host aliases from ~/.ssh/config are supported. At most one "
           "endpoint may be remote.");
-  d_->source->setToolTip(endpointHelp);
+  d_->source->setToolTip(endpointHelp +
+                         QStringLiteral(" (Shortcut: Ctrl+[) (Esc ends editing)"));
   sourceLayout->addWidget(d_->source, 1);
   auto* sourceBrowse = new QToolButton(sourcePanel);
   sourceBrowse->setIcon(icons::toolbarIcon(QStringLiteral("folder-add")));
@@ -1002,7 +1003,10 @@ MainWindow::MainWindow(QWidget* parent)
   d_->destination = new QLineEdit(destinationPanel);
   d_->destination->setObjectName(QStringLiteral("destination-edit"));
   d_->destination->setPlaceholderText(endpointPlaceholder);
-  d_->destination->setToolTip(endpointHelp);
+  d_->destination->setToolTip(
+      endpointHelp + QStringLiteral(" (Shortcut: Ctrl+]) (Esc ends editing)"));
+  d_->source->installEventFilter(this);
+  d_->destination->installEventFilter(this);
   destinationLayout->addWidget(d_->destination, 1);
   auto* destinationBrowse = new QToolButton(destinationPanel);
   destinationBrowse->setIcon(icons::toolbarIcon(QStringLiteral("folder-add")));
@@ -1540,10 +1544,16 @@ void MainWindow::showCommandPreview() {
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
-  if (watched == d_->search && event->type() == QEvent::KeyPress) {
+  if (event->type() == QEvent::KeyPress) {
     auto* key = static_cast<QKeyEvent*>(event);
-    if (key->key() == Qt::Key_Escape) {
+    if (watched == d_->search && key->key() == Qt::Key_Escape) {
       d_->search->clear();
+      return true;
+    }
+    if ((watched == d_->source || watched == d_->destination) &&
+        key->key() == Qt::Key_Escape) {
+      // Match qpy: Esc ends editing instead of leaving focus in the field.
+      static_cast<QLineEdit*>(watched)->clearFocus();
       return true;
     }
   }

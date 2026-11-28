@@ -134,8 +134,10 @@ tracks the conversion so a missing behaviour is explicit rather than implied.
 after Ctrl+N switches focus to the Decisions pane.
 
 
-`paneAndFilterShortcutsWork` verifies Ctrl+S/D pane focus and the two-way
-Ctrl+1 inverse filter toggle; shortcuts use ApplicationShortcut context.
+`paneAndFilterShortcutsWork` verifies Ctrl+S/D pane focus, Ctrl+[ / Ctrl+]
+location-field focus (including tooltips and Esc ending editing), and the
+two-way Ctrl+1 inverse filter toggle; shortcuts use ApplicationShortcut
+context.
 
 ## Search interaction
 
