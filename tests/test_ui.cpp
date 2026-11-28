@@ -2891,6 +2891,11 @@ void UiTest::paneAndFilterShortcutsWork() {
   QVERIFY(directories->isChecked());
   QTest::keyClick(&window, Qt::Key_9, Qt::AltModifier);
   QVERIFY(!directories->isChecked());
+  QTest::keyClick(&window, Qt::Key_BracketLeft, Qt::ControlModifier);
+  QCOMPARE(QApplication::focusWidget(), window.findChild<QLineEdit*>("source-edit"));
+  QTest::keyClick(&window, Qt::Key_BracketRight, Qt::ControlModifier);
+  QCOMPARE(QApplication::focusWidget(),
+           window.findChild<QLineEdit*>("destination-edit"));
 }
 
 void UiTest::keyboardNavigationAfterPaneShortcut() {
@@ -2924,6 +2929,19 @@ void UiTest::keyboardNavigationAfterPaneShortcut() {
   }
   auto* status = window.findChild<QLineEdit*>("status-label");
   QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Comparison complete")), 8000);
+
+  auto* search = window.findChild<QLineEdit*>(QStringLiteral("search-edit"));
+  QVERIFY(search != nullptr);
+  search->setText(QStringLiteral("a.txt"));
+  auto* searchStatus = window.findChild<QLabel*>(QStringLiteral("search-status"));
+  QVERIFY(searchStatus != nullptr);
+  QTRY_VERIFY_WITH_TIMEOUT(searchStatus->text().startsWith(QStringLiteral("1/")),
+                           2000);
+  auto* sourceView = window.findChildren<QTableView*>().first();
+  QCOMPARE(sourceView->model()
+               ->data(sourceView->currentIndex(), Qt::UserRole)
+               .toString(),
+           QStringLiteral("a.txt"));
 
   QTest::keyClick(&window, Qt::Key_N, Qt::ControlModifier);
   auto* focused = qobject_cast<QTableView*>(QApplication::focusWidget());

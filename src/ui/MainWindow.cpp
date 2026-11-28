@@ -239,6 +239,7 @@ class MainWindow::Private {
   bool compareAfterSync = true;
   bool planDirty = false;
   QTimer* settingsTimer = nullptr;
+  QTimer* searchTimer = nullptr;
   QHash<QString, QVariant> pendingSettings;
   QVector<core::ExternalTool> externalTools;
   QVector<QTemporaryDir*> diffStagingDirs;
@@ -929,7 +930,9 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->search, &QLineEdit::returnPressed, this,
           &MainWindow::findNext);
   connect(d_->search, &QLineEdit::textChanged, this, [this](const QString&) {
-    refreshSearchMatches();
+    // Debounce like qpy: once the list has matches, focus the first one
+    // instead of leaving the cursor on row zero.
+    d_->searchTimer->start();
   });
   // Row 2: source + action filter bar + destination.
   auto* locations = new QHBoxLayout();
@@ -1127,6 +1130,13 @@ MainWindow::MainWindow(QWidget* parent)
   connect(d_->verify, &QAbstractButton::clicked, this, &MainWindow::verifyPlan);
   connect(d_->sync, &QAbstractButton::clicked, this, &MainWindow::synchronize);
   connect(d_->cancel, &QAbstractButton::clicked, this, &MainWindow::cancelOperation);
+  d_->searchTimer = new QTimer(this);
+  d_->searchTimer->setSingleShot(true);
+  d_->searchTimer->setInterval(250);
+  connect(d_->searchTimer, &QTimer::timeout, this, [this]() {
+    refreshSearchMatches();
+    if (!d_->searchMatches.isEmpty()) stepSearch(1);
+  });
   d_->settingsTimer = new QTimer(this);
   d_->settingsTimer->setSingleShot(true);
   d_->settingsTimer->setInterval(1000);
@@ -1275,6 +1285,12 @@ MainWindow::MainWindow(QWidget* parent)
              [this]() { d_->comparison->focusPane(2); });
   addPaneKey(QKeySequence(QStringLiteral("Ctrl+N")),
              [this]() { d_->comparison->focusPane(1); });
+  addPaneKey(QKeySequence(QStringLiteral("Ctrl+[")), [this]() {
+    d_->source->setFocus(Qt::ShortcutFocusReason);
+  });
+  addPaneKey(QKeySequence(QStringLiteral("Ctrl+]")), [this]() {
+    d_->destination->setFocus(Qt::ShortcutFocusReason);
+  });
   addPaneKey(QKeySequence(QStringLiteral("Ctrl+W")), [this]() {
     auto* tree = d_->overview->findChild<QTreeView*>();
     if (tree != nullptr) tree->setFocus(Qt::ShortcutFocusReason);
@@ -2909,6 +2925,7 @@ void MainWindow::findNext() {
     d_->search->selectAll();
     return;
   }
+  d_->searchTimer->stop();
   if (d_->search->text().trimmed().toLower() != d_->searchText ||
       d_->searchMatches.isEmpty()) {
     refreshSearchMatches();
@@ -2922,6 +2939,7 @@ void MainWindow::findPrevious() {
     d_->search->selectAll();
     return;
   }
+  d_->searchTimer->stop();
   if (d_->search->text().trimmed().toLower() != d_->searchText ||
       d_->searchMatches.isEmpty()) {
     refreshSearchMatches();

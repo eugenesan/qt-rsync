@@ -11,6 +11,10 @@ and refreshed documentation and packaging.
 
 ### Changed
 
+- Searching focuses the first match after the debounce, like qpy; explicit
+  next/previous cancels a pending debounce so it cannot step twice.
+- Alt+S/D shortcut idea dropped: Ctrl+[ / Ctrl+] now focus the Source and
+  Destination location fields in both apps.
 - Keyboard navigation after Ctrl+N (and any pane focus change) works: the
   Decisions pane now keeps its current index in the visible column instead of
   a hidden one, so arrow keys move the selection again.
