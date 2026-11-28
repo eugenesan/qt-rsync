@@ -286,6 +286,17 @@ C++. The UI models only project them. This is the central lesson from the
 qpy-rsync hybrid phase and is documented in ADR-002
 ([`docs/decisions.md`](docs/decisions.md)).
 
+### Differences from qpy-rsync
+
+- Pure C++20 / Qt 6 Widgets: no Python runtime, no headless CLI, no QML or
+  `.ui` files, and no Python/native dual view.
+- qt-rsync-native XDG paths; qpy settings and profiles are neither imported
+  nor migrated. Profiles are JSON, settings are plain INI values (no base64).
+- Byte-size columns 9/10 are hidden by default; recent profiles are ordered by
+  modification time; timing diagnostics go to the session log and stderr, not
+  to a separate perf-log file.
+- The test-level N/A list is in [`docs/testing.md`](docs/testing.md).
+
 ## Documentation
 
 | Document | Content |
@@ -297,8 +308,11 @@ qpy-rsync hybrid phase and is documented in ADR-002
 
 Detailed product specifications, performance research and the native-view
 experiment remain in the [qpy-rsync repository](https://github.com/eugenesan/qpy-rsync)
-(`docs/design.md`, `docs/performance-analysis.md`, `native-hybrid/README.md`,
-`native-qt-model/CONCLUSION.md`) and are not duplicated here.
+(`docs/design.md`, `docs/installation.md`, `docs/debugging.md`,
+`docs/performance-analysis.md`, `native-hybrid/README.md`,
+`native-qt-model/CONCLUSION.md`) and are not duplicated here. For Qt, the
+equivalent host/SSH setup and build instructions are in **Requirements**,
+**Build** and **Debian package** above.
 
 ## Safety status
 
