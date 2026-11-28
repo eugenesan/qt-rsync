@@ -258,7 +258,12 @@ qpy-rsync GUI launcher, and unrecognised arguments are forwarded to Qt.
 | `--version` | Print version and build, then exit. |
 | `--help` | Print usage. |
 
-`--log-file` and `--no-log-file` are mutually exclusive.
+`--log-file` and `--no-log-file` are mutually exclusive. For example, to fill
+both locations and start a comparison immediately:
+
+```sh
+./build/bin/qt-rsync --dir-pair /home/alice/data server:/srv/data --compare
+```
 
 ## Debian package
 
@@ -270,6 +275,36 @@ sudo apt install ../qt-rsync_0.2.1-0_amd64.deb
 The package installs `/usr/bin/qt-rsync`, the desktop entry and the scalable
 icon. It depends on Qt 6 and rsync; KDE Breeze and `ksshaskpass` are
 recommended.
+
+## Files and locations
+
+| Path | Content |
+|---|---|
+| `~/.config/qt-rsync/profiles/` | JSON profiles (`*.json`) |
+| `<profile>.lock` | PID lock beside a profile; stale locks are taken over automatically |
+| `~/.config/qt-rsync/settingsrc` | Configuration: logging, sound, verification, decisions, advanced, tools, colours, comparison options, current profile |
+| `$XDG_STATE_HOME/qt-rsyncstaterc` (default `~/.local/state/qt-rsyncstaterc`) | Window geometry, splitter/layout state and other session state |
+| `$XDG_CACHE_HOME/qt-rsync/app-<profile>.log` | Session log with commands, decisions and diagnostics |
+| `$XDG_CACHE_HOME/qt-rsync/rsync-<profile>.log` | Raw rsync output, when logging is enabled |
+
+All settings and widget state are plain INI scalars, so these files can be
+read and edited by hand; profiles are JSON. There is no base64 encoding and no
+import or migration of qpy-rsync settings or profiles.
+
+## Remote hosts
+
+Remote endpoints use OpenSSH exactly as `rsync` does; the app stores no remote
+credentials. Before a remote comparison:
+
+1. Verify the connection with `ssh user@host`.
+2. Review and accept the host key through OpenSSH's normal prompt.
+3. Prefer a key loaded into `ssh-agent`; aliases from `~/.ssh/config` work.
+4. Install `ksshaskpass` when graphical password or key-passphrase prompting
+   is needed, and keep an X display available for the prompt.
+
+Remote rsync runs through `setsid --wait`, which needs `util-linux`. If a
+remote operation hangs before rsync starts, the askpass helper or the display
+is the first thing to check.
 
 ## Layout
 
@@ -301,6 +336,43 @@ qpy-rsync hybrid phase and is documented in ADR-002
   to a separate perf-log file.
 - The test-level N/A list is in [`docs/testing.md`](docs/testing.md).
 
+## Development and debugging
+
+```sh
+QT_RSYNC_BUILD_DIR=/path/to/build ./build.sh   # build only
+QT_RSYNC_BUILD_DIR=/path/to/build ./test.sh    # build + all QtTest cases
+ctest --test-dir /path/to/build --output-on-failure
+QT_QPA_PLATFORM=offscreen ./build/tests/ui_tests <FunctionName>  # one case
+```
+
+Qt tests use `Qt6::Test` with the `offscreen` platform, so no X server is
+needed. Settings → Advanced offers **Include timing diagnostics in the
+session log** and a more verbose debug toggle; both write to
+`$XDG_CACHE_HOME/qt-rsync/app-<profile>.log` and standard error. The debug
+toggle also enables timing and logs rsync/SSH arguments, exit codes and
+samples of stdout/stderr — it can be very verbose on large trees.
+
+The qpy-rsync suite in `/home/user/Develop/src/qpy-rsync/tests/unit` is the
+behavioural oracle. `docs/bootstrap.md` is a hand-off prompt for continuing
+this project in a new session.
+
+## Troubleshooting
+
+- **Sync/Verify disabled, Compare badged:** the comparison is stale after a
+  location, method or filter change. Press **Compare** before deciding again.
+- **"Temporary profile name is locked" / locked-profile dialog:** another
+  instance holds `<profile>.lock`. Check again, work on a temporary copy, or
+  quit; do not delete the lock while the other instance is running.
+- **Verification blocked:** the second dry run differs from the reviewed
+  comparison. The status bar and journal list the missing/unexpected items;
+  re-compare and review the decisions again.
+- **Remote operation hangs before rsync starts:** check the SSH connection,
+  the askpass helper and the display. Use the debug toggle to see the command
+  and process state.
+- **A rebuilt binary behaves like an older one:** when building over NFS, the
+  mount can cache stale executables. Remount with
+  `mount -o remount,nofacache,noac`.
+
 ## Documentation
 
 | Document | Content |
@@ -308,6 +380,7 @@ qpy-rsync hybrid phase and is documented in ADR-002
 | [`docs/code-map.md`](docs/code-map.md) | where each class, model, dialog and rule lives |
 | [`docs/decisions.md`](docs/decisions.md) | the architecture decisions, including ADR-002 |
 | [`docs/testing.md`](docs/testing.md) | test commands, oracle strategy and deliberate differences |
+| [`docs/bootstrap.md`](docs/bootstrap.md) | hand-off prompt for continuing the project in a new session |
 | [`CHANGELOG.md`](CHANGELOG.md) | the history of every change |
 
 Detailed product specifications, performance research and the native-view

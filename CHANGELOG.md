@@ -4,6 +4,13 @@ All notable changes to qt-rsync. Versions group a few related milestones
 rather than every commit; the port started at 0.0.1 and reached 0.2.0 on
 2026-11-24, with the 0.2.1 maintenance release on 2026-11-27.
 
+## Unreleased
+
+- README gained Files and locations, Remote hosts, Development and debugging,
+  Troubleshooting and a worked CLI example; the Keyboard table now lists the
+  current shortcuts. The new-session bootstrap prompt is kept in the tree as
+  `docs/bootstrap.md`.
+
 ## 0.2.1 — 2026-11-27
 
 Maintenance release carrying the post-0.2.0 parity and stability work.
